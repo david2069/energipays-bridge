@@ -1,0 +1,18 @@
+<!-- Desktop sidebar nav -->
+<nav class="w-16 flex flex-col items-center py-4 bg-slate-800 border-r border-slate-700 shrink-0">
+  <div class="mb-6">
+    <img src="/static/icons/icon-192.png" alt="logo" class="w-9 h-9 rounded-lg" onerror="this.style.display='none'" />
+  </div>
+
+  <template x-for="tab in $store.app.tabs" :key="tab.id">
+    <button
+      @click="$store.app.activeTab = tab.id"
+      :class="$store.app.activeTab === tab.id
+        ? 'bg-brand/20 text-brand'
+        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'"
+      class="w-10 h-10 rounded-lg flex items-center justify-center mb-1 transition-colors"
+      :title="tab.label">
+      <span x-html="tab.icon" class="w-5 h-5"></span>
+    </button>
+  </template>
+</nav>

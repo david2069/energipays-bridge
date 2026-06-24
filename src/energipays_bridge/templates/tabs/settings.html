@@ -1,0 +1,80 @@
+<!-- Settings tab -->
+<div x-show="$store.app.activeTab === 'settings'" x-data="settingsTab()">
+
+  <h2 class="font-semibold text-slate-100 mb-4">Settings</h2>
+
+  <!-- Safe mode -->
+  <div class="card mb-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="font-medium text-slate-200">Safe Mode</div>
+        <div class="text-xs text-slate-500 mt-0.5">When on, all write commands (boost, device on/off) are blocked</div>
+      </div>
+      <button @click="toggleSafeMode()"
+              :class="$store.app.safeMode ? 'bg-amber-500' : 'bg-slate-600'"
+              class="relative w-11 h-6 rounded-full transition-colors">
+        <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+              :class="$store.app.safeMode ? 'translate-x-5' : ''"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Polling interval -->
+  <div class="card mb-4">
+    <div class="font-medium text-slate-200 mb-3">Poll Interval</div>
+    <div class="flex items-center gap-3">
+      <input type="number" min="10" max="300" x-model.number="pollInterval"
+             class="w-24 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand" />
+      <span class="text-sm text-slate-400">seconds</span>
+      <button @click="savePollInterval()"
+              :disabled="saving"
+              class="ml-auto text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors disabled:opacity-50">
+        Save
+      </button>
+    </div>
+    <div class="text-xs text-slate-500 mt-2">Restart the server after changing the poll interval.</div>
+  </div>
+
+  <!-- Credentials info -->
+  <div class="card mb-4">
+    <div class="font-medium text-slate-200 mb-2">Credentials</div>
+    <div class="text-xs text-slate-400 space-y-1">
+      <p>Set via environment variables or <code class="bg-slate-800 px-1 rounded">.env</code> file:</p>
+      <pre class="bg-slate-800 rounded p-2 text-green-400 mt-2">ENERGIPAYS_EMAIL=you@example.com
+ENERGIPAYS_PASSWORD=secret
+ENERGIPAYS_POLL_INTERVAL=60</pre>
+      <p class="text-slate-500">Credentials are never stored in the database.</p>
+    </div>
+  </div>
+
+  <!-- Data retention -->
+  <div class="card mb-4">
+    <div class="font-medium text-slate-200 mb-3">Data Retention</div>
+    <div class="space-y-3">
+      <div class="flex items-center gap-3">
+        <label class="text-sm text-slate-400 w-32">Raw data</label>
+        <input type="number" min="1" max="30" x-model.number="rawAgeDays"
+               class="w-20 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand" />
+        <span class="text-sm text-slate-400">days</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-sm text-slate-400 w-32">Archive</label>
+        <input type="number" min="7" max="365" x-model.number="retentionDays"
+               class="w-20 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand" />
+        <span class="text-sm text-slate-400">days</span>
+      </div>
+      <button @click="saveRetention()" :disabled="saving"
+              class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors disabled:opacity-50">
+        Save retention
+      </button>
+    </div>
+  </div>
+
+  <!-- Device info -->
+  <div class="card">
+    <div class="font-medium text-slate-200 mb-2">Device</div>
+    <div class="font-mono text-xs text-slate-400" x-text="$store.app.deviceId || 'Not discovered'"></div>
+    <div class="text-xs text-slate-500 mt-1" x-text="$store.app.dataServer"></div>
+  </div>
+
+</div>

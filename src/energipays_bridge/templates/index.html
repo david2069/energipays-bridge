@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Energipays Bridge</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
+
+  <!-- Tailwind (local) -->
+  <script src="/static/js/tailwind.min.js?v={{ cache_bust }}"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { DEFAULT: '#22c55e', dark: '#16a34a' },
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Design tokens -->
+  <link rel="stylesheet" href="/static/css/app.css?v={{ cache_bust }}" />
+
+  <!-- Alpine.js (deferred) -->
+  <script defer src="/static/js/alpine.min.js?v={{ cache_bust }}"></script>
+
+  <!-- Tab modules (loaded before Alpine initialises) -->
+  <script src="/static/js/app.js?v={{ cache_bust }}"></script>
+  <script src="/static/js/dashboard_tab.js?v={{ cache_bust }}"></script>
+  <script src="/static/js/analytics_tab.js?v={{ cache_bust }}"></script>
+  <script src="/static/js/rules_tab.js?v={{ cache_bust }}"></script>
+  <script src="/static/js/raw_tab.js?v={{ cache_bust }}"></script>
+  <script src="/static/js/settings_tab.js?v={{ cache_bust }}"></script>
+  <script src="/static/js/logs_tab.js?v={{ cache_bust }}"></script>
+
+  <!-- Chart.js (lazy-loaded by analytics tab) -->
+  <script src="/static/js/chart.min.js?v={{ cache_bust }}"></script>
+</head>
+
+<body class="h-full bg-slate-900 text-slate-100" x-data x-init="$store.app.init()">
+
+  <!-- ── Desktop layout ────────────────────────────────────────────────── -->
+  <div class="hidden md:flex h-full">
+    {% include "partials/sidebar.html" %}
+
+    <div class="flex-1 flex flex-col min-w-0">
+      {% include "partials/topbar.html" %}
+      <main class="flex-1 overflow-y-auto p-4">
+        {% include "tabs/dashboard.html" %}
+        {% include "tabs/analytics.html" %}
+        {% include "tabs/rules.html" %}
+        {% include "tabs/raw.html" %}
+        {% include "tabs/settings.html" %}
+        {% include "tabs/logs.html" %}
+      </main>
+    </div>
+  </div>
+
+  <!-- ── Mobile layout ─────────────────────────────────────────────────── -->
+  <div class="flex flex-col h-full md:hidden">
+    {% include "partials/topbar.html" %}
+    <main class="flex-1 overflow-y-auto p-3">
+      {% include "tabs/dashboard.html" %}
+      {% include "tabs/analytics.html" %}
+      {% include "tabs/rules.html" %}
+      {% include "tabs/raw.html" %}
+      {% include "tabs/settings.html" %}
+      {% include "tabs/logs.html" %}
+    </main>
+    {% include "partials/mobile_nav.html" %}
+  </div>
+
+  <!-- ── Toast notifications ───────────────────────────────────────────── -->
+  <div class="fixed top-4 right-4 z-50 space-y-2" x-show="$store.app.toasts.length">
+    <template x-for="(t, i) in $store.app.toasts" :key="i">
+      <div class="flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium"
+           :class="t.level === 'error' ? 'bg-red-600 text-white' : t.level === 'warn' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-100'">
+        <span x-text="t.msg"></span>
+      </div>
+    </template>
+  </div>
+
+</body>
+</html>

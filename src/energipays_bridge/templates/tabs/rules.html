@@ -1,0 +1,42 @@
+<!-- Rules tab -->
+<div x-show="$store.app.activeTab === 'rules'" x-data="rulesTab()">
+
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="font-semibold text-slate-100">Automation Rules</h2>
+    <button @click="refresh()" class="text-xs text-slate-400 hover:text-slate-200">↺ Refresh</button>
+  </div>
+
+  <div x-show="loading" class="text-slate-500 text-sm py-8 text-center">Loading rules…</div>
+  <div x-show="!loading && rules.length === 0" class="text-slate-500 text-sm py-8 text-center">No rules found.</div>
+
+  <div class="space-y-2" x-show="!loading && rules.length > 0">
+    <template x-for="rule in rules" :key="rule.id">
+      <div class="card cursor-pointer" @click="toggle(rule.id)">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-medium text-slate-200" x-text="rule.name || rule.id"></div>
+            <div class="text-xs text-slate-500 mt-0.5" x-text="rule.type || 'Rule'"></div>
+          </div>
+          <svg class="w-4 h-4 text-slate-500 transition-transform"
+               :class="expanded === rule.id ? 'rotate-180' : ''"
+               fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </div>
+
+        <!-- Expanded detail -->
+        <div x-show="expanded === rule.id" x-collapse class="mt-3 pt-3 border-t border-slate-700">
+          <pre class="text-xs text-slate-400 overflow-x-auto whitespace-pre-wrap"
+               x-text="JSON.stringify(rule, null, 2)"></pre>
+          <div x-show="!$store.app.safeMode" class="mt-3 text-xs text-slate-500 italic">
+            Rule editing coming soon — write endpoint not yet confirmed.
+          </div>
+          <div x-show="$store.app.safeMode" class="mt-3 text-xs text-amber-400">
+            Safe Mode active — enable writes in Settings to edit rules.
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+</div>

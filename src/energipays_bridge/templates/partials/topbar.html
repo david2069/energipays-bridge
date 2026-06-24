@@ -1,0 +1,22 @@
+<!-- Topbar: status indicators + active tab label -->
+<header class="flex items-center gap-3 px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
+  <!-- Mobile: app name -->
+  <span class="md:hidden font-semibold text-sm text-slate-100">Energipays</span>
+
+  <!-- Status dot -->
+  <div class="flex items-center gap-1.5 ml-auto md:ml-0">
+    <span class="w-2 h-2 rounded-full"
+          :class="$store.app.connected ? 'bg-green-400' : 'bg-red-500'"></span>
+    <span class="text-xs text-slate-400" x-text="$store.app.connected ? 'Live' : 'Offline'"></span>
+  </div>
+
+  <!-- Last poll time -->
+  <span class="hidden md:block text-xs text-slate-500"
+        x-text="$store.app.lastPollLabel"></span>
+
+  <!-- Safe mode badge -->
+  <span x-show="$store.app.safeMode"
+        class="ml-auto text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded px-2 py-0.5">
+    Safe Mode
+  </span>
+</header>

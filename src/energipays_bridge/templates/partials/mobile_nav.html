@@ -1,0 +1,14 @@
+<!-- Mobile bottom tab bar -->
+<nav class="md:hidden flex border-t border-slate-700 bg-slate-800 shrink-0">
+  <template x-for="tab in $store.app.tabs" :key="tab.id">
+    <button
+      @click="$store.app.activeTab = tab.id"
+      :class="$store.app.activeTab === tab.id
+        ? 'text-brand border-t-2 border-brand -mt-px'
+        : 'text-slate-400'"
+      class="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs transition-colors">
+      <span x-html="tab.icon" class="w-5 h-5"></span>
+      <span x-text="tab.label"></span>
+    </button>
+  </template>
+</nav>

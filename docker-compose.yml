@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ../energipays-client:/energipays-client   # local editable install
+    environment:
+      - ENERGIPAYS_EMAIL=${ENERGIPAYS_EMAIL}
+      - ENERGIPAYS_PASSWORD=${ENERGIPAYS_PASSWORD}
+      - ENERGIPAYS_POLL_INTERVAL=${ENERGIPAYS_POLL_INTERVAL:-60}
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    restart: unless-stopped

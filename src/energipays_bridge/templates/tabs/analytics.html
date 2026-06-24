@@ -1,0 +1,58 @@
+<!-- Analytics tab -->
+<div x-show="$store.app.activeTab === 'analytics'" x-data="analyticsTab()">
+
+  <!-- Toolbar -->
+  <div class="flex flex-wrap gap-2 mb-4">
+    <!-- Time range -->
+    <div class="flex gap-1 bg-slate-800 rounded-lg p-1">
+      <template x-for="r in ranges" :key="r">
+        <button @click="setRange(r)"
+                :class="range === r ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
+                class="px-2 py-1 rounded text-xs font-medium transition-colors"
+                x-text="r"></button>
+      </template>
+    </div>
+    <!-- Bucket -->
+    <div class="flex gap-1 bg-slate-800 rounded-lg p-1">
+      <template x-for="b in buckets" :key="b">
+        <button @click="setBucket(b)"
+                :class="bucket === b ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
+                class="px-2 py-1 rounded text-xs font-medium transition-colors"
+                x-text="b"></button>
+      </template>
+    </div>
+    <!-- Series selector -->
+    <div class="flex gap-1 bg-slate-800 rounded-lg p-1">
+      <template x-for="s in series" :key="s.key">
+        <button @click="toggleSeries(s.key)"
+                :class="activeSeries.includes(s.key) ? 'text-slate-100 bg-slate-600' : 'text-slate-400 hover:text-slate-200'"
+                class="px-2 py-1 rounded text-xs font-medium transition-colors"
+                x-text="s.label"></button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Chart canvas -->
+  <div class="card p-3 mb-4">
+    <div x-show="loading" class="flex items-center justify-center h-48 text-slate-500 text-sm">Loading…</div>
+    <canvas id="analyticsChart" class="w-full" style="max-height:300px" x-show="!loading"></canvas>
+  </div>
+
+  <!-- Diverted energy summary -->
+  <div class="card">
+    <div class="text-xs text-slate-500 uppercase tracking-wide mb-3">Power Diverter — Today</div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-slate-800 rounded-lg p-3">
+        <div class="text-xs text-slate-500 mb-1">Diverted heating</div>
+        <div class="text-xl font-semibold text-slate-100"
+             x-text="fmt($store.app.points['today.DE_h'], 'kWh', 2) || '—'"></div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3">
+        <div class="text-xs text-slate-500 mb-1">Diverted plug</div>
+        <div class="text-xl font-semibold text-slate-100"
+             x-text="fmt($store.app.points['today.DE_e'], 'kWh', 2) || '—'"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
