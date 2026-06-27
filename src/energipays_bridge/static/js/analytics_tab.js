@@ -361,9 +361,13 @@ function analyticsTab() {
         return String(t)
       }
 
+      // Raw ISO timestamps for 6h slicing (kept alongside labels/rows)
+      let rawTs = []
+
       // Primary format: { analytics: { "YYYY-MM-DD HH:MM:SS": { EIP, SP, ... } }, interval: ... }
       if (raw?.analytics && typeof raw.analytics === 'object' && !Array.isArray(raw.analytics)) {
         const entries = Object.entries(raw.analytics).sort((a, b) => a[0] < b[0] ? -1 : 1)
+        rawTs  = entries.map(([ts]) => ts)
         labels = entries.map(([ts]) => _fmtTime(ts))
         rows   = entries.map(([, v]) => v)
       } else if (Array.isArray(raw)) {
@@ -383,10 +387,14 @@ function analyticsTab() {
         }
       }
 
-      // 6h view: slice to last 12 entries (30-min buckets × 12 = 6h)
-      if (this.cloudSpan === '6h' && rows.length > 12) {
-        rows   = rows.slice(-12)
-        labels = labels.slice(-12)
+      // 6h view: find the last entry at or before now, slice 12 entries back from there
+      if (this.cloudSpan === '6h' && rows.length > 12 && rawTs.length === rows.length) {
+        const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ') // "YYYY-MM-DD HH:MM"
+        let nowIdx = rawTs.reduce((best, ts, i) => ts.slice(0,16) <= nowStr ? i : best, 11)
+        const end   = nowIdx + 1
+        const start = Math.max(0, end - 12)
+        rows   = rows.slice(start, end)
+        labels = labels.slice(start, end)
       }
 
       const active = this.activeCloudSeries

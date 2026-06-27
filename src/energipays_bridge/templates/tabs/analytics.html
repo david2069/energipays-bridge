@@ -22,7 +22,7 @@
 
     <!-- Row 1: Span + Res + chart style + export -->
     <div class="flex items-center gap-2 flex-wrap">
-      <label class="text-xs text-slate-500 shrink-0">Span</label>
+      <label class="text-xs text-slate-500 shrink-0">Range</label>
       <select x-model="rangeOrCustom" @change="onRangeChange($event.target.value)"
               class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
         <optgroup label="Day view">
@@ -55,7 +55,7 @@
              @change="if(localPickDate){ localDayMode='date'; _resetChart(); load() }"
              class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand" />
 
-      <label class="text-xs text-slate-500 shrink-0">Res</label>
+      <label class="text-xs text-slate-500 shrink-0">Bucket</label>
       <select x-model="bucket" @change="setBucket(bucket)"
               class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
         <option value="1m">1 min</option>
@@ -126,17 +126,6 @@
             </template>
           </div>
         </div>
-      </div>
-      <!-- Active series chips (compact, shows what's selected) -->
-      <div class="flex gap-1 flex-wrap">
-        <template x-for="key in activeSeries" :key="key">
-          <span class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-slate-400 bg-slate-800 border border-slate-700">
-            <span class="w-1.5 h-1.5 rounded-full shrink-0"
-                  :style="`background:${localSeries.find(s=>s.key===key)?.color||'#64748b'}`"></span>
-            <span x-text="localSeries.find(s=>s.key===key)?.label||key"></span>
-            <button @click="toggleSeries(key)" class="ml-0.5 text-slate-600 hover:text-red-400">×</button>
-          </span>
-        </template>
       </div>
     </div>
   </div>
