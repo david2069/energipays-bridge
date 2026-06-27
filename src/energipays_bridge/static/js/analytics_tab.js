@@ -68,6 +68,10 @@ function analyticsTab() {
       this.customFrom = _toDatetimeLocal(yesterday)
       // Default cloud date = today
       this.cloudDate = _toDateStr(now)
+      // On mobile, default local range to 1h (less dense, fits narrow viewport)
+      if (window.innerWidth < 768) {
+        this.rangeOrCustom = '1h'
+      }
       await this.$nextTick()
       this._buildChart()
       await this.load()
@@ -105,6 +109,9 @@ function analyticsTab() {
     _resizeChart() {
       if (_analyticsChart) {
         _analyticsChart.resize()
+        // Belt-and-suspenders: mobile browsers sometimes need a second pass
+        // after layout settles (scroll/flex recalc)
+        setTimeout(() => { if (_analyticsChart) _analyticsChart.resize() }, 150)
       }
     },
 
