@@ -349,11 +349,12 @@
 
         <!-- ── House node (topology marker — no click, no data yet) ──────── -->
         <g transform="translate(155,108)">
-          <!-- Simple flat house outline: body -18..18, eaves -24..24, peak at y=-22 -->
-          <path d="M -18,16 L 18,16 L 18,-2 L 24,-2 L 0,-22 L -24,-2 L -18,-2 Z"
-                :fill="$store.app.isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.08)'"
-                :stroke="$store.app.isDark ? '#22c55e' : '#16a34a'"
-                stroke-width="1.8" stroke-linejoin="round"/>
+          <!-- Heroicons 'home' scaled to ~48px, centered on origin -->
+          <svg x="-24" y="-24" width="48" height="48" viewBox="0 0 24 24"
+               fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"
+               :stroke="$store.app.isDark ? '#22c55e' : '#16a34a'">
+            <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
         </g>
 
         <!-- ── Diverter node (clickable) ──────────────────────────────────── -->
