@@ -3,20 +3,30 @@
 
   <h2 class="font-semibold text-slate-100 mb-4">Settings</h2>
 
-  <!-- Safe mode -->
+  <!-- Poller status -->
   <div class="card mb-4">
-    <div class="flex items-center justify-between">
-      <div>
-        <div class="font-medium text-slate-200">Safe Mode</div>
-        <div class="text-xs text-slate-500 mt-0.5">When on, all write commands (boost, device on/off) are blocked</div>
-      </div>
-      <button @click="toggleSafeMode()"
-              :class="$store.app.safeMode ? 'bg-amber-500' : 'bg-slate-600'"
-              class="relative w-11 h-6 rounded-full transition-colors">
-        <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
-              :class="$store.app.safeMode ? 'translate-x-5' : ''"></span>
-      </button>
+    <div class="text-xs text-slate-500 uppercase tracking-wide mb-3">Energipays Poller</div>
+    <div class="grid grid-cols-2 gap-y-2 text-sm">
+      <span class="text-slate-500">Status</span>
+      <span :class="pollerStatus === 'running' ? 'text-green-400 font-medium' : 'text-red-400 font-medium'"
+            x-text="pollerStatus"></span>
+
+      <span class="text-slate-500">Polls completed</span>
+      <span class="text-slate-200" x-text="pollsTotal.toLocaleString()"></span>
+
+      <span class="text-slate-500">Last poll</span>
+      <span class="text-slate-200" x-text="$store.app.lastPollLabel"></span>
+
+      <span class="text-slate-500">Poll interval</span>
+      <span class="text-slate-200" x-text="pollInterval + 's'"></span>
+
+      <span class="text-slate-500">Last error</span>
+      <span :class="lastError ? 'text-red-400' : 'text-slate-500'"
+            x-text="lastError || 'None'" class="truncate max-w-[200px]"></span>
     </div>
+    <p class="text-xs text-slate-600 mt-3 border-t border-slate-700 pt-3">
+      Polls the Energipays cloud API every <span x-text="pollInterval"></span>s and publishes metrics to the local database.
+    </p>
   </div>
 
   <!-- Polling interval -->
@@ -35,46 +45,351 @@
     <div class="text-xs text-slate-500 mt-2">Restart the server after changing the poll interval.</div>
   </div>
 
-  <!-- Credentials info -->
+  <!-- Account / credentials -->
   <div class="card mb-4">
-    <div class="font-medium text-slate-200 mb-2">Credentials</div>
-    <div class="text-xs text-slate-400 space-y-1">
-      <p>Set via environment variables or <code class="bg-slate-800 px-1 rounded">.env</code> file:</p>
-      <pre class="bg-slate-800 rounded p-2 text-green-400 mt-2">ENERGIPAYS_EMAIL=you@example.com
-ENERGIPAYS_PASSWORD=secret
-ENERGIPAYS_POLL_INTERVAL=60</pre>
-      <p class="text-slate-500">Credentials are never stored in the database.</p>
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-medium text-slate-200">Account</div>
+      <button x-show="!changingCredentials"
+              @click="changingCredentials = true"
+              class="text-xs text-brand hover:text-brand/80 transition-colors">
+        Change account
+      </button>
     </div>
-  </div>
 
-  <!-- Data retention -->
-  <div class="card mb-4">
-    <div class="font-medium text-slate-200 mb-3">Data Retention</div>
-    <div class="space-y-3">
-      <div class="flex items-center gap-3">
-        <label class="text-sm text-slate-400 w-32">Raw data</label>
-        <input type="number" min="1" max="30" x-model.number="rawAgeDays"
-               class="w-20 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand" />
-        <span class="text-sm text-slate-400">days</span>
+    <!-- Connected account summary -->
+    <div x-show="!changingCredentials" class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-brand/20 flex items-center justify-center shrink-0">
+        <span class="text-sm font-semibold text-brand"
+              x-text="($store.app.userName || $store.app.userEmail || '?')[0].toUpperCase()"></span>
       </div>
-      <div class="flex items-center gap-3">
-        <label class="text-sm text-slate-400 w-32">Archive</label>
-        <input type="number" min="7" max="365" x-model.number="retentionDays"
-               class="w-20 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand" />
-        <span class="text-sm text-slate-400">days</span>
+      <div>
+        <div class="text-sm text-slate-200 font-medium" x-text="$store.app.userName || '—'"></div>
+        <div class="text-xs text-slate-500" x-text="$store.app.userEmail || 'Not connected'"></div>
       </div>
-      <button @click="saveRetention()" :disabled="saving"
-              class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors disabled:opacity-50">
-        Save retention
+      <div class="ml-auto">
+        <span class="text-xs px-2 py-0.5 rounded-full"
+              :class="$store.app.connected ? 'bg-green-900/40 text-green-400' : 'bg-slate-700 text-slate-500'"
+              x-text="$store.app.connected ? 'Connected' : 'Offline'"></span>
+      </div>
+    </div>
+
+    <!-- Change credentials form -->
+    <div x-show="changingCredentials" class="space-y-3">
+      <!-- Success banner -->
+      <div x-show="credMsg && credOk"
+           class="flex items-center gap-2 text-xs bg-green-900/30 border border-green-700/40 text-green-300 rounded-lg px-3 py-2">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+        <span x-text="credMsg"></span>
+      </div>
+      <!-- Error banner -->
+      <div x-show="credMsg && !credOk"
+           class="flex items-center gap-2 text-xs bg-red-900/30 border border-red-700/40 text-red-300 rounded-lg px-3 py-2">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span x-text="credMsg"></span>
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Email address</label>
+        <input type="email" x-model="credEmail" placeholder="you@example.com"
+               class="w-full bg-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-brand"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Password</label>
+        <div class="relative">
+          <input :type="showCredPw ? 'text' : 'password'" x-model="credPassword"
+                 placeholder="••••••••"
+                 class="w-full bg-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-brand pr-9"/>
+          <button @click="showCredPw = !showCredPw"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path x-show="!showCredPw" stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              <path x-show="showCredPw" stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        Stored AES-256 encrypted on this server only
+      </p>
+      <div class="flex gap-2 pt-1">
+        <button @click="testCredentials()"
+                :disabled="credBusy || !credEmail || !credPassword"
+                class="flex-1 py-2 rounded-lg text-sm font-medium border border-slate-600 text-slate-300 hover:border-slate-400 transition-colors disabled:opacity-40">
+          <span x-show="credBusy && credAction==='test'">Testing…</span>
+          <span x-show="!(credBusy && credAction==='test')">Test connection</span>
+        </button>
+        <button @click="saveCredentials()"
+                :disabled="credBusy || !credEmail || !credPassword"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold bg-brand hover:bg-brand/90 text-white transition-colors disabled:opacity-40">
+          <span x-show="credBusy && credAction==='save'">Saving…</span>
+          <span x-show="!(credBusy && credAction==='save')">Save & reconnect</span>
+        </button>
+      </div>
+      <button @click="changingCredentials = false; credMsg = ''"
+              class="w-full text-xs text-slate-500 hover:text-slate-400 py-1 transition-colors">
+        Cancel
       </button>
     </div>
   </div>
 
+  <!-- Database storage -->
+  <div class="card mb-4">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-xs text-slate-500 uppercase tracking-wide">Database Storage</div>
+      <span x-show="dbSizeMb !== null" class="text-xs text-slate-500" x-text="dbSizeMb + ' MB'"></span>
+    </div>
+
+    <!-- Metrics recording toggle -->
+    <div class="flex items-center justify-between py-2 border-b border-slate-700 mb-3">
+      <div>
+        <div class="text-sm text-slate-200 font-medium">Metrics Recording</div>
+        <div class="text-xs text-slate-500 mt-0.5">Store historical data locally. Disable for HA add-on mode — use HA's recorder instead.</div>
+      </div>
+      <button @click="toggleMetrics()"
+              :class="metricsEnabled ? 'bg-brand' : 'bg-slate-600'"
+              class="relative w-11 h-6 rounded-full transition-colors shrink-0 ml-4">
+        <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+              :class="metricsEnabled ? 'translate-x-5' : ''"></span>
+      </button>
+    </div>
+
+    <!-- Table stats -->
+    <div x-show="metricsEnabled">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-xs text-slate-500 border-b border-slate-700">
+            <th class="text-left pb-1.5 font-normal">Table</th>
+            <th class="text-right pb-1.5 font-normal">Rows</th>
+            <th class="text-right pb-1.5 font-normal">Span</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          <template x-for="t in dbTables" :key="t.table">
+            <tr>
+              <td class="py-1.5 font-mono text-xs text-slate-400" x-text="t.table"></td>
+              <td class="py-1.5 text-right text-slate-200" x-text="(t.rows || 0).toLocaleString()"></td>
+              <td class="py-1.5 text-right text-slate-400 text-xs"
+                  x-text="t.span_days ? t.span_days + 'd' : '—'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <button @click="_refreshDbStats()"
+              class="mt-3 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+        ↻ Refresh
+      </button>
+    </div>
+
+    <div x-show="!metricsEnabled"
+         class="py-3 text-xs text-slate-500 text-center">
+      Bridge mode — no local metrics stored. HA Recorder handles history.
+    </div>
+  </div>
+
+  <!-- Metrics storage / retention -->
+  <div class="card mb-4" :class="!metricsEnabled ? 'opacity-40 pointer-events-none' : ''">
+    <div class="text-xs text-slate-500 uppercase tracking-wide mb-3">Metrics Storage</div>
+
+    <div class="space-y-3">
+      <!-- Raw retention -->
+      <div class="flex items-center gap-3">
+        <label class="text-sm text-slate-400 flex-1">Retention (days)</label>
+        <input type="number" min="7" max="365" x-model.number="retentionDays"
+               class="w-20 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand text-right" />
+        <button @click="saveRetentionDays()" :disabled="saving"
+                class="text-xs bg-brand/80 hover:bg-brand text-white px-3 py-1.5 rounded transition-colors disabled:opacity-50 w-16">
+          Save
+        </button>
+      </div>
+
+      <!-- Archive (raw full-resolution) -->
+      <div class="flex items-center gap-3">
+        <label class="text-sm text-slate-400 flex-1">Raw full-resolution (days)</label>
+        <input type="number" min="1" max="30" x-model.number="rawAgeDays"
+               class="w-20 bg-slate-700 text-slate-100 text-sm rounded px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-brand text-right" />
+        <button @click="saveRawDays()" :disabled="saving"
+                class="text-xs bg-brand/80 hover:bg-brand text-white px-3 py-1.5 rounded transition-colors disabled:opacity-50 w-16">
+          Save
+        </button>
+      </div>
+    </div>
+
+    <p class="text-xs text-slate-600 mt-3">
+      Raw data kept full-resolution for <span x-text="rawAgeDays"></span> days, then downsampled to 5-min averages, then purged after <span x-text="retentionDays"></span> days. Maintenance runs hourly. (Raw window must be ≤ retention.)
+    </p>
+
+    <!-- Archive Now -->
+    <div class="mt-3 pt-3 border-t border-slate-700">
+      <button @click="archiveNow()" :disabled="archiving"
+              class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded transition-colors disabled:opacity-50 font-medium">
+        <span x-show="!archiving">Archive Now</span>
+        <span x-show="archiving">Archiving…</span>
+      </button>
+      <span x-show="archiveMsg" class="ml-3 text-xs text-green-400" x-text="archiveMsg"></span>
+    </div>
+  </div>
+
+  <!-- Backup & Export -->
+  <div class="card mb-4" :class="!metricsEnabled ? 'opacity-40 pointer-events-none' : ''">
+    <div class="text-xs text-slate-500 uppercase tracking-wide mb-3">Backup &amp; Export</div>
+
+    <!-- Actions row -->
+    <div class="flex items-center gap-3 mb-4">
+      <button @click="createBackup()" :disabled="backingUp"
+              class="text-xs font-medium bg-brand/80 hover:bg-brand text-white px-4 py-2 rounded transition-colors disabled:opacity-50">
+        <span x-show="!backingUp">Create Backup</span>
+        <span x-show="backingUp">Creating…</span>
+      </button>
+      <button @click="_refreshBackups()"
+              class="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2 py-2">
+        Refresh
+      </button>
+    </div>
+
+    <!-- Recent backups -->
+    <div x-show="backups.length > 0">
+      <div class="text-xs text-slate-500 mb-2">Recent Backups (<span x-text="backups.length"></span>)</div>
+      <div class="space-y-1.5">
+        <template x-for="b in backups" :key="b.name">
+          <div class="flex items-center gap-2 text-xs py-1.5 border-b border-slate-800">
+            <span class="text-slate-400 font-mono flex-1 truncate" x-text="b.name"></span>
+            <span class="text-slate-600" x-text="b.size_kb + ' KB'"></span>
+            <a :href="'/api/admin/backup/' + b.name"
+               download
+               class="text-brand hover:text-brand/80 transition-colors font-medium">Download</a>
+          </div>
+        </template>
+      </div>
+    </div>
+    <div x-show="backups.length === 0" class="text-xs text-slate-600 mb-3">
+      No backups yet — create one above.
+    </div>
+
+    <!-- Export metrics -->
+    <div class="mt-4 pt-3 border-t border-slate-700">
+      <div class="text-xs text-slate-500 mb-2">Export Metrics</div>
+      <div class="flex items-center gap-2">
+        <select x-model="exportHours"
+                class="bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand">
+          <option value="24">24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+        </select>
+        <a :href="'/api/admin/export/metrics?fmt=csv&hours=' + exportHours"
+           download
+           class="text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors">
+          ↓ CSV
+        </a>
+        <a :href="'/api/admin/export/metrics?fmt=json&hours=' + exportHours"
+           download
+           class="text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors">
+          ↓ JSON
+        </a>
+      </div>
+    </div>
+  </div>
+
   <!-- Device info -->
-  <div class="card">
+  <div class="card mb-4">
     <div class="font-medium text-slate-200 mb-2">Device</div>
     <div class="font-mono text-xs text-slate-400" x-text="$store.app.deviceId || 'Not discovered'"></div>
     <div class="text-xs text-slate-500 mt-1" x-text="$store.app.dataServer"></div>
+  </div>
+
+  <!-- MQTT Discovery -->
+  <div class="card" x-data="mqttSettings()">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-medium text-slate-200">MQTT Discovery</div>
+      <!-- connection status dot -->
+      <span class="flex items-center gap-1.5 text-xs"
+            :class="mqttConnected ? 'text-green-400' : 'text-slate-500'">
+        <span class="w-2 h-2 rounded-full" :class="mqttConnected ? 'bg-green-400' : 'bg-slate-600'"></span>
+        <span x-text="mqttConnected ? 'Connected' : (mqttEnabled ? 'Disconnected' : 'Disabled')"></span>
+      </span>
+    </div>
+
+    <p class="text-xs text-slate-500 mb-3">
+      Publishes all sensor values as HA MQTT Discovery entities. Use the same broker
+      as the FranklinWH Modbus Bridge — entities from both bridges appear in HA automatically.
+    </p>
+
+    <!-- Enable toggle -->
+    <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-700">
+      <span class="text-sm text-slate-300">Enable MQTT</span>
+      <div class="text-xs text-slate-500 italic">Set <code class="text-slate-400">MQTT_ENABLED=true</code> in env / docker-compose</div>
+    </div>
+
+    <!-- Config display (read-only — set via env) -->
+    <div class="space-y-2 mb-4">
+      <template x-for="[label, val] in [
+        ['Broker host', mqttHost],
+        ['Port', mqttPort],
+        ['Username', mqttUsername || '(none)'],
+        ['Discovery prefix', mqttPrefix],
+      ]" :key="label">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-slate-500 text-xs" x-text="label"></span>
+          <span class="font-mono text-xs text-slate-300" x-text="val"></span>
+        </div>
+      </template>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-2">
+      <button @click="republish()"
+              :disabled="!mqttEnabled || republishing"
+              class="flex-1 py-2 rounded-lg text-xs font-medium bg-brand/20 text-brand border border-brand/30 hover:bg-brand/30 disabled:opacity-40 transition-colors">
+        <span x-show="!republishing">↺ Republish discovery</span>
+        <span x-show="republishing">Publishing…</span>
+      </button>
+      <button @click="unpublish()"
+              :disabled="!mqttEnabled || unpublishing"
+              class="py-2 px-3 rounded-lg text-xs text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-800 disabled:opacity-40 transition-colors">
+        <span x-show="!unpublishing">Clear from HA</span>
+        <span x-show="unpublishing">Clearing…</span>
+      </button>
+    </div>
+    <div x-show="actionMsg" class="mt-2 text-xs" :class="actionOk ? 'text-green-400' : 'text-red-400'"
+         x-text="actionMsg"></div>
+  </div>
+
+  <!-- API HTTP Metrics -->
+  <div class="card mt-4" x-data="httpStatsCard()" x-init="load()">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-medium text-slate-200">API Connectivity</div>
+      <button @click="load()" :class="loading && 'animate-spin'"
+              class="text-slate-400 hover:text-slate-200 text-sm">↺</button>
+    </div>
+    <div x-show="!available" class="text-xs text-slate-500">Not connected.</div>
+    <div x-show="available" class="space-y-1.5 text-xs">
+      <div class="flex justify-between">
+        <span class="text-slate-500">Session started</span>
+        <span class="text-slate-300 font-mono" x-text="fmtTs(started_ts)"></span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-500">Total requests</span>
+        <span class="text-slate-300 font-mono" x-text="total_requests"></span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-500">Last request</span>
+        <span class="text-slate-300 font-mono" x-text="fmtTs(last_request_ts)"></span>
+      </div>
+      <div class="border-t border-slate-700/50 pt-1.5 flex justify-between">
+        <span :class="error_count > 0 ? 'text-red-400' : 'text-slate-500'">HTTP errors</span>
+        <span class="font-mono font-semibold" :class="error_count > 0 ? 'text-red-400' : 'text-slate-400'"
+              x-text="error_count"></span>
+      </div>
+      <template x-if="error_count > 0">
+        <div class="space-y-1">
+          <div class="flex justify-between">
+            <span class="text-slate-500">Last error at</span>
+            <span class="text-red-400 font-mono" x-text="fmtTs(last_error_ts)"></span>
+          </div>
+          <div class="text-red-400/80 font-mono break-all" x-text="last_error"></div>
+        </div>
+      </template>
+    </div>
   </div>
 
 </div>

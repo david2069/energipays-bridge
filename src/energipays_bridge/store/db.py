@@ -38,6 +38,17 @@ _MIGRATIONS = [
         version INTEGER PRIMARY KEY
     );
     """,
+    # v2 — persistent application log storage
+    """
+    CREATE TABLE IF NOT EXISTS app_logs (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts      REAL    NOT NULL,
+        level   TEXT    NOT NULL,
+        logger  TEXT    NOT NULL,
+        msg     TEXT    NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts);
+    """,
 ]
 
 

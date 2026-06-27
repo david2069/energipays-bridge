@@ -19,13 +19,17 @@ _BUCKET_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}
 async def metrics_history(
     request: Request,
     point: str = Query(..., description="point_id, e.g. phasePower"),
-    range: str = Query("24h", description="time range: 1h,2h,4h,6h,12h,24h,7d,30d"),
+    range: str = Query("24h", description="preset range: 1h,2h,4h,6h,12h,24h,7d,30d"),
     bucket: str = Query("5m", description="bucket size: 1m,5m,15m,1h"),
+    from_ts: float = Query(None, alias="from", description="unix timestamp — overrides range"),
+    to_ts: float = Query(None, alias="to", description="unix timestamp — overrides range"),
 ) -> dict:
-    range_s = _RANGE_SECONDS.get(range, 86400)
     bucket_s = _BUCKET_SECONDS.get(bucket, 300)
-    to_ts = time.time()
-    from_ts = to_ts - range_s
+    now = time.time()
+    if from_ts is None or to_ts is None:
+        range_s = _RANGE_SECONDS.get(range, 86400)
+        to_ts = now
+        from_ts = now - range_s
     device_id = request.app.state.device_id
     db = request.app.state.db
 
@@ -34,5 +38,7 @@ async def metrics_history(
         "point": point,
         "range": range,
         "bucket": bucket,
+        "from": from_ts,
+        "to": to_ts,
         "data": [{"ts": ts, "value": val} for ts, val in rows],
     }

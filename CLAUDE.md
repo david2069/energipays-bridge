@@ -54,6 +54,13 @@ EnergipaysPoller (60s) → SampleBus → MetricsRecorder → SQLite
 FastAPI → Jinja2 SPA → Alpine.js + Chart.js (no build step)
 ```
 
+## Working rules
+
+- **Never change UI layout, behaviour, or any existing feature without explicit user approval.**
+- If a change is needed beyond the stated task, describe it and wait for a yes before touching anything.
+- One increment at a time: propose → get approval → implement → deploy.
+- **After every JS/HTML change: check browser console errors before reporting done.** Use grep on templates and JS files for common Alpine pitfalls (`x-if` inside SVG, undefined store keys, missing methods) if a browser is not available.
+
 ## Conventions
 
 - Python ≥ 3.11, type hints on public functions
@@ -75,6 +82,27 @@ FastAPI → Jinja2 SPA → Alpine.js + Chart.js (no build step)
 | `src/energipays_bridge/api/` | REST routes |
 | `src/energipays_bridge/templates/` | Jinja2 SPA shell + tabs |
 | `src/energipays_bridge/static/js/app.js` | Alpine store + 10s poll |
+
+## Known Behaviour
+
+### Poll lag (by design)
+The bridge polls Energipays every **60 seconds** (configurable, but do not go below 60s).
+This means state changes visible in the energipays.com app may take up to 60s to appear here.
+This is intentional — we must not hammer the Energipays API.
+
+The UI polls `/api/points/latest` every **10 seconds** for display refresh, but that data is
+only as fresh as the last 60s device poll.
+
+Commands (UI or MQTT) are sent immediately and acknowledged in real time (log + toast +
+Last Command Result sensor in HA). The 60s lag only applies to passive state polling.
+
+### Command audit trail
+Every write command is logged with source prefix:
+- `cmd (UI): <action> → <result>` — sent from the web dashboard
+- `cmd (MQTT): <action> → <result>` — sent from Home Assistant
+
+Failures are logged as `WARNING`. Both UI and MQTT commands publish to the
+`Last Command Result` and `Last Command Time` HA sensors for track & trace.
 
 ## Safe Mode
 

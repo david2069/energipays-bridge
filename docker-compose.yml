@@ -12,4 +12,12 @@ services:
       - ENERGIPAYS_POLL_INTERVAL=${ENERGIPAYS_POLL_INTERVAL:-60}
       - DATA_DIR=/app/data
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # MQTT — same broker as franklinwh-modbus-bridge (fwhbridge-mosquitto, host port 1886)
+      - MQTT_ENABLED=true
+      - MQTT_HOST=host.docker.internal
+      - MQTT_PORT=1886
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped

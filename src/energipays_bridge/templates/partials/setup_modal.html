@@ -1,0 +1,202 @@
+<!-- Setup / onboarding modal — shown when no credentials are configured -->
+<div
+  x-show="$store.app.setupModal"
+  x-cloak
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  x-transition:enter="transition ease-out duration-200"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="transition ease-in duration-150"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
+  x-data="setupForm()"
+>
+  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
+
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Connect to Energipays</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Enter your account credentials to get started</p>
+      </div>
+    </div>
+
+    <!-- Status banner -->
+    <div x-show="status" class="mb-4 rounded-lg px-4 py-3 text-sm font-medium"
+         :class="{
+           'bg-green-50 text-green-800 border border-green-200': status === 'success',
+           'bg-red-50 text-red-800 border border-red-200': status === 'error',
+           'bg-blue-50 text-blue-800 border border-blue-200': status === 'testing' || status === 'saving'
+         }">
+      <!-- Testing -->
+      <div x-show="status === 'testing'" class="flex items-center gap-2">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        Verifying credentials…
+      </div>
+      <!-- Saving -->
+      <div x-show="status === 'saving'" class="flex items-center gap-2">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        Connecting and saving…
+      </div>
+      <!-- Success -->
+      <div x-show="status === 'success'" class="flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span>Connected as <strong x-text="userName"></strong> — starting poller…</span>
+      </div>
+      <!-- Error -->
+      <div x-show="status === 'error'" class="flex items-center gap-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <span x-text="errorMsg"></span>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <form @submit.prevent="save()" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email address</label>
+        <input
+          type="email"
+          x-model="email"
+          placeholder="you@example.com"
+          autocomplete="username"
+          :disabled="status === 'saving' || status === 'success'"
+          class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          required
+        />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+        <div class="relative">
+          <input
+            :type="showPw ? 'text' : 'password'"
+            x-model="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            :disabled="status === 'saving' || status === 'success'"
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            required
+          />
+          <button type="button" @click="showPw = !showPw"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+            <svg x-show="!showPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            <svg x-show="showPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Encryption note -->
+      <p class="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        Stored encrypted (AES-256) on this server only
+      </p>
+
+      <!-- Buttons -->
+      <div class="flex gap-3 pt-2">
+        <button
+          type="button"
+          @click="test()"
+          :disabled="!email || !password || status === 'testing' || status === 'saving' || status === 'success'"
+          class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Test connection
+        </button>
+        <button
+          type="submit"
+          :disabled="!email || !password || status === 'testing' || status === 'saving' || status === 'success'"
+          class="flex-1 rounded-lg bg-blue-600 text-white py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Save &amp; connect
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function setupForm() {
+  return {
+    email: '',
+    password: '',
+    showPw: false,
+    status: '',       // '' | 'testing' | 'saving' | 'success' | 'error'
+    errorMsg: '',
+    userName: '',
+
+    async test() {
+      this.status = 'testing'
+      this.errorMsg = ''
+      try {
+        const r = await fetch('/api/setup/test', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: this.email, password: this.password}),
+        })
+        const d = await r.json()
+        if (d.ok) {
+          this.userName = d.user?.name || d.user?.email || this.email
+          this.status = 'success'
+          // Reset to allow saving after successful test
+          setTimeout(() => { this.status = '' }, 2500)
+        } else {
+          this.errorMsg = d.error || 'Login failed — check your credentials'
+          this.status = 'error'
+        }
+      } catch (e) {
+        this.errorMsg = 'Network error — is the server running?'
+        this.status = 'error'
+      }
+    },
+
+    async save() {
+      this.status = 'saving'
+      this.errorMsg = ''
+      try {
+        const r = await fetch('/api/setup/save', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: this.email, password: this.password}),
+        })
+        const d = await r.json()
+        if (d.ok) {
+          this.userName = d.user?.name || d.user?.email || this.email
+          this.status = 'success'
+          Alpine.store('app').addToast('Connected as ' + this.userName, 'success')
+          // Give the poller a moment to start, then dismiss modal
+          setTimeout(() => {
+            Alpine.store('app').setupModal = false
+            Alpine.store('app').needsSetup = false
+          }, 1500)
+        } else {
+          this.errorMsg = d.error || 'Login failed — check your credentials'
+          this.status = 'error'
+        }
+      } catch (e) {
+        this.errorMsg = 'Network error — is the server running?'
+        this.status = 'error'
+      }
+    },
+  }
+}
+</script>

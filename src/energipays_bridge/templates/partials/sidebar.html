@@ -1,7 +1,9 @@
 <!-- Desktop sidebar nav -->
 <nav class="w-16 flex flex-col items-center py-4 bg-slate-800 border-r border-slate-700 shrink-0">
-  <div class="mb-6">
-    <img src="/static/icons/icon-192.png" alt="logo" class="w-9 h-9 rounded-lg" onerror="this.style.display='none'" />
+  <!-- Energipays logo -->
+  <div class="mb-5">
+    <img src="/static/icons/devices/logo-small-clean.svg" alt="logo" class="w-8 h-8"
+         onerror="this.src='/static/icons/icon-192.png'" />
   </div>
 
   <template x-for="tab in $store.app.tabs" :key="tab.id">
@@ -12,7 +14,22 @@
         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'"
       class="w-10 h-10 rounded-lg flex items-center justify-center mb-1 transition-colors"
       :title="tab.label">
-      <span x-html="tab.icon" class="w-5 h-5"></span>
+      <!-- Use energipays.com sidebar icons where available, else fallback to inline SVG -->
+      <template x-if="tab.id === 'dashboard'">
+        <img src="/static/icons/devices/sidebar-devices.svg" class="w-5 h-5"
+             :style="$store.app.activeTab === 'dashboard' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:invert(60%) sepia(0%) saturate(0%) brightness(80%)'" alt=""/>
+      </template>
+      <template x-if="tab.id === 'analytics'">
+        <img src="/static/icons/devices/sidebar-analytics.svg" class="w-5 h-5"
+             :style="$store.app.activeTab === 'analytics' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:invert(60%) sepia(0%) saturate(0%) brightness(80%)'" alt=""/>
+      </template>
+      <template x-if="tab.id === 'rules'">
+        <img src="/static/icons/devices/sidebar-rules.svg" class="w-5 h-5"
+             :style="$store.app.activeTab === 'rules' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:invert(60%) sepia(0%) saturate(0%) brightness(80%)'" alt=""/>
+      </template>
+      <template x-if="tab.id !== 'dashboard' && tab.id !== 'analytics' && tab.id !== 'rules'">
+        <span x-html="tab.icon" class="w-5 h-5"></span>
+      </template>
     </button>
   </template>
 </nav>

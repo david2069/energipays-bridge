@@ -1,6 +1,7 @@
 <!-- Raw Metrics tab -->
 <div x-show="$store.app.activeTab === 'raw'" x-data="rawTab()">
 
+  <!-- Header + mode toggle -->
   <div class="flex items-center justify-between mb-4">
     <h2 class="font-semibold text-slate-100">Raw Metrics</h2>
     <div class="flex gap-2">
@@ -13,24 +14,62 @@
     </div>
   </div>
 
-  <!-- Tree view -->
+  <!-- ── Tree view ───────────────────────────────────────────────────────── -->
   <div x-show="mode === 'tree'" class="card">
-    <div class="text-xs text-slate-500 mb-3"
-         x-text="'Points: ' + Object.keys($store.app.points).length + ' · updated ' + $store.app.lastPollLabel"></div>
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-xs text-slate-500"
+            x-text="'Points: ' + Object.keys($store.app.points).length + ' · updated ' + $store.app.lastPollLabel"></span>
+      <button @click="exportTreeJSON()"
+              class="text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded px-2 py-0.5 bg-slate-800">
+        ↓ JSON
+      </button>
+    </div>
     <div class="space-y-0.5">
       <template x-for="[k, v] in Object.entries($store.app.points).sort()" :key="k">
         <div class="flex justify-between items-center py-1 px-2 rounded hover:bg-slate-800 group">
           <span class="font-mono text-xs text-slate-400 group-hover:text-slate-300" x-text="k"></span>
-          <span class="font-mono text-xs text-slate-200 ml-4" x-text="typeof v === 'number' ? v.toLocaleString() : String(v)"></span>
+          <span class="font-mono text-xs text-slate-200 ml-4 tabular-nums"
+                x-text="typeof v === 'number' ? v.toLocaleString(undefined, {maximumFractionDigits: 4}) : String(v)"></span>
         </div>
       </template>
     </div>
   </div>
 
-  <!-- Terminal view -->
-  <div x-show="mode === 'terminal'" class="card">
-    <pre class="font-mono text-xs text-green-400 overflow-x-auto whitespace-pre-wrap leading-relaxed"
-         x-text="JSON.stringify($store.app.points, null, 2)"></pre>
+  <!-- ── Terminal / command runner ─────────────────────────────────────── -->
+  <div x-show="mode === 'terminal'" class="space-y-3">
+
+    <!-- Command bar -->
+    <div class="flex flex-wrap items-center gap-2">
+      <select x-model="selectedCmd"
+              class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-slate-500 flex-1 min-w-40">
+        <template x-for="c in commands" :key="c.id">
+          <option :value="c.id" x-text="c.label"></option>
+        </template>
+      </select>
+      <code class="text-xs text-slate-500 font-mono truncate max-w-48" x-text="selectedEndpoint"></code>
+      <button @click="runCommand()"
+              :disabled="cmdLoading"
+              class="px-3 py-1.5 rounded text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium">
+        <span x-show="!cmdLoading">▶ Run</span>
+        <span x-show="cmdLoading">…</span>
+      </button>
+      <button @click="exportCmdJSON()" x-show="cmdOutput !== null"
+              class="px-2 py-1.5 rounded text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
+        ↓ JSON
+      </button>
+    </div>
+
+    <!-- Output -->
+    <div class="card p-0 overflow-hidden">
+      <div x-show="cmdError" class="text-xs text-red-400 font-mono px-3 py-2" x-text="cmdError"></div>
+      <div x-show="!cmdOutput && !cmdError" class="text-xs text-slate-500 px-3 py-4 text-center">
+        Select a command and press Run
+      </div>
+      <pre x-show="cmdOutput !== null"
+           class="font-mono text-xs text-green-400 overflow-x-auto whitespace-pre-wrap leading-relaxed p-3 max-h-[60vh] overflow-y-auto"
+           x-text="cmdOutputStr"></pre>
+    </div>
+
   </div>
 
 </div>

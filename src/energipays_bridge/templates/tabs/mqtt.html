@@ -1,0 +1,112 @@
+<!-- MQTT Entities tab -->
+<div x-show="$store.app.activeTab === 'mqtt'" x-data="mqttTab()">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <h2 class="font-semibold text-slate-100">MQTT Entities</h2>
+      <!-- connection pill -->
+      <span class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+            :class="connected ? 'bg-green-900/40 text-green-400' : 'bg-slate-700 text-slate-400'">
+        <span class="w-1.5 h-1.5 rounded-full" :class="connected ? 'bg-green-400' : 'bg-slate-500'"></span>
+        <span x-text="connected ? 'Connected' : 'Disconnected'"></span>
+      </span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button @click="load()" :class="loading && 'animate-spin'"
+              class="text-slate-400 hover:text-slate-200 text-sm">↺</button>
+      <button @click="republish()"
+              class="text-xs px-2.5 py-1.5 rounded-lg bg-brand/20 text-brand border border-brand/30 hover:bg-brand/30 transition-colors">
+        ↺ Republish
+      </button>
+      <button @click="unpublish()"
+              class="text-xs px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-800 transition-colors">
+        Clear HA
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter + search row -->
+  <div class="flex items-center gap-2 mb-3 flex-wrap">
+    <div class="flex gap-1 bg-slate-800 rounded-lg p-0.5">
+      <template x-for="[f, label] in [['all','All'],['writable','Writable'],['sensors','Sensors'],['binary','Binary'],['diagnostic','Diagnostic']]" :key="f">
+        <button @click="filter = f"
+                :class="filter === f ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 hover:text-slate-300'"
+                class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                x-text="label"></button>
+      </template>
+    </div>
+    <span class="text-xs text-slate-500" x-text="filtered().length + ' entities'"></span>
+    <input type="search" x-model="search" placeholder="Search…"
+           class="ml-auto w-36 bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand placeholder-slate-600" />
+  </div>
+
+  <!-- Loading -->
+  <div x-show="loading" class="text-slate-500 text-sm py-8 text-center">Loading…</div>
+
+  <!-- Entity list -->
+  <div x-show="!loading" class="space-y-1.5">
+    <template x-for="e in filtered()" :key="e.slug">
+      <div class="card p-3">
+        <div class="flex items-start gap-3">
+
+          <!-- Type badge -->
+          <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5"
+                :class="typeColor(e.ha_type)"
+                x-text="typeLabel(e.ha_type)"></span>
+
+          <!-- Name + slug + keys -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-medium text-slate-200 text-sm" x-text="e.name"></span>
+              <span x-show="e.writable"
+                    class="text-[10px] px-1 py-0.5 rounded bg-amber-900/30 text-amber-400 font-medium">
+                writable
+              </span>
+              <span x-show="e.diagnostic"
+                    class="text-[10px] px-1 py-0.5 rounded bg-slate-700 text-slate-500 font-medium">
+                diag
+              </span>
+              <span x-show="e.unit" class="text-[10px] text-slate-500" x-text="e.unit"></span>
+            </div>
+            <div class="font-mono text-[10px] text-slate-600 mt-0.5" x-text="e.slug"></div>
+            <div x-show="e.stat_key"
+                 class="font-mono text-[10px] text-slate-700 truncate"
+                 x-text="'key: ' + e.stat_key"></div>
+
+            <!-- Select options -->
+            <div x-show="e.options && e.options.length" class="flex flex-wrap gap-1 mt-1.5">
+              <template x-for="opt in (e.options || [])" :key="opt">
+                <span class="text-[10px] px-1.5 py-0.5 rounded border"
+                      :class="opt === e.value ? 'border-brand bg-brand/10 text-brand' : 'border-slate-700 text-slate-600'"
+                      x-text="opt"></span>
+              </template>
+            </div>
+
+            <!-- State + command topics (collapsed by default) -->
+            <div x-data="{showTopics:false}">
+              <button @click="showTopics=!showTopics"
+                      class="text-[10px] text-slate-600 hover:text-slate-400 mt-1 transition-colors"
+                      x-text="showTopics ? '▲ topics' : '▾ topics'"></button>
+              <div x-show="showTopics" class="mt-1 space-y-0.5">
+                <div class="font-mono text-[10px] text-slate-600 truncate" x-text="'state: ' + (e.state_topic || '—')"></div>
+                <div x-show="e.command_topic"
+                     class="font-mono text-[10px] text-amber-700 truncate"
+                     x-text="'cmd:   ' + e.command_topic"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Current value -->
+          <div class="shrink-0 text-right min-w-[3rem]">
+            <span class="font-mono text-sm font-semibold"
+                  :class="valueClass(e)"
+                  x-text="e.value ?? '—'"></span>
+          </div>
+
+        </div>
+      </div>
+    </template>
+  </div>
+
+</div>

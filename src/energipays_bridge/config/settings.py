@@ -5,6 +5,19 @@ import pathlib
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class MqttSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="MQTT_", env_file=".env",
+                                      env_file_encoding="utf-8", extra="ignore")
+
+    host: str = "localhost"
+    port: int = 1883
+    username: str = ""
+    password: str = ""
+    tls: bool = False
+    enabled: bool = False                    # opt-in; set MQTT_ENABLED=true to activate
+    discovery_prefix: str = "homeassistant"
+
+
 class BridgeSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -25,6 +38,9 @@ class BridgeSettings(BaseSettings):
     data_dir: str = "./data"                 # SQLite + cache files live here
     raw_age_days: int = 7                    # full-resolution retention
     retention_days: int = 30                 # archive retention
+
+    # Timezone (used for cloud stats API calls)
+    timezone: str = "Australia/Sydney"
 
     # Logging
     log_level: str = "INFO"

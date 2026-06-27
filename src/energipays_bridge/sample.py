@@ -34,6 +34,15 @@ class SampleBus:
     def subscribe(self, fn: Subscriber) -> None:
         self._subscribers.append(fn)
 
+    def unsubscribe_type(self, cls: type) -> int:
+        """Remove all subscribers whose owning object is an instance of cls. Returns count removed."""
+        before = len(self._subscribers)
+        self._subscribers = [
+            fn for fn in self._subscribers
+            if not isinstance(getattr(fn, "__self__", None), cls)
+        ]
+        return before - len(self._subscribers)
+
     async def publish(self, sample: Sample) -> None:
         tasks = [asyncio.create_task(fn(sample)) for fn in self._subscribers]
         if tasks:
