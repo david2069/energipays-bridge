@@ -71,7 +71,7 @@ function analyticsTab() {
       // On mobile: default local range to 1h, cloud span to 6h (less dense)
       if (window.innerWidth < 768) {
         this.rangeOrCustom = '1h'
-        this.cloudSpan = '6h'
+        this.cloudSpan = '2h'
       }
       await this.$nextTick()
       this._buildChart()
@@ -390,12 +390,19 @@ function analyticsTab() {
         }
       }
 
-      // 6h view: find the last entry at or before now, slice 12 entries back from there
-      if (this.cloudSpan === '6h' && rows.length > 12 && rawTs.length === rows.length) {
-        const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ') // "YYYY-MM-DD HH:MM"
-        let nowIdx = rawTs.reduce((best, ts, i) => ts.slice(0,16) <= nowStr ? i : best, 11)
+      // For sub-day spans ('6h', '3h', '2h', '1h'): clip to N buckets ending at Now.
+      // Uses HH:MM labels (always populated) to find current position in the day.
+      const _subDayBuckets = { '1h': 2, '2h': 4, '3h': 6, '6h': 12 }
+      const _nBuckets = _subDayBuckets[this.cloudSpan]
+      if (_nBuckets && rows.length > _nBuckets) {
+        const nowHHMM = (() => { const d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') })()
+        // Find last label index whose HH:MM value is <= now (labels may be 'HH:MM' or 'DD/MM')
+        let nowIdx = labels.reduce((best, lbl, i) => {
+          const t = (lbl.length === 5 && lbl[2] === ':') ? lbl : null
+          return t && t <= nowHHMM ? i : best
+        }, Math.min(_nBuckets - 1, rows.length - 1))
         const end   = nowIdx + 1
-        const start = Math.max(0, end - 12)
+        const start = Math.max(0, end - _nBuckets)
         rows   = rows.slice(start, end)
         labels = labels.slice(start, end)
       }

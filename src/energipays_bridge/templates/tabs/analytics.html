@@ -151,7 +151,7 @@
     <div class="flex items-center gap-2 flex-wrap">
       <!-- Span selector -->
       <div class="flex rounded-lg overflow-hidden border border-slate-700">
-        <template x-for="sp in ['6h','1d','7d','30d']" :key="sp">
+        <template x-for="sp in ['1h','2h','3h','6h','1d','7d','30d']" :key="sp">
           <button @click="cloudSpan=sp; _resetChart(); load()"
                   :class="cloudSpan===sp ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
                   class="px-2.5 py-1.5 text-xs font-medium transition-colors"
