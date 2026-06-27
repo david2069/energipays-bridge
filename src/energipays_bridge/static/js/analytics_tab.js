@@ -1,5 +1,5 @@
 // Chart.js stored in closure — NOT Alpine reactive (avoids Proxy recursion)
-let _analyticsChart = null
+
 let _chartData = []   // latest fetched data for export
 
 // Cloud stats field definitions — mirrors energipays.com chart legend
@@ -73,16 +73,19 @@ function analyticsTab() {
         this.rangeOrCustom = '1h'
         this.cloudSpan = '2h'
       }
-      await this.$nextTick()
-      this._buildChart()
-      await this.load()
+      // Defer chart build so the tab has time to become visible regardless
+      // of whether this is the starting tab or reached via the tab switcher.
+      setTimeout(() => {
+        this._buildChart()
+        if (this.$el._chart) this.load()
+      }, 80)
       this.$watch('$store.app.activeTab', val => {
         if (val === 'analytics') {
           // setTimeout instead of $nextTick: Alpine removes x-show display:none
           // synchronously, but the browser needs a full layout pass before
           // Chart.js can measure the canvas width. $nextTick fires too early.
           setTimeout(() => {
-            if (_analyticsChart) _analyticsChart.resize()
+            if (this.$el._chart) this.$el._chart.resize()
             else { this._buildChart(); this.load() }
           }, 50)
         }
@@ -100,28 +103,30 @@ function analyticsTab() {
     },
 
     _applyThemeToChart() {
-      if (!_analyticsChart) return
+      if (!this.$el._chart) return
       const c = this._chartColors()
-      _analyticsChart.options.plugins.legend.labels.color = c.legend
-      _analyticsChart.options.scales.x.ticks.color = c.ticks
-      _analyticsChart.options.scales.x.grid.color  = c.grid
-      _analyticsChart.options.scales.y.ticks.color = c.ticks
-      _analyticsChart.options.scales.y.grid.color  = c.grid
-      _analyticsChart.update('none')
+      this.$el._chart.options.plugins.legend.labels.color = c.legend
+      this.$el._chart.options.scales.x.ticks.color = c.ticks
+      this.$el._chart.options.scales.x.grid.color  = c.grid
+      this.$el._chart.options.scales.y.ticks.color = c.ticks
+      this.$el._chart.options.scales.y.grid.color  = c.grid
+      this.$el._chart.update('none')
     },
 
     _resizeChart() {
-      if (_analyticsChart) {
-        _analyticsChart.resize()
+      if (this.$el._chart) {
+        this.$el._chart.resize()
         // Belt-and-suspenders: mobile browsers sometimes need a second pass
         // after layout settles (scroll/flex recalc)
-        setTimeout(() => { if (_analyticsChart) _analyticsChart.resize() }, 150)
+        setTimeout(() => { if (this.$el._chart) this.$el._chart.resize() }, 150)
       }
     },
 
     _buildChart() {
-      const canvas = document.getElementById('analyticsChart')
-      if (!canvas || _analyticsChart) return
+      // Use this.$el so each layout (desktop / mobile) finds its own canvas
+      // instead of getElementById which always returns the first in the DOM.
+      const canvas = this.$el.querySelector('#analyticsChart')
+      if (!canvas || this.$el._chart) return
       // Defer if container is hidden (x-show=display:none → 0 dimensions).
       // The activeTab watcher will retry once the tab is visible.
       if (canvas.offsetWidth === 0) return
@@ -161,7 +166,7 @@ function analyticsTab() {
           ctx.restore()
         }
       }
-      _analyticsChart = new Chart(canvas.getContext('2d'), {
+      this.$el._chart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: { labels: [], datasets: [] },
         plugins: [nowLinePlugin],
@@ -209,10 +214,10 @@ function analyticsTab() {
     },
 
     _resetChart() {
-      if (_analyticsChart) {
-        _analyticsChart.data.labels = []
-        _analyticsChart.data.datasets = []
-        _analyticsChart.update()
+      if (this.$el._chart) {
+        this.$el._chart.data.labels = []
+        this.$el._chart.data.datasets = []
+        this.$el._chart.update()
       }
     },
 
@@ -247,7 +252,7 @@ function analyticsTab() {
     },
 
     async _loadLocal() {
-      if (!_analyticsChart) return
+      if (!this.$el._chart) return
       this.loading = true
       this.cloudError = ''
       _chartData = []
@@ -286,17 +291,17 @@ function analyticsTab() {
           }
         }
         const hasRight = allDatasets.some(ds => ds.yAxisID === 'yRight')
-        _analyticsChart.options.scales.yRight.display = hasRight
-        _analyticsChart.data.labels = labels
-        _analyticsChart.data.datasets = allDatasets
+        this.$el._chart.options.scales.yRight.display = hasRight
+        this.$el._chart.data.labels = labels
+        this.$el._chart.data.datasets = allDatasets
         // Stacking: flat mode = stacked bars, signed = grouped
         const localStacked = !this.signedMode
-        _analyticsChart.options.scales.x.stacked = localStacked
-        _analyticsChart.options.scales.y.stacked = localStacked
+        this.$el._chart.options.scales.x.stacked = localStacked
+        this.$el._chart.options.scales.y.stacked = localStacked
         // Show "Now" line for local mode (always current time) — HH:MM to match label format
         const _ln = new Date()
-        _analyticsChart._nowLabel = String(_ln.getHours()).padStart(2,'0') + ':' + String(_ln.getMinutes()).padStart(2,'0')
-        _analyticsChart.update()
+        this.$el._chart._nowLabel = String(_ln.getHours()).padStart(2,'0') + ':' + String(_ln.getMinutes()).padStart(2,'0')
+        this.$el._chart.update()
       } finally {
         this.loading = false
         await this.$nextTick()
@@ -313,7 +318,7 @@ function analyticsTab() {
     },
 
     async _loadCloud() {
-      if (!_analyticsChart || !this.cloudDate) return
+      if (!this.$el._chart || !this.cloudDate) return
       this.loading = true
       this.cloudError = ''
       _chartData = []
@@ -472,14 +477,14 @@ function analyticsTab() {
       }
 
       const hasRight = allDatasets.some(ds => ds.yAxisID === 'yRight')
-      _analyticsChart.options.scales.yRight.display = hasRight
+      this.$el._chart.options.scales.yRight.display = hasRight
       // Stacking: flat mode = stacked, signed mode = grouped
       const stacked = !this.signedMode
-      _analyticsChart.options.scales.x.stacked = stacked
-      _analyticsChart.options.scales.y.stacked = stacked
+      this.$el._chart.options.scales.x.stacked = stacked
+      this.$el._chart.options.scales.y.stacked = stacked
       // For multi-day, show more x-axis ticks so date labels are visible
       const multiDayView = this.cloudSpan !== '1d'
-      _analyticsChart.options.scales.x.ticks.maxTicksLimit = multiDayView ? 60 : 10
+      this.$el._chart.options.scales.x.ticks.maxTicksLimit = multiDayView ? 60 : 10
       // For today's 1d view: null out all values after "Now" index so future slots don't render
       const isToday = !multiDayView && this.cloudDate === _toDateStr(new Date())
       if (isToday) {
@@ -491,13 +496,13 @@ function analyticsTab() {
             for (let i = nowIdx + 1; i < ds.data.length; i++) ds.data[i] = null
           })
         }
-        _analyticsChart._nowLabel = nowLabel
+        this.$el._chart._nowLabel = nowLabel
       } else {
-        _analyticsChart._nowLabel = null
+        this.$el._chart._nowLabel = null
       }
-      _analyticsChart.data.labels = labels
-      _analyticsChart.data.datasets = allDatasets
-      _analyticsChart.update()
+      this.$el._chart.data.labels = labels
+      this.$el._chart.data.datasets = allDatasets
+      this.$el._chart.update()
 
       // If labels are empty we got an unexpected format — expose structure for debugging
       if (!labels.length) {

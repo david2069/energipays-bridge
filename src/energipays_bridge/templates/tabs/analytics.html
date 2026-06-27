@@ -150,14 +150,20 @@
   <div x-show="mode==='cloud'" class="mb-3">
     <div class="flex items-center gap-2 flex-wrap">
       <!-- Span selector -->
-      <div class="flex rounded-lg overflow-hidden border border-slate-700">
-        <template x-for="sp in ['1h','2h','3h','6h','1d','7d','30d']" :key="sp">
-          <button @click="cloudSpan=sp; _resetChart(); load()"
-                  :class="cloudSpan===sp ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
-                  class="px-2.5 py-1.5 text-xs font-medium transition-colors"
-                  x-text="sp"></button>
-        </template>
-      </div>
+      <select x-model="cloudSpan" @change="_resetChart(); load()"
+              class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
+        <optgroup label="Last N hours">
+          <option value="1h">Last 1 h</option>
+          <option value="2h">Last 2 h</option>
+          <option value="3h">Last 3 h</option>
+          <option value="6h">Last 6 h</option>
+        </optgroup>
+        <optgroup label="Full days">
+          <option value="1d">Today</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </optgroup>
+      </select>
       <!-- Date picker -->
       <div class="flex items-center gap-1">
         <button @click="cloudDate = _prevDay(cloudDate); _resetChart(); load()"
