@@ -251,10 +251,19 @@
 
   <!-- Combined Power Flow + Metrics card (Grid / Solar / Heater / Diverter tabs) -->
   <!-- Clicking any SVG node switches the tab below -->
-  <div class="card mb-4" x-data="{metricsTab:'grid', showDeviceTooltip:false}">
+  <div class="card mb-4" x-data="{metricsTab:'grid', showDeviceTooltip:false,
+    diagH: parseInt(localStorage.getItem('diagH')||'200'),
+    diagScale(d){ this.diagH=Math.max(120,Math.min(380,this.diagH+d)); localStorage.setItem('diagH',this.diagH) }}">
 
     <!-- Power flow diagram — nodes are clickable to switch tab below -->
-    <div class="relative w-full mb-3" style="height:200px;">
+    <!-- Size controls -->
+    <div class="flex justify-end gap-1 mb-1">
+      <button @click="diagScale(-40)" title="Shrink diagram"
+              class="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">−</button>
+      <button @click="diagScale(40)" title="Enlarge diagram"
+              class="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">+</button>
+    </div>
+    <div class="relative w-full mb-3" :style="`height:${diagH}px`">
       <svg viewBox="0 0 400 200" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
         <!--
           Topology: Grid(38,75) + Solar(38,150) → House(155,108) → Diverter(268,88) → Heater(378,68) + H2(372,158)
@@ -465,9 +474,9 @@
               x-text="($store.app.points.phasePower || 0) < 0 ? 'import' : 'export'"></span>
       </div>
 
-      <table class="w-full text-sm">
+      <table class="w-full text-xs">
         <thead>
-          <tr class="text-xs text-slate-500 border-b border-slate-700">
+          <tr class="text-[10px] text-slate-500 border-b border-slate-700">
             <th class="text-left pb-1 font-normal">Period</th>
             <th class="text-right pb-1 font-normal">Export kWh</th>
             <th class="text-right pb-1 font-normal">Import kWh</th>
@@ -476,9 +485,9 @@
         <tbody class="divide-y divide-slate-800">
           <template x-for="[label, prefix] in [['Today','today'],['Yesterday','yesterday'],['7 days','week']]">
             <tr>
-              <td class="py-1.5 text-slate-400" x-text="label"></td>
-              <td class="py-1.5 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.EEct'], '', 1) || '—'"></td>
-              <td class="py-1.5 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.IEct'], '', 1) || '—'"></td>
+              <td class="py-1 text-slate-400" x-text="label"></td>
+              <td class="py-1 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.EEct'], '', 1) || '—'"></td>
+              <td class="py-1 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.IEct'], '', 1) || '—'"></td>
             </tr>
           </template>
         </tbody>
@@ -504,9 +513,9 @@
         <span class="text-sm text-slate-500 mb-1">generation</span>
       </div>
 
-      <table class="w-full text-sm">
+      <table class="w-full text-xs">
         <thead>
-          <tr class="text-xs text-slate-500 border-b border-slate-700">
+          <tr class="text-[10px] text-slate-500 border-b border-slate-700">
             <th class="text-left pb-1 font-normal">Period</th>
             <th class="text-right pb-1 font-normal">Diverted kWh</th>
             <th class="text-right pb-1 font-normal">Solar kWh</th>
@@ -515,9 +524,9 @@
         <tbody class="divide-y divide-slate-800">
           <template x-for="[label, prefix] in [['Today','today'],['Yesterday','yesterday'],['7 days','week']]">
             <tr>
-              <td class="py-1.5 text-slate-400" x-text="label"></td>
-              <td class="py-1.5 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.DE_h'], '', 1) || '—'"></td>
-              <td class="py-1.5 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.DE_e'], '', 1) || '—'"></td>
+              <td class="py-1 text-slate-400" x-text="label"></td>
+              <td class="py-1 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.DE_h'], '', 1) || '—'"></td>
+              <td class="py-1 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.DE_e'], '', 1) || '—'"></td>
             </tr>
           </template>
         </tbody>
@@ -572,9 +581,9 @@
       </div>
 
       <!-- Diverted energy table -->
-      <table class="w-full text-sm">
+      <table class="w-full text-xs">
         <thead>
-          <tr class="text-xs text-slate-500 border-b border-slate-700">
+          <tr class="text-[10px] text-slate-500 border-b border-slate-700">
             <th class="text-left pb-1 font-normal">Period</th>
             <th class="text-right pb-1 font-normal">Diverted kWh</th>
           </tr>
@@ -582,8 +591,8 @@
         <tbody class="divide-y divide-slate-800">
           <template x-for="[label, prefix] in [['Today','today'],['Yesterday','yesterday'],['7 days','week']]">
             <tr>
-              <td class="py-1.5 text-slate-400" x-text="label"></td>
-              <td class="py-1.5 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.DE_h'], '', 1) || '—'"></td>
+              <td class="py-1 text-slate-400" x-text="label"></td>
+              <td class="py-1 text-right text-slate-200" x-text="fmt($store.app.points[prefix+'.DE_h'], '', 1) || '—'"></td>
             </tr>
           </template>
         </tbody>
