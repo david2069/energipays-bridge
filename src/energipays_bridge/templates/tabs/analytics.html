@@ -10,8 +10,9 @@
     </button>
     <button @click="setMode('cloud')"
             :class="mode==='cloud' ? 'bg-brand/20 text-brand border-brand/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
-            class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors">
-      ☁ Cloud
+            class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors">
+      <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+      Cloud
     </button>
     <span class="text-xs text-slate-500 ml-1"
           x-text="mode==='local' ? 'Showing local SQLite history' : 'Showing cloud data from energipays.com'"></span>
