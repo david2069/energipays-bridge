@@ -78,10 +78,13 @@ function analyticsTab() {
       await this.load()
       this.$watch('$store.app.activeTab', val => {
         if (val === 'analytics') {
-          this.$nextTick(() => {
+          // setTimeout instead of $nextTick: Alpine removes x-show display:none
+          // synchronously, but the browser needs a full layout pass before
+          // Chart.js can measure the canvas width. $nextTick fires too early.
+          setTimeout(() => {
             if (_analyticsChart) _analyticsChart.resize()
             else { this._buildChart(); this.load() }
-          })
+          }, 50)
         }
       })
       this.$watch('$store.app.isDark', () => this._applyThemeToChart())
