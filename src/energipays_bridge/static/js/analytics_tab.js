@@ -68,9 +68,10 @@ function analyticsTab() {
       this.customFrom = _toDatetimeLocal(yesterday)
       // Default cloud date = today
       this.cloudDate = _toDateStr(now)
-      // On mobile, default local range to 1h (less dense, fits narrow viewport)
+      // On mobile: default local range to 1h, cloud span to 6h (less dense)
       if (window.innerWidth < 768) {
         this.rangeOrCustom = '1h'
+        this.cloudSpan = '6h'
       }
       await this.$nextTick()
       this._buildChart()
@@ -118,6 +119,9 @@ function analyticsTab() {
     _buildChart() {
       const canvas = document.getElementById('analyticsChart')
       if (!canvas || _analyticsChart) return
+      // Defer if container is hidden (x-show=display:none → 0 dimensions).
+      // The activeTab watcher will retry once the tab is visible.
+      if (canvas.offsetWidth === 0) return
       canvas.style.width = '100%'
       canvas.style.height = '100%'
       const c = this._chartColors()
@@ -337,7 +341,7 @@ function analyticsTab() {
       let rows = []
       let labels = []
 
-      const multiDay = this.cloudSpan !== '1d'
+      const multiDay = this.cloudSpan !== '1d' && this.cloudSpan !== '6h'
       const _fmtTime = t => {
         if (!t) return ''
         if (typeof t === 'string' && t.length >= 16) {
@@ -379,7 +383,11 @@ function analyticsTab() {
         }
       }
 
-      // API returns 15-min intervals natively — no downsampling needed
+      // 6h view: slice to last 12 entries (30-min buckets × 12 = 6h)
+      if (this.cloudSpan === '6h' && rows.length > 12) {
+        rows   = rows.slice(-12)
+        labels = labels.slice(-12)
+      }
 
       const active = this.activeCloudSeries
       const allDatasets = []
