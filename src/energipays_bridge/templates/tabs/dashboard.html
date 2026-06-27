@@ -256,57 +256,62 @@
     <!-- Power flow diagram — nodes are clickable to switch tab below -->
     <div class="relative w-full mb-3" style="height:200px;">
       <svg viewBox="0 0 400 200" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+        <!--
+          Topology: Grid(38,75) + Solar(38,150) → House(155,108) → Diverter(268,88) → Heater(378,68) + H2(372,158)
+        -->
 
         <!-- ── Flow lines ─────────────────────────────────────────────────── -->
-        <!-- Off-Peak line: Grid → Diverter (shown when off-peak switcher present) -->
-        <g x-show="$store.app.points['sd.offpeakSwitcherStatus'] == 1">
-          <line x1="80" y1="68" x2="168" y2="68" stroke-width="1.5" stroke-dasharray="5 3"
-                :stroke="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '#a78bfa' : '#334155'">
-            <animate attributeName="stroke-dashoffset"
-                     :values="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '16;0' : '0;0'"
-                     dur="1.4s" repeatCount="indefinite"/>
-          </line>
-          <text x="124" y="62" text-anchor="middle" font-size="7" fill="#6d28d9">Off-Peak</text>
-        </g>
-        <!-- Grid → Diverter (main grid line) -->
-        <line x1="80" y1="85" x2="168" y2="85" stroke-width="2"
-              :stroke="($store.app.points.phasePower||0) < -0.05 ? '#f59e0b' : ($store.app.points.phasePower||0) > 0.05 ? '#4ade80' : '#475569'"
-              stroke-dasharray="6 4">
+        <!-- Grid → House -->
+        <line x1="68" y1="80" x2="133" y2="103" stroke-width="2" stroke-dasharray="6 4"
+              :stroke="($store.app.points.phasePower||0) < -0.05 ? '#f59e0b' : ($store.app.points.phasePower||0) > 0.05 ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8')">
           <animate attributeName="stroke-dashoffset"
                    :values="($store.app.points.phasePower||0) < -0.05 ? '20;0' : ($store.app.points.phasePower||0) > 0.05 ? '0;20' : '0;0'"
                    dur="1.2s" repeatCount="indefinite"/>
         </line>
+        <!-- Solar → House -->
+        <line x1="62" y1="133" x2="133" y2="113" stroke-width="1.5" stroke-dasharray="5 4"
+              :stroke="($store.app.points.solarStreamA||0) > 0.05 ? '#facc15' : ($store.app.isDark ? '#334155' : '#cbd5e1')">
+          <animate attributeName="stroke-dashoffset"
+                   :values="($store.app.points.solarStreamA||0) > 0.05 ? '18;0' : '0;0'"
+                   dur="1.3s" repeatCount="indefinite"/>
+        </line>
+        <!-- House → Diverter -->
+        <line x1="179" y1="107" x2="240" y2="93" stroke-width="2" stroke-dasharray="6 4"
+              :stroke="(Math.abs($store.app.points.phasePower||0) > 0.05 || ($store.app.points.solarStreamA||0) > 0.05) ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8')">
+          <animate attributeName="stroke-dashoffset"
+                   :values="(Math.abs($store.app.points.phasePower||0) > 0.05 || ($store.app.points.solarStreamA||0) > 0.05) ? '20;0' : '0;0'"
+                   dur="1.2s" repeatCount="indefinite"/>
+        </line>
         <!-- Diverter → Heater (main) -->
-        <line x1="232" y1="85" x2="320" y2="85" stroke-width="2"
-              :stroke="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? '#4ade80' : '#475569'"
-              stroke-dasharray="6 4">
+        <line x1="296" y1="83" x2="350" y2="72" stroke-width="2" stroke-dasharray="6 4"
+              :stroke="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8')">
           <animate attributeName="stroke-dashoffset"
                    :values="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? '20;0' : '0;0'"
                    dur="1.2s" repeatCount="indefinite"/>
         </line>
-        <!-- Diverter → Heater 2 (shown only when H2 load active) -->
+        <!-- Diverter → H2 (conditional) -->
         <g x-show="$store.app.points['dev.is_h2_load_active'] == 1 && $store.app.points['sd.heater2SwitcherStatus'] == 1">
-          <line x1="220" y1="96" x2="320" y2="150" stroke-width="1.5" stroke-dasharray="5 3"
-                :stroke="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '#4ade80' : '#475569'">
+          <line x1="290" y1="100" x2="355" y2="148" stroke-width="1.5" stroke-dasharray="5 3"
+                :stroke="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '#4ade80' : ($store.app.isDark ? '#475569' : '#cbd5e1')">
             <animate attributeName="stroke-dashoffset"
                      :values="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '16;0' : '0;0'"
                      dur="1.4s" repeatCount="indefinite"/>
           </line>
-          <!-- Heater 2 node -->
-          <g transform="translate(355,158)">
-            <image href="/static/icons/devices/heater2-icon.svg" x="-12" y="-20" width="24" height="24"/>
-            <text y="12" text-anchor="middle" font-size="8" fill="#94a3b8">H2</text>
-            <text y="22" text-anchor="middle" font-size="9" font-weight="600"
-                  :fill="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '#4ade80' : '#94a3b8'"
-                  x-text="fmt($store.app.points.offPeakStreamExtraPower,'kW',2)"></text>
-          </g>
         </g>
-        <!-- Solar → Diverter (dashed) -->
-        <line x1="60" y1="148" x2="180" y2="100" stroke="#334155" stroke-width="1.5" stroke-dasharray="4 4"
-              :stroke="($store.app.points.solarStreamA||0) > 0.05 ? '#facc15' : '#334155'"/>
+        <!-- Off-Peak: Grid → Diverter (direct, shown when off-peak active) -->
+        <g x-show="$store.app.points['sd.offpeakSwitcherStatus'] == 1">
+          <line x1="68" y1="72" x2="240" y2="80" stroke-width="1" stroke-dasharray="3 4"
+                :stroke="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '#a78bfa' : ($store.app.isDark ? '#2d1f5e' : '#ddd6fe')">
+            <animate attributeName="stroke-dashoffset"
+                     :values="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '14;0' : '0;0'"
+                     dur="1.6s" repeatCount="indefinite"/>
+          </line>
+          <text x="154" y="66" text-anchor="middle" font-size="7"
+                :fill="$store.app.isDark ? '#7c3aed' : '#6d28d9'">Off-Peak</text>
+        </g>
 
-        <!-- ── Grid node (clickable) ──────────────────────────────────────── -->
-        <g transform="translate(40,85)" @click="metricsTab='grid'" style="cursor:pointer">
+        <!-- ── Grid node ──────────────────────────────────────────────────── -->
+        <g transform="translate(38,75)" @click="metricsTab='grid'" style="cursor:pointer">
           <circle cx="0" cy="0" r="28" fill="transparent"/>
           <image href="/static/icons/devices/electricity-icon.png" x="-16" y="-38" width="32" height="32"
                  style="filter:saturate(1.2)"/>
@@ -318,63 +323,12 @@
           <text y="18" text-anchor="middle" font-size="8"
                 :fill="($store.app.points.phasePower||0) < -0.05 ? '#f97316' : '#4ade80'"
                 x-text="($store.app.points.phasePower||0) < -0.05 ? 'Import' : 'Export'"></text>
-          <!-- active underline -->
           <line x1="-22" y1="24" x2="22" y2="24" stroke-width="2" stroke-linecap="round"
                 :stroke="metricsTab==='grid' ? '#4ade80' : 'transparent'"/>
         </g>
 
-        <!-- ── Diverter / device (clickable + hover tooltip) ───────────────── -->
-        <g transform="translate(200,85)" @click="metricsTab='diverter'" style="cursor:pointer"
-           @mouseenter="showDeviceTooltip=true" @mouseleave="showDeviceTooltip=false">
-          <!-- House outline shape -->
-          <path d="M -26,28 L 26,28 L 26,-2 L 32,-2 L 0,-34 L -32,-2 L -26,-2 Z"
-                :fill="$store.app.isDark
-                  ? ($store.app.points['sd.customer']==1 ? '#1e3a2f' : '#1e2535')
-                  : ($store.app.points['sd.customer']==1 ? '#dcfce7' : '#f1f5f9')"
-                :stroke="metricsTab==='diverter' ? '#4ade80' : ($store.app.points['sd.customer']==1 ? '#22c55e' : ($store.app.isDark ? '#334155' : '#cbd5e1'))"
-                stroke-width="1.5" stroke-linejoin="round"/>
-          <clipPath id="pdClip">
-            <path d="M -26,28 L 26,28 L 26,-2 L 32,-2 L 0,-34 L -32,-2 L -26,-2 Z"/>
-          </clipPath>
-          <image href="/static/icons/devices/pd-device.png"
-                 x="-28" y="-28" width="56" height="56" style="filter:brightness(0.92) saturate(0.8)" clip-path="url(#pdClip)"/>
-          <circle cx="24" cy="-24" r="5"
-                  :fill="$store.app.points['sd.customer']==1 ? '#22c55e' : '#ef4444'"/>
-          <text y="48" text-anchor="middle" font-size="9" fill="#94a3b8"
-                x-text="$store.app.points['dev.name'] || 'Diverter'"></text>
-          <text y="60" text-anchor="middle" font-size="8"
-                :fill="$store.app.points['sd.customer']==1 ? '#22c55e' : '#ef4444'"
-                x-text="$store.app.points['sd.customer']==1 ? 'Enabled' : 'Disabled'"></text>
-          <!-- WiFi bars (4 levels: -85/-70/-60/-50 dBm thresholds) -->
-          <rect x="-24" y="74" width="4" height="6" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -85 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
-          <rect x="-18" y="71" width="4" height="9" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -70 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
-          <rect x="-12" y="68" width="4" height="12" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -60 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
-          <rect x="-6" y="65" width="4" height="15" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -50 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
-          <!-- LoRa arcs — 3 levels signal strength (-90/-100/-110 dBm) -->
-          <circle cx="20" cy="80" r="2"
-                  :fill="($store.app.points.signalLora||-999) > -999 ? '#4ade80' : ($store.app.points['dev.is_lora_enabled'] ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8'))"/>
-          <path d="M16,78 Q20,72 24,78" fill="none" stroke-width="1.5" stroke-linecap="round"
-                :stroke="($store.app.points.signalLora||-999) >= -110 ? '#4ade80' : ($store.app.isDark ? '#2d4a3e' : '#cbd5e1')"/>
-          <path d="M13,75 Q20,66 27,75" fill="none" stroke-width="1.2" stroke-linecap="round"
-                :stroke="($store.app.points.signalLora||-999) >= -100 ? '#22c55e' : ($store.app.isDark ? '#1e3a2f' : '#e2e8f0')"/>
-          <path d="M10,72 Q20,60 30,72" fill="none" stroke-width="1" stroke-linecap="round"
-                :stroke="($store.app.points.signalLora||-999) >= -90 ? '#16a34a' : ($store.app.isDark ? '#1a2e1a' : '#f1f5f9')"/>
-          <!-- Error badge — x-show not x-if: SVG <template> has no .content -->
-          <g x-show="$store.app.points.errorCount > 0">
-            <circle cx="-22" cy="-24" r="6" fill="#ef4444"/>
-            <text x="-22" y="-20.5" text-anchor="middle" font-size="8" font-weight="700" fill="white">!</text>
-          </g>
-          <!-- underline when active -->
-          <line x1="-22" y1="84" x2="22" y2="84" stroke-width="2" stroke-linecap="round"
-                :stroke="metricsTab==='diverter' ? '#4ade80' : 'transparent'"/>
-        </g>
-
-        <!-- ── Solar node (clickable) ─────────────────────────────────────── -->
-        <g transform="translate(40,148)" @click="metricsTab='solar'" style="cursor:pointer">
+        <!-- ── Solar node ─────────────────────────────────────────────────── -->
+        <g transform="translate(38,150)" @click="metricsTab='solar'" style="cursor:pointer">
           <circle cx="0" cy="0" r="22" fill="transparent"/>
           <image href="/static/icons/devices/solar-icon.png" x="-14" y="-28" width="28" height="28"/>
           <text y="8" text-anchor="middle" font-size="9"
@@ -384,8 +338,63 @@
                 x-text="($store.app.points.solarStreamA||0) > 0.05 ? fmt($store.app.points.solarStreamA,'kW',2) : 'N/A'"></text>
         </g>
 
-        <!-- ── Heater / hot water node (clickable) ────────────────────────── -->
-        <g transform="translate(360,75)" @click="metricsTab='heater'" style="cursor:pointer">
+        <!-- ── House node (topology marker — no click, no data yet) ──────── -->
+        <g transform="translate(155,108)">
+          <!-- Simple flat house outline: body -18..18, eaves -24..24, peak at y=-22 -->
+          <path d="M -18,16 L 18,16 L 18,-2 L 24,-2 L 0,-22 L -24,-2 L -18,-2 Z"
+                :fill="$store.app.isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.08)'"
+                :stroke="$store.app.isDark ? '#22c55e' : '#16a34a'"
+                stroke-width="1.8" stroke-linejoin="round"/>
+        </g>
+
+        <!-- ── Diverter node (clickable) ──────────────────────────────────── -->
+        <g transform="translate(268,88)" @click="metricsTab='diverter'" style="cursor:pointer"
+           @mouseenter="showDeviceTooltip=true" @mouseleave="showDeviceTooltip=false">
+          <rect x="-28" y="-28" width="56" height="56" rx="8"
+                :fill="$store.app.isDark
+                  ? ($store.app.points['sd.customer']==1 ? '#1e3a2f' : '#1e2535')
+                  : ($store.app.points['sd.customer']==1 ? '#f0fdf4' : '#f8fafc')"
+                :stroke="metricsTab==='diverter' ? '#4ade80' : ($store.app.points['sd.customer']==1 ? '#22c55e' : ($store.app.isDark ? '#334155' : '#cbd5e1'))"
+                stroke-width="1.5"/>
+          <clipPath id="pdClip"><rect x="-28" y="-28" width="56" height="56" rx="8"/></clipPath>
+          <image href="/static/icons/devices/pd-device.png"
+                 x="-28" y="-28" width="56" height="56" style="filter:brightness(0.92) saturate(0.8)" clip-path="url(#pdClip)"/>
+          <circle cx="22" cy="-22" r="5"
+                  :fill="$store.app.points['sd.customer']==1 ? '#22c55e' : '#ef4444'"/>
+          <text y="40" text-anchor="middle" font-size="9" fill="#94a3b8"
+                x-text="$store.app.points['dev.name'] || 'Diverter'"></text>
+          <text y="52" text-anchor="middle" font-size="8"
+                :fill="$store.app.points['sd.customer']==1 ? '#22c55e' : '#ef4444'"
+                x-text="$store.app.points['sd.customer']==1 ? 'Enabled' : 'Disabled'"></text>
+          <!-- WiFi bars -->
+          <rect x="-22" y="64" width="4" height="6" rx="0.8"
+                :fill="($store.app.points.signalWiFi||-100) >= -85 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
+          <rect x="-16" y="61" width="4" height="9" rx="0.8"
+                :fill="($store.app.points.signalWiFi||-100) >= -70 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
+          <rect x="-10" y="58" width="4" height="12" rx="0.8"
+                :fill="($store.app.points.signalWiFi||-100) >= -60 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
+          <rect x="-4" y="55" width="4" height="15" rx="0.8"
+                :fill="($store.app.points.signalWiFi||-100) >= -50 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
+          <!-- LoRa arcs -->
+          <circle cx="16" cy="70" r="2"
+                  :fill="($store.app.points.signalLora||-999) > -999 ? '#4ade80' : ($store.app.points['dev.is_lora_enabled'] ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8'))"/>
+          <path d="M12,68 Q16,62 20,68" fill="none" stroke-width="1.5" stroke-linecap="round"
+                :stroke="($store.app.points.signalLora||-999) >= -110 ? '#4ade80' : ($store.app.isDark ? '#2d4a3e' : '#cbd5e1')"/>
+          <path d="M9,65 Q16,56 23,65" fill="none" stroke-width="1.2" stroke-linecap="round"
+                :stroke="($store.app.points.signalLora||-999) >= -100 ? '#22c55e' : ($store.app.isDark ? '#1e3a2f' : '#e2e8f0')"/>
+          <path d="M6,62 Q16,50 26,62" fill="none" stroke-width="1" stroke-linecap="round"
+                :stroke="($store.app.points.signalLora||-999) >= -90 ? '#16a34a' : ($store.app.isDark ? '#1a2e1a' : '#f1f5f9')"/>
+          <!-- Error badge -->
+          <g x-show="$store.app.points.errorCount > 0">
+            <circle cx="-20" cy="-22" r="6" fill="#ef4444"/>
+            <text x="-20" y="-18.5" text-anchor="middle" font-size="8" font-weight="700" fill="white">!</text>
+          </g>
+          <line x1="-22" y1="74" x2="22" y2="74" stroke-width="2" stroke-linecap="round"
+                :stroke="metricsTab==='diverter' ? '#4ade80' : 'transparent'"/>
+        </g>
+
+        <!-- ── Heater node (clickable) ────────────────────────────────────── -->
+        <g transform="translate(378,68)" @click="metricsTab='heater'" style="cursor:pointer">
           <circle cx="0" cy="0" r="28" fill="transparent"/>
           <image href="/static/icons/devices/heater2-icon.svg" x="-14" y="-36" width="28" height="28"/>
           <text y="6" text-anchor="middle" font-size="9"
@@ -396,7 +405,6 @@
                 x-text="fmt(Math.abs($store.app.points.offPeakStreamHeaterPower),'kW',2)"></text>
           <text y="30" text-anchor="middle" font-size="9" fill="#64748b"
                 x-text="fmt($store.app.points.waterTemperatureAvg,'°C',1)"></text>
-          <!-- Boost indicators — use x-show not x-if: SVG <template> has no .content -->
           <g x-show="$store.app.points.boostStatus">
             <text y="44" text-anchor="middle" font-size="8" fill="#f97316">⚡ Boost</text>
           </g>
@@ -405,6 +413,16 @@
           </g>
           <line x1="-22" y1="36" x2="22" y2="36" stroke-width="2" stroke-linecap="round"
                 :stroke="metricsTab==='heater' ? '#fb923c' : 'transparent'"/>
+        </g>
+
+        <!-- ── H2 node (conditional) ─────────────────────────────────────── -->
+        <g x-show="$store.app.points['dev.is_h2_load_active'] == 1 && $store.app.points['sd.heater2SwitcherStatus'] == 1"
+           transform="translate(372,158)">
+          <image href="/static/icons/devices/heater2-icon.svg" x="-12" y="-20" width="24" height="24"/>
+          <text y="12" text-anchor="middle" font-size="8" fill="#94a3b8">H2</text>
+          <text y="22" text-anchor="middle" font-size="9" font-weight="600"
+                :fill="($store.app.points.offPeakStreamExtraPower||0) > 0.05 ? '#4ade80' : '#94a3b8'"
+                x-text="fmt($store.app.points.offPeakStreamExtraPower,'kW',2)"></text>
         </g>
 
       </svg>
