@@ -326,13 +326,18 @@
         <!-- ── Diverter / device (clickable + hover tooltip) ───────────────── -->
         <g transform="translate(200,85)" @click="metricsTab='diverter'" style="cursor:pointer"
            @mouseenter="showDeviceTooltip=true" @mouseleave="showDeviceTooltip=false">
-          <rect x="-32" y="-32" width="64" height="64" rx="10"
-                :fill="$store.app.points['sd.customer']==1 ? '#1e3a2f' : '#1e2535'"
-                :stroke="metricsTab==='diverter' ? '#4ade80' : ($store.app.points['sd.customer']==1 ? '#22c55e' : '#334155')"
-                stroke-width="1.5"/>
+          <!-- House outline shape -->
+          <path d="M -26,28 L 26,28 L 26,-2 L 32,-2 L 0,-34 L -32,-2 L -26,-2 Z"
+                :fill="$store.app.isDark
+                  ? ($store.app.points['sd.customer']==1 ? '#1e3a2f' : '#1e2535')
+                  : ($store.app.points['sd.customer']==1 ? '#dcfce7' : '#f1f5f9')"
+                :stroke="metricsTab==='diverter' ? '#4ade80' : ($store.app.points['sd.customer']==1 ? '#22c55e' : ($store.app.isDark ? '#334155' : '#cbd5e1'))"
+                stroke-width="1.5" stroke-linejoin="round"/>
+          <clipPath id="pdClip">
+            <path d="M -26,28 L 26,28 L 26,-2 L 32,-2 L 0,-34 L -32,-2 L -26,-2 Z"/>
+          </clipPath>
           <image href="/static/icons/devices/pd-device.png"
                  x="-28" y="-28" width="56" height="56" style="filter:brightness(0.92) saturate(0.8)" clip-path="url(#pdClip)"/>
-          <clipPath id="pdClip"><rect x="-28" y="-28" width="56" height="56" rx="8"/></clipPath>
           <circle cx="24" cy="-24" r="5"
                   :fill="$store.app.points['sd.customer']==1 ? '#22c55e' : '#ef4444'"/>
           <text y="48" text-anchor="middle" font-size="9" fill="#94a3b8"
@@ -342,22 +347,22 @@
                 x-text="$store.app.points['sd.customer']==1 ? 'Enabled' : 'Disabled'"></text>
           <!-- WiFi bars (4 levels: -85/-70/-60/-50 dBm thresholds) -->
           <rect x="-24" y="74" width="4" height="6" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -85 ? '#4ade80' : '#1e3a2f'"/>
+                :fill="($store.app.points.signalWiFi||-100) >= -85 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
           <rect x="-18" y="71" width="4" height="9" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -70 ? '#4ade80' : '#1e3a2f'"/>
+                :fill="($store.app.points.signalWiFi||-100) >= -70 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
           <rect x="-12" y="68" width="4" height="12" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -60 ? '#4ade80' : '#1e3a2f'"/>
+                :fill="($store.app.points.signalWiFi||-100) >= -60 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
           <rect x="-6" y="65" width="4" height="15" rx="0.8"
-                :fill="($store.app.points.signalWiFi||-100) >= -50 ? '#4ade80' : '#1e3a2f'"/>
+                :fill="($store.app.points.signalWiFi||-100) >= -50 ? '#4ade80' : ($store.app.isDark ? '#1e3a2f' : '#cbd5e1')"/>
           <!-- LoRa arcs — 3 levels signal strength (-90/-100/-110 dBm) -->
           <circle cx="20" cy="80" r="2"
-                  :fill="($store.app.points.signalLora||-999) > -999 ? '#4ade80' : ($store.app.points['dev.is_lora_enabled'] ? '#4ade80' : '#475569')"/>
+                  :fill="($store.app.points.signalLora||-999) > -999 ? '#4ade80' : ($store.app.points['dev.is_lora_enabled'] ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8'))"/>
           <path d="M16,78 Q20,72 24,78" fill="none" stroke-width="1.5" stroke-linecap="round"
-                :stroke="($store.app.points.signalLora||-999) >= -110 ? '#4ade80' : ($store.app.points['dev.is_lora_enabled'] ? '#2d4a3e' : '#475569')"/>
+                :stroke="($store.app.points.signalLora||-999) >= -110 ? '#4ade80' : ($store.app.isDark ? '#2d4a3e' : '#cbd5e1')"/>
           <path d="M13,75 Q20,66 27,75" fill="none" stroke-width="1.2" stroke-linecap="round"
-                :stroke="($store.app.points.signalLora||-999) >= -100 ? '#22c55e' : ($store.app.points['dev.is_lora_enabled'] ? '#1e3a2f' : '#334155')"/>
+                :stroke="($store.app.points.signalLora||-999) >= -100 ? '#22c55e' : ($store.app.isDark ? '#1e3a2f' : '#e2e8f0')"/>
           <path d="M10,72 Q20,60 30,72" fill="none" stroke-width="1" stroke-linecap="round"
-                :stroke="($store.app.points.signalLora||-999) >= -90 ? '#16a34a' : '#1a2e1a'"/>
+                :stroke="($store.app.points.signalLora||-999) >= -90 ? '#16a34a' : ($store.app.isDark ? '#1a2e1a' : '#f1f5f9')"/>
           <!-- Error badge — x-show not x-if: SVG <template> has no .content -->
           <g x-show="$store.app.points.errorCount > 0">
             <circle cx="-22" cy="-24" r="6" fill="#ef4444"/>
