@@ -92,7 +92,7 @@ async def test_integration(request: Request, row_id: str) -> dict:
                                   "raw": raw, "scaled": scaled})
             return {"ok": True, "readings": readings}
 
-        if proto == "modbus_tcp":
+        if proto in ("modbus_tcp", "sunspec_tcp"):
             readings = []
             for m in mappings:
                 fc, address, reg_type, scale = _parse_source(m.source)
@@ -126,8 +126,8 @@ async def test_integration(request: Request, row_id: str) -> dict:
                                   "raw": raw, "scaled": scaled})
             return {"ok": True, "readings": readings}
 
-        if proto in ("mqtt", "sunspec_tcp"):
-            return {"ok": False, "error": f"{proto.upper()} test not supported via this endpoint — use Probe or Discover instead"}
+        if proto == "mqtt":
+            return {"ok": False, "error": "MQTT test not supported via this endpoint — use Probe or Discover instead"}
 
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
