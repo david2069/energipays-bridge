@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from .api import admin, cloud_stats, devices, metrics, mqtt_api, points, ui
+from .api import admin, cloud_stats, devices, integrations as integrations_api, metrics, mqtt_api, notifications as notifications_api, points, ui, weather_nem
 from .api import setup as setup_api
 from .api.admin import install_log_handler, set_log_db
 from .api.http_metrics import HttpMetrics, attach_metrics_hook
@@ -31,6 +31,7 @@ from .config.settings import BridgeSettings, MqttSettings
 from .poller import EnergipaysPoller
 from .publish.mqtt_publisher import MqttPublisher
 from .sample import SampleBus
+from .integrations.registry import IntegrationRegistry
 from .store.credentials import load_credentials
 from .store.db import get_config, init_db
 from .store.metrics import MetricsRecorder, archive_old_metrics, purge_old_archive
@@ -86,6 +87,11 @@ async def lifespan(app: FastAPI):
     app.state.latest_quality: str = "unknown"
 
     async def _store_latest(sample):
+        # Only update from the main Energipays device — integration pollers
+        # publish ext.* samples under their own device_id; those are merged
+        # separately via integration_registry.latest in points.py
+        if sample.device_id != getattr(app.state, "device_id", None):
+            return
         app.state.latest_points = sample.points
         app.state.latest_ts = sample.ts
         app.state.latest_quality = sample.quality
@@ -163,6 +169,9 @@ async def lifespan(app: FastAPI):
             discovery_prefix=mqtt_settings.discovery_prefix,
         )
         await mqtt_publisher.start()
+        if await get_config(db, "mqtt_paused", "0") == "1":
+            mqtt_publisher.paused = True
+            log.info("MQTT publisher paused (runtime toggle)")
         bus.subscribe(mqtt_publisher.queue_sample)
         log.info("MQTT publisher enabled → %s:%s", mqtt_settings.host, mqtt_settings.port)
 
@@ -185,6 +194,18 @@ async def lifespan(app: FastAPI):
     else:
         log.info("MQTT disabled — set MQTT_ENABLED=true to enable")
     app.state.mqtt_publisher = mqtt_publisher
+
+    # ── 8. Integration registry ───────────────────────────────────────────────
+    integration_registry = IntegrationRegistry(db, bus)
+    await integration_registry.start_all()
+    app.state.integration_registry = integration_registry
+    log.info("Integration registry started")
+
+    # ── 8b. Notification trigger ──────────────────────────────────────────────
+    from .notifications.trigger import NotificationTrigger
+    notif_trigger = NotificationTrigger(db, device_id or "")
+    bus.subscribe(notif_trigger)
+    log.info("NotificationTrigger registered")
 
     # ── 9. Metrics archival loop ──────────────────────────────────────────────
     async def _archival_loop():
@@ -214,6 +235,7 @@ async def lifespan(app: FastAPI):
     # ── Shutdown ──────────────────────────────────────────────────────────────
     archival_task.cancel()
     cleanup_task.cancel()
+    await integration_registry.stop_all()
     if poller:
         await poller.stop()
     if mqtt_publisher:
@@ -227,6 +249,7 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.include_router(ui.router)
     app.include_router(setup_api.router)
+    app.include_router(integrations_api.router)
     app.include_router(points.router)
     app.include_router(metrics.router)
     app.include_router(devices.router)
@@ -234,6 +257,8 @@ def create_app() -> FastAPI:
     app.include_router(mqtt_api.router)
     app.include_router(http_metrics_api.router)
     app.include_router(cloud_stats.router)
+    app.include_router(weather_nem.router)
+    app.include_router(notifications_api.router)
     return app
 
 

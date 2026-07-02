@@ -119,6 +119,28 @@ async def update_rule(rule_id: str, body: RuleBody, request: Request) -> dict:
     return result
 
 
+class RuleNameBody(BaseModel):
+    name: str
+
+
+@router.put("/api/rules/{rule_id}/name")
+async def rename_rule(rule_id: str, body: RuleNameBody, request: Request) -> dict:
+    import logging as _log
+    from fastapi import HTTPException
+    _require_writes(request)
+    client = request.app.state.client
+    result = await _thread(client.rename_rule, rule_id, body.name)
+    if isinstance(result, dict) and "error" in result:
+        status = result.get("status", 502)
+        detail = result.get("error_decrypted") or result.get("error") or "Cloud API error"
+        _log.getLogger(__name__).error(
+            "rules: cloud rejected rename for rule %s — HTTP %s: %s", rule_id, status, detail
+        )
+        raise HTTPException(status_code=status if 400 <= status < 600 else 502, detail=str(detail))
+    _log.getLogger(__name__).info("rules: rule %s renamed to %s", rule_id, body.name)
+    return result
+
+
 @router.delete("/api/rules/{rule_id}")
 async def delete_rule(rule_id: str, request: Request) -> dict:
     import logging as _log

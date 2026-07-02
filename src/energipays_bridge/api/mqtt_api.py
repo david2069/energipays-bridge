@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/mqtt", tags=["mqtt"])
 
 class MqttConfigOut(BaseModel):
     enabled: bool
+    paused: bool
     host: str
     port: int
     username: str
@@ -28,6 +29,7 @@ async def get_mqtt_config(request: Request):
     pub = getattr(request.app.state, "mqtt_publisher", None)
     return MqttConfigOut(
         enabled=s.enabled,
+        paused=pub.paused if pub else False,
         host=s.host,
         port=s.port,
         username=s.username,
@@ -53,6 +55,18 @@ async def unpublish(request: Request):
         return {"ok": False, "detail": "MQTT publisher not running"}
     await pub.unpublish()
     return {"ok": True, "detail": "Discovery payloads cleared from HA"}
+
+
+@router.post("/toggle-pause")
+async def toggle_pause(request: Request):
+    pub = getattr(request.app.state, "mqtt_publisher", None)
+    if not pub:
+        return {"ok": False, "paused": True, "detail": "MQTT publisher not running"}
+    pub.paused = not pub.paused
+    db = request.app.state.db
+    from ..store.db import set_config  # noqa: PLC0415
+    await set_config(db, "mqtt_paused", "1" if pub.paused else "0")
+    return {"ok": True, "paused": pub.paused}
 
 
 @router.get("/entities")

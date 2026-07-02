@@ -64,6 +64,9 @@ class MqttPublisher:
         self._ep_client: Any = None    # EnergipaysClient
         self._data_server: str = ""
 
+        # runtime pause flag (toggled via API without restart)
+        self.paused: bool = False
+
         # rule name ↔ id mapping
         self._rules: list[dict] = []   # [{id, name}, ...]
         self._rule_name_to_id: dict[str, str] = {}
@@ -114,6 +117,8 @@ class MqttPublisher:
     # ── SampleBus subscriber ───────────────────────────────────────────────
 
     async def queue_sample(self, sample: Sample) -> None:
+        if self.paused:
+            return
         pts = sample.points
         self._latest_points = pts
 

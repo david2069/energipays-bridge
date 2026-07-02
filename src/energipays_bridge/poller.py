@@ -141,6 +141,12 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
             or (prof.get("device_statuses") or {}).get("retailer_rule")
         )
 
+        # Solar restriction window times (top-level on profile)
+        for key in ("solar_restriction_from", "solar_restriction_to"):
+            val = prof.get(key)
+            if val is not None:
+                points[f"sd.{key}"] = val
+
         # Device-level fields
         for key in ("boost_power", "weather_boost_power", "weather_boost_time",
                     "volume", "name", "firmware_version", "is_online",
@@ -170,11 +176,27 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
                 if val is not None:
                     points[f"lora.{key}"] = val
 
-        # User identity (stable, logged-in user)
+        # Device timezone + GPS
+        tz = prof.get("tz")
+        if tz:
+            points["dev.timezone"] = tz
+        loc = prof.get("location") or {}
+        if isinstance(loc, dict):
+            lat = loc.get("lat")
+            lng = loc.get("lng") or loc.get("lon")
+            if lat and lng and (lat != 0 or lng != 0):
+                points["dev.latitude"] = lat
+                points["dev.longitude"] = lng
+
+        # User identity + location (stable, logged-in user)
         user = prof.get("user") or {}
         if isinstance(user, dict) and user.get("email"):
             points["user.email"] = user["email"]
             points["user.name"] = f"{user.get('name','')} {user.get('last_name','')}".strip()
+            for field in ("address", "city", "state", "country", "zip", "phone_number"):
+                val = user.get(field)
+                if val is not None:
+                    points[f"user.{field}"] = val
 
     return points
 
