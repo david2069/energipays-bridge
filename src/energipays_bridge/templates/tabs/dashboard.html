@@ -13,7 +13,7 @@
       </div>
       <div class="flex items-center gap-2">
         <span x-show="$store.app.points.boostStatus"
-              class="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-500/20 text-orange-400 animate-pulse flex items-center gap-1">
+              class="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-500/20 text-orange-400 animate-pulse items-center gap-1 hidden sm:flex">
           <span>⚡ Boost by button</span>
           <span>·</span>
           <span x-text="boostRemaining()"></span>
@@ -89,17 +89,17 @@
 
       <!-- T3 / T2 / T1 + max + target (mirrors SOC card right-side stats) -->
       <div class="flex-1 text-sm space-y-1.5">
-        <template x-for="[label, key] in [['Top  T3','waterTemperature3'],['Mid  T2','waterTemperature2'],['Bot  T1','waterTemperature1']]">
+        <template x-for="[label, key] in [['T3 Top','waterTemperature3'],['T2 Middle','waterTemperature2'],['T1 Bottom','waterTemperature1']]">
           <div class="flex justify-between items-center">
             <span class="text-slate-500 text-xs font-mono" x-text="label"></span>
             <span class="font-mono text-xs font-semibold tabular-nums"
                   :style="`color:${tempColor($store.app.points[key], $store.app.points.temperatureLimit)}`"
-                  x-text="fmt($store.app.points[key], '°C', 1)"></span>
+                  x-text="($store.app.points[key] > 0) ? fmt($store.app.points[key], '°C', 1) : '—'"></span>
           </div>
         </template>
         <div class="border-t border-slate-700/60 pt-1.5 space-y-1">
           <div class="flex justify-between items-center">
-            <span class="text-slate-500 text-xs">Max</span>
+            <span class="text-slate-500 text-xs">Maximum</span>
             <span class="font-mono text-xs font-semibold text-slate-200"
                   x-text="fmt(Math.max($store.app.points.waterTemperature1||0, $store.app.points.waterTemperature2||0, $store.app.points.waterTemperature3||0) || null, '°C', 1)"></span>
           </div>
@@ -153,18 +153,23 @@
             </div>
           </div>
 
-          <!-- Rocket button — single toggle, full height of both rows -->
-          <button @click="$store.app.points.boostStatus ? cancelBoost() : sendBoost(boostPeriod)"
-                  :disabled="boosting || cancelling"
-                  :title="$store.app.points.boostStatus ? 'Stop boost' : 'Start boost'"
-                  class="shrink-0 w-12 rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-60"
-                  :style="$store.app.points.boostStatus
-                    ? 'background:#b91c1c;border:3px solid rgb(203,203,203);box-shadow:0 2px 8px rgba(0,0,0,0.4)'
-                    : 'background:#16a34a;border:3px solid rgb(203,203,203);box-shadow:0 2px 8px rgba(0,0,0,0.4)'"
-                  :class="(boosting || cancelling) ? 'opacity-60' : 'hover:brightness-110'">
-            <img src="/static/icons/boost-rocket.png" class="w-6 h-6" alt="boost"
-                 style="filter:invert(90%) sepia(5%) brightness(120%)"/>
-          </button>
+          <!-- Rocket button — circular toggle + On/Off state -->
+          <div class="shrink-0 flex flex-col items-center justify-center gap-1">
+            <button @click="$store.app.points.boostStatus ? cancelBoost() : sendBoost(boostPeriod)"
+                    :disabled="boosting || cancelling"
+                    :title="$store.app.points.boostStatus ? 'Stop boost' : 'Start boost'"
+                    class="w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95"
+                    :style="$store.app.points.boostStatus
+                      ? 'background:#b91c1c;border:3px solid rgb(203,203,203);box-shadow:0 2px 8px rgba(0,0,0,0.4)'
+                      : 'background:#16a34a;border:3px solid rgb(203,203,203);box-shadow:0 2px 8px rgba(0,0,0,0.4)'"
+                    :class="(boosting || cancelling) ? 'opacity-60' : 'hover:brightness-110'">
+              <img src="/static/icons/boost-rocket.png" class="w-6 h-6" alt="boost"
+                   style="filter:invert(90%) sepia(5%) brightness(120%)"/>
+            </button>
+            <span class="text-[10px] font-bold tabular-nums"
+                  :class="$store.app.points.boostStatus ? 'text-red-400' : 'text-green-400'"
+                  x-text="$store.app.points.boostStatus ? 'On' : 'Off'"></span>
+          </div>
 
         </div>
       </div>
@@ -205,47 +210,86 @@
 
       </div>
 
-      <!-- Active rule — label + dropdown + manage on one line -->
+      <!-- Active rule — dropdown + Device Rules button -->
       <div class="mt-2 flex items-center gap-2">
         <span class="text-xs text-slate-500 shrink-0">Active Rule</span>
-        <select x-effect="
-                  const circuits = [
-                    {type:'command',  label:'PD',        point:'active_rule_id'},
-                    {type:'offpeak',  label:'Off-Peak',  point:'active_rule_offpeak_id'},
-                    {type:'heater2',  label:'Heater 2',  point:'active_rule_heater2_id'},
-                  ];
-                  let curVal = '';
-                  for (const c of circuits) {
-                    const id = $store.app.points[c.point] || '';
-                    if (id) { curVal = id; break; }
-                  }
-                  while ($el.options.length) $el.remove(0);
-                  $el.appendChild(new Option('No Rule Set', ''));
-                  for (const c of circuits) {
-                    const rules = _rulePickerRules.filter(r => r.type === c.type);
-                    if (!rules.length) continue;
-                    const grp = document.createElement('optgroup');
-                    grp.label = c.label;
-                    for (const rule of rules) {
-                      grp.appendChild(new Option(rule.name || rule.id, rule.id));
-                    }
-                    $el.appendChild(grp);
-                  }
-                  $el.value = curVal;
-                "
-                @change="
-                  const ruleId = $event.target.value;
-                  const rule = _rulePickerRules.find(r => r.id === ruleId);
-                  openRuleConfirm(ruleId, rule?.type || 'command');
-                "
+        <select :value="rulePickerValue"
+                @change="const r=_rulePickerRules.find(x=>x.id===$event.target.value); openRuleConfirm($event.target.value, r?.type||'command')"
                 class="flex-1 min-w-0 bg-white border border-slate-300 text-slate-800 text-xs rounded px-2 py-1 focus:outline-none focus:border-sky-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200">
-          <option value="">No Rule Set</option>
+          <template x-for="opt in rulePickerOptions" :key="opt.value">
+            <option :value="opt.value" :selected="opt.value === rulePickerValue" x-text="opt.label"></option>
+          </template>
         </select>
-        <button @click="$store.app.activeTab='rules'"
+        <button @click="deviceRulesOpen=true"
                 class="shrink-0 text-xs px-2.5 py-1 rounded-md bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors">
-          Manage rules
+          Device Rules
+        </button>
+        <button @click="weatherBoostOpen=true; wbPending=$store.app.points['sd.weatherSwitcherStatus']==1?1:0"
+                class="shrink-0 text-xs px-2.5 py-1 rounded-md font-semibold transition-colors"
+                :class="$store.app.points['sd.weatherSwitcherStatus']==1 ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'">
+          ☁ Weather boost
         </button>
       </div>
+
+      <!-- Active rule 24h timeline — shown when a rule is running -->
+      <template x-if="$store.app.points['active_rule_id'] && dashRunningSlot(_rulePickerRules.find(r=>r.id===$store.app.points['active_rule_id']))">
+        <div class="mt-2" x-data="{
+          get rule(){ return _rulePickerRules.find(r=>r.id===$store.app.points['active_rule_id']) },
+          get slot(){ return dashRunningSlot(this.rule) },
+          get todaySlots(){
+            const r = this.rule; if(!r) return [];
+            const now = new Date();
+            const jsDay = now.getDay();
+            const todayKey = 'd'+(jsDay===0?7:jsDay);
+            const data = r.data||{};
+            const everyday = r.everyday || Object.keys(data).filter(k=>/^d\d$/.test(k)).length===7;
+            return everyday ? (data[todayKey]||[]) : (data[todayKey]||[]);
+          },
+          slotLeft(s){ const [h,m]=s.timeFrom.split(':').map(Number); return ((h*60+m)/1440*100).toFixed(2)+'%' },
+          slotWidth(s){ const [h1,m1]=s.timeFrom.split(':').map(Number); const [h2,m2]=s.timeTo.split(':').map(Number); return (((h2*60+m2)-(h1*60+m1))/1440*100).toFixed(2)+'%' },
+          nowPct(){ const n=new Date(); return ((n.getHours()*60+n.getMinutes())/1440*100).toFixed(2)+'%' }
+        }">
+          <!-- Running badge + countdown -->
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[10px] font-semibold text-green-600 dark:text-green-400"
+                  x-text="'▶ Running ' + dashSlotCountdown(slot)"></span>
+            <span class="text-[10px] text-slate-500" x-text="rule?.name || ''"></span>
+          </div>
+          <!-- 24h bar -->
+          <div class="relative h-4 rounded overflow-hidden bg-amber-50 dark:bg-amber-900/20">
+            <template x-for="s in todaySlots" :key="s.timeFrom">
+              <div class="absolute top-0 h-full opacity-80 rounded-sm"
+                   :style="`left:${slotLeft(s)};width:${slotWidth(s)};background:${s.command===2?'#ef4444':'#3b82f6'}`"></div>
+            </template>
+            <!-- hour grid lines -->
+            <template x-for="h in [6,12,18]" :key="h">
+              <div class="absolute top-0 bottom-0 w-px bg-slate-400/30" :style="`left:${(h/24*100).toFixed(1)}%`"></div>
+            </template>
+            <!-- now marker -->
+            <div class="absolute top-0 bottom-0 w-0.5 bg-green-400 z-10 shadow-[0_0_4px_#4ade80]"
+                 :style="`left:${nowPct()}`"></div>
+          </div>
+          <!-- Time labels -->
+          <div class="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
+            <span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span>
+          </div>
+          <!-- Legend -->
+          <div class="flex items-center gap-3 mt-1">
+            <div class="flex items-center gap-1">
+              <span class="w-2.5 h-2 rounded-sm inline-block" style="background:#3b82f6"></span>
+              <span class="text-[9px] text-slate-500">Disable</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-2.5 h-2 rounded-sm inline-block" style="background:#ef4444"></span>
+              <span class="text-[9px] text-slate-500">Boost</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 rounded-sm inline-block bg-green-400"></span>
+              <span class="text-[9px] text-slate-500">Now</span>
+            </div>
+          </div>
+        </div>
+      </template>
 
   </div>
 
@@ -255,16 +299,84 @@
     diagH: parseInt(localStorage.getItem('diagH')||'200'),
     diagScale(d){ this.diagH=Math.max(120,Math.min(380,this.diagH+d)); localStorage.setItem('diagH',this.diagH) }}">
 
-    <!-- Power flow diagram — nodes are clickable to switch tab below -->
-    <!-- Size controls -->
-    <div class="flex justify-end gap-1 mb-1">
-      <button @click="diagScale(-40)" title="Shrink diagram"
-              class="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">−</button>
-      <button @click="diagScale(40)" title="Enlarge diagram"
-              class="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">+</button>
+    <!-- Device name · timezone · address header -->
+    <div class="flex items-center gap-2 mb-1 flex-wrap">
+      <span class="text-xs font-medium text-slate-300"
+            x-text="$store.app.deviceName || 'Power Diverter'"></span>
+      <template x-if="$store.app.deviceTimezone">
+        <span class="text-xs text-slate-500">·</span>
+      </template>
+      <template x-if="$store.app.deviceTimezone">
+        <span class="text-xs text-slate-400" x-text="$store.app.deviceTimezone.replace('_',' ')"></span>
+      </template>
+      <template x-if="$store.app.userAddress || $store.app.userCity">
+        <span class="text-xs text-slate-500 truncate"
+              x-text="'📍 ' + [$store.app.userAddress, $store.app.userCity].filter(Boolean).join(', ')"></span>
+      </template>
     </div>
+
+    <!-- Weather + NEM row — directly under address, left-aligned -->
+    <div class="flex items-center gap-3 mb-2 min-h-[28px]"
+         x-data="{get wn(){return Alpine.store('dashboard')?.weatherNem||{}}}"
+         x-show="wn.weather || wn.nem">
+      <!-- Weather -->
+      <template x-if="wn.weather">
+        <div class="flex items-center gap-1.5">
+          <!-- icon -->
+          <svg class="w-4 h-4 shrink-0" :class="$store.app.isDark ? 'text-slate-400' : 'text-slate-500'"
+               viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <!-- Sun -->
+            <g x-show="wn.weather.code <= 2">
+              <circle cx="10" cy="10" r="3.5"/>
+              <line x1="10" y1="2" x2="10" y2="4"/><line x1="10" y1="16" x2="10" y2="18"/>
+              <line x1="2" y1="10" x2="4" y2="10"/><line x1="16" y1="10" x2="18" y2="10"/>
+              <line x1="4.1" y1="4.1" x2="5.5" y2="5.5"/><line x1="14.5" y1="14.5" x2="15.9" y2="15.9"/>
+              <line x1="15.9" y1="4.1" x2="14.5" y2="5.5"/><line x1="5.5" y1="14.5" x2="4.1" y2="15.9"/>
+            </g>
+            <!-- Cloud -->
+            <g x-show="wn.weather.code >= 3 && wn.weather.code <= 57">
+              <path d="M6 14 Q2 14 2 10 Q2 6 6 6 Q7 3 11 3 Q16 3 16 8 Q19 8 19 12 Q19 16 15 16 L6 16 Z" stroke-width="1.2"/>
+            </g>
+            <!-- Rain -->
+            <g x-show="wn.weather.code >= 58 && wn.weather.code < 95">
+              <path d="M5 11 Q2 11 2 8 Q2 5 5 5 Q6 2 10 2 Q15 2 15 7 Q18 7 18 10 Q18 13 15 13 L5 13 Z" stroke-width="1.2"/>
+              <line x1="6" y1="15" x2="5" y2="18" stroke-linecap="round"/>
+              <line x1="10" y1="15" x2="9" y2="18" stroke-linecap="round"/>
+              <line x1="14" y1="15" x2="13" y2="18" stroke-linecap="round"/>
+            </g>
+            <!-- Thunder -->
+            <g x-show="wn.weather.code >= 95">
+              <path d="M5 11 Q2 11 2 8 Q2 5 5 5 Q6 2 10 2 Q15 2 15 7 Q18 7 18 10 Q18 13 15 13 L5 13 Z" stroke-width="1.2"/>
+              <polyline points="11,14 8,18 11,18 8,22" stroke="#f59e0b" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </g>
+          </svg>
+          <span class="text-sm font-semibold" :class="$store.app.isDark ? 'text-slate-200' : 'text-slate-800'"
+                x-text="wn.weather.temp_c.toFixed(1) + '°C'"></span>
+          <span class="text-xs" :class="$store.app.isDark ? 'text-slate-400' : 'text-slate-500'"
+                x-text="wn.weather.description"></span>
+        </div>
+      </template>
+      <!-- Divider -->
+      <template x-if="wn.weather && wn.nem">
+        <span class="text-slate-600 text-xs select-none">·</span>
+      </template>
+      <!-- NEM -->
+      <template x-if="wn.nem">
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs font-mono font-semibold"
+                :class="(wn.nem.rrp_mwh||0) < 0 ? 'text-red-400' : (wn.nem.rrp_mwh||0) > 200 ? 'text-amber-400' : ($store.app.isDark ? 'text-slate-200' : 'text-slate-800')"
+                x-text="'$' + wn.nem.rrp_mwh.toFixed(0) + '/MWh'"></span>
+          <span class="text-xs font-mono" :class="$store.app.isDark ? 'text-slate-400' : 'text-slate-500'"
+                x-text="(wn.nem.rrp_kwh*100).toFixed(1) + 'c/kWh'"></span>
+          <span class="text-[10px] px-1 py-0.5 rounded font-mono"
+                :class="$store.app.isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500'"
+                x-text="wn.nem.region.replace('1','')"></span>
+        </div>
+      </template>
+    </div>
+    <!-- Power flow diagram -->
     <div class="relative w-full mb-3" :style="`height:${diagH}px`">
-      <svg viewBox="0 0 400 200" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 -5 400 260" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
         <!--
           Topology: Grid(38,75) + Solar(38,150) → House(155,108) → Diverter(268,88) → Heater(378,68) + H2(372,158)
         -->
@@ -286,9 +398,9 @@
         </line>
         <!-- House → Diverter -->
         <line x1="179" y1="107" x2="240" y2="93" stroke-width="2" stroke-dasharray="6 4"
-              :stroke="(Math.abs($store.app.points.phasePower||0) > 0.05 || ($store.app.points.solarStreamA||0) > 0.05) ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8')">
+              :stroke="(Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 || ($store.app.points.offPeakStreamExtraPower||0) > 0.05) ? '#4ade80' : ($store.app.isDark ? '#475569' : '#94a3b8')">
           <animate attributeName="stroke-dashoffset"
-                   :values="(Math.abs($store.app.points.phasePower||0) > 0.05 || ($store.app.points.solarStreamA||0) > 0.05) ? '20;0' : '0;0'"
+                   :values="(Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 || ($store.app.points.offPeakStreamExtraPower||0) > 0.05) ? '20;0' : '0;0'"
                    dur="1.2s" repeatCount="indefinite"/>
         </line>
         <!-- Diverter → Heater (main) -->
@@ -322,17 +434,17 @@
         <!-- ── Grid node ──────────────────────────────────────────────────── -->
         <g transform="translate(38,75)" @click="metricsTab='grid'" style="cursor:pointer">
           <circle cx="0" cy="0" r="28" fill="transparent"/>
-          <image href="/static/icons/devices/electricity-icon.png" x="-16" y="-38" width="32" height="32"
+          <image href="/static/icons/devices/electricity-icon.png" x="-16" y="-34" width="32" height="32"
                  style="filter:saturate(1.2)"/>
-          <text y="-8" text-anchor="middle" font-size="9"
+          <text y="8" text-anchor="middle" font-size="9"
                 :fill="metricsTab==='grid' ? '#4ade80' : '#94a3b8'">Grid</text>
-          <text y="6" text-anchor="middle" font-size="11" font-weight="600"
+          <text y="22" text-anchor="middle" font-size="11" font-weight="600"
                 :fill="($store.app.points.phasePower||0) < -0.05 ? '#fbbf24' : ($store.app.points.phasePower||0) > 0.05 ? '#4ade80' : '#94a3b8'"
                 x-text="fmt(Math.abs($store.app.points.phasePower),'kW',2)"></text>
-          <text y="18" text-anchor="middle" font-size="8"
+          <text y="34" text-anchor="middle" font-size="8"
                 :fill="($store.app.points.phasePower||0) < -0.05 ? '#f97316' : '#4ade80'"
-                x-text="($store.app.points.phasePower||0) < -0.05 ? 'Import' : 'Export'"></text>
-          <line x1="-22" y1="24" x2="22" y2="24" stroke-width="2" stroke-linecap="round"
+                x-text="Math.abs($store.app.points.phasePower||0) < 0.05 ? '' : ($store.app.points.phasePower||0) < -0.05 ? 'Import' : 'Export'"></text>
+          <line x1="-22" y1="40" x2="22" y2="40" stroke-width="2" stroke-linecap="round"
                 :stroke="metricsTab==='grid' ? '#4ade80' : 'transparent'"/>
         </g>
 
@@ -344,10 +456,32 @@
                 :fill="metricsTab==='solar' ? '#facc15' : '#94a3b8'">Solar</text>
           <text y="20" text-anchor="middle" font-size="9"
                 :fill="($store.app.points.solarStreamA||0) > 0.05 ? '#facc15' : '#475569'"
-                x-text="($store.app.points.solarStreamA||0) > 0.05 ? fmt($store.app.points.solarStreamA,'kW',2) : 'N/A'"></text>
+                x-text="fmt($store.app.points.solarStreamA||0,'kW',2)"></text>
+          <!-- Solar restriction window — shown below Solar kW label -->
+          <g x-show="$store.app.points['sd.solarRestrictionSwitcherStatus']"
+             transform="translate(0,36)" style="pointer-events:none">
+            <rect x="-22" y="-12" width="44" height="23" rx="3" :fill="$store.app.isDark ? '#1e293b' : '#fff7ed'" stroke="#f97316" stroke-width="1"/>
+            <text text-anchor="middle" y="-4" font-size="5" font-weight="bold" fill="#f97316">BLACKOUT</text>
+            <text text-anchor="middle" y="6" font-size="6" :fill="$store.app.isDark ? '#fed7aa' : '#9a3412'"
+                  x-text="($store.app.points['sd.solar_restriction_from']||'--:--')+'→'+($store.app.points['sd.solar_restriction_to']||'--:--')"></text>
+          </g>
         </g>
 
-        <!-- ── House node (topology marker — no click, no data yet) ──────── -->
+        <!-- ── Battery ↔ House flow line (battery at TOP, y=38 → house top y=84) ── -->
+        <g x-show="$store.app.points['ext.battery_soc'] != null">
+          <line x1="155" y1="38" x2="155" y2="84" stroke-width="1.5" stroke-dasharray="5 3"
+                :stroke="($store.app.points['ext.battery_power_w']||0) > 50 ? '#4ade80' : ($store.app.points['ext.battery_power_w']||0) < -50 ? '#f59e0b' : ($store.app.isDark ? '#334155' : '#cbd5e1')">
+            <animate attributeName="stroke-dashoffset"
+                     :values="($store.app.points['ext.battery_power_w']||0) > 50 ? '16;0' : ($store.app.points['ext.battery_power_w']||0) < -50 ? '0;16' : '0;0'"
+                     dur="1.4s" repeatCount="indefinite"/>
+          </line>
+          <!-- kW label beside line -->
+          <text x="160" y="63" font-size="7" :fill="$store.app.isDark ? '#94a3b8' : '#64748b'"
+                x-show="Math.abs($store.app.points['ext.battery_power_w']||0) > 50"
+                x-text="(Math.abs($store.app.points['ext.battery_power_w']||0)/1000).toFixed(2)+' kW'"></text>
+        </g>
+
+        <!-- ── House node ──────────────────────────────────────────────── -->
         <g transform="translate(155,108)">
           <!-- Heroicons 'home' scaled to ~48px, centered on origin -->
           <svg x="-24" y="-24" width="48" height="48" viewBox="0 0 24 24"
@@ -355,6 +489,133 @@
                :stroke="$store.app.isDark ? '#22c55e' : '#16a34a'">
             <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
           </svg>
+          <!-- Home Loads label + value below house icon -->
+          <text text-anchor="middle" y="30" font-size="5.5" font-weight="600"
+                :fill="$store.app.isDark ? '#94a3b8' : '#64748b'">Home Loads</text>
+          <text text-anchor="middle" y="39" font-size="6.5" font-weight="bold"
+                :fill="$store.app.isDark ? '#f1f5f9' : '#1e293b'"
+                x-show="$store.app.points['ext.home_load_w'] != null"
+                x-text="(($store.app.points['ext.home_load_w']||0)/1000).toFixed(2)+' kW'"></text>
+          <text text-anchor="middle" y="39" font-size="6.5"
+                :fill="$store.app.isDark ? '#475569' : '#94a3b8'"
+                x-show="$store.app.points['ext.home_load_w'] == null">—</text>
+        </g>
+
+        <!-- ── Battery node — TOP of house ──────────────────────────────────── -->
+        <g x-show="$store.app.points['ext.battery_soc'] != null" transform="translate(155,18)"
+           x-data="{
+             _modeMap: {1:'Emergency Backup',2:'Self-Consumption',3:'Time-of-Use'},
+             _gridMap: {0:'Grid Forming',1:'Grid Following',2:'PV Clipped',3:'Grid Forming'},
+             get mode(){
+               const v=$store.app.points['ext.battery_state'];
+               if(this._modeMap[v]) return this._modeMap[v];
+               if(typeof v==='string'){
+                 if(v.toLowerCase().includes('charg')) return '↑ Charging';
+                 if(v.toLowerCase().includes('discharg')) return '↓ Discharging';
+                 if(v.toLowerCase().includes('idle')) return 'Idle';
+                 return v;
+               }
+               return '';
+             },
+             get gridSt(){
+               const g=$store.app.points['ext.battery_grid_status'];
+               if(typeof g==='string' && g.length>0) return g;
+               if(this._gridMap[g]!=null) return this._gridMap[g];
+               return '';
+             },
+             get tip(){
+               const p=$store.app.points;
+               const lines=[];
+               if(p['ext.battery_power_w']!=null) lines.push('Power: '+(p['ext.battery_power_w']/1000).toFixed(2)+' kW');
+               if(this.mode) lines.push('Mode: '+this.mode);
+               if(this.gridSt) lines.push(this.gridSt);
+               if(p['ext.battery_capacity_kwh']!=null) lines.push('Cap: '+p['ext.battery_capacity_kwh']+' kWh');
+               if(p['ext.battery_soh']!=null) lines.push('SoH: '+p['ext.battery_soh']+'%');
+               return lines.join(' · ')||null;
+             }
+           }"
+           :title="tip"
+           @click="metricsTab='battery'" style="cursor:pointer">
+          <!-- SoC arc ring (r=20) -->
+          <circle cx="0" cy="0" r="20"
+                  :stroke="$store.app.isDark ? '#334155' : '#e2e8f0'" stroke-width="3" fill="none"/>
+          <circle cx="0" cy="0" r="20" stroke-width="3" fill="none"
+                  stroke-linecap="round"
+                  :stroke="($store.app.points['ext.battery_soc']||0)>50 ? '#4ade80' : ($store.app.points['ext.battery_soc']||0)>20 ? '#f59e0b' : '#ef4444'"
+                  :stroke-dasharray="(($store.app.points['ext.battery_soc']||0)/100*125.7).toFixed(1)+' 125.7'"
+                  stroke-dashoffset="31.4"
+                  transform="rotate(-90)"/>
+          <!-- SoC % -->
+          <text text-anchor="middle" y="-5" font-size="10" font-weight="700"
+                :fill="($store.app.points['ext.battery_soc']||0)>50 ? '#4ade80' : ($store.app.points['ext.battery_soc']||0)>20 ? '#f59e0b' : '#ef4444'"
+                x-text="(+$store.app.points['ext.battery_soc']||0).toFixed(0)+'%'"></text>
+          <!-- kW inside ring (below SoC) -->
+          <text text-anchor="middle" y="6" font-size="6" font-weight="bold"
+                :fill="$store.app.isDark ? '#94a3b8' : '#64748b'"
+                x-show="Math.abs($store.app.points['ext.battery_power_w']||0) > 50"
+                x-text="(Math.abs($store.app.points['ext.battery_power_w']||0)/1000).toFixed(1)+' kW '+(($store.app.points['ext.battery_power_w']||0)>0?'↓':'↑')"></text>
+          <!-- Home Load below battery kW -->
+          <text text-anchor="middle" y="16" font-size="5.5" font-weight="bold"
+                :fill="$store.app.isDark ? '#f1f5f9' : '#334155'"
+                x-show="$store.app.points['ext.home_load_w'] != null"
+                x-text="'⌂ '+(($store.app.points['ext.home_load_w']||0)/1000).toFixed(2)+' kW'"></text>
+          <!-- Mode / grid status label below ring -->
+          <text text-anchor="middle" y="32" font-size="6.5" font-weight="500"
+                :fill="$store.app.isDark ? '#7dd3fc' : '#0369a1'"
+                x-show="mode"
+                x-text="mode"></text>
+          <text text-anchor="middle" y="42" font-size="6"
+                :fill="$store.app.isDark ? '#64748b' : '#94a3b8'"
+                x-show="gridSt"
+                x-text="gridSt"></text>
+          <!-- Name label left of ring -->
+          <text text-anchor="end" x="-24" y="4" font-size="7"
+                :fill="$store.app.isDark ? '#64748b' : '#94a3b8'"
+                x-text="$store.app.batteryLabel || 'Battery'"></text>
+        </g>
+
+        <!-- ── Ext Solar PV node — RIGHT of battery ────────────────────────────
+             Positioned at (242,18) so flow line to battery is horizontal (no
+             crossing the house icon). Battery at (155,18) r=20 → right edge x=175.
+             Local x offset: 175-242 = -67 → x2="-67".
+             No-battery fallback: diagonal down-left to house (155,108).
+        ─────────────────────────────────────────────────────────────────────── -->
+        <g x-show="$store.app.points['ext.solar_power_w'] != null && !_pvHidden"
+           x-data="{
+             get _pvHidden(){ return !!JSON.parse(localStorage.getItem('ep_pv_hidden')||'false') },
+             togglePv(){ localStorage.setItem('ep_pv_hidden', JSON.stringify(!this._pvHidden)) },
+             get pv(){ return $store.app.points['ext.solar_power_w']||0 },
+             get hasBattery(){ return $store.app.points['ext.battery_soc'] != null }
+           }"
+           transform="translate(242,18)">
+
+          <!-- Flow line → Battery: horizontal left from sun circle to battery right edge -->
+          <g x-show="hasBattery">
+            <line x1="-12" y1="0" x2="-67" y2="0" stroke-width="1.5" stroke-dasharray="5 3"
+                  :stroke="pv > 50 ? '#facc15' : ($store.app.isDark ? '#334155' : '#cbd5e1')">
+              <animate attributeName="stroke-dashoffset" :values="pv > 50 ? '16;0' : '0;0'" dur="1.4s" repeatCount="indefinite"/>
+            </line>
+          </g>
+
+          <!-- Flow line → House (only when no battery) — diagonal down-left -->
+          <g x-show="!hasBattery">
+            <line x1="-12" y1="6" x2="-75" y2="84" stroke-width="1.5" stroke-dasharray="5 3"
+                  :stroke="pv > 50 ? '#facc15' : ($store.app.isDark ? '#334155' : '#cbd5e1')">
+              <animate attributeName="stroke-dashoffset" :values="pv > 50 ? '16;0' : '0;0'" dur="1.4s" repeatCount="indefinite"/>
+            </line>
+          </g>
+
+          <!-- Solar icon — same as internal solar node -->
+          <circle cx="0" cy="0" r="22" fill="transparent"/>
+          <image href="/static/icons/devices/solar-icon.png" x="-14" y="-26" width="28" height="28"/>
+          <text text-anchor="middle" y="10" font-size="9"
+                :fill="pv > 50 ? '#facc15' : '#94a3b8'">Solar PV</text>
+          <text text-anchor="middle" y="22" font-size="9" font-weight="600"
+                :fill="pv > 50 ? '#facc15' : '#475569'"
+                x-text="(pv/1000).toFixed(2)+' kW'"></text>
+          <!-- × hide button -->
+          <text text-anchor="middle" x="20" y="-14" font-size="9" fill="#475569"
+                style="cursor:pointer" @click.stop="togglePv()" title="Hide integration solar">×</text>
         </g>
 
         <!-- ── Diverter node (clickable) ──────────────────────────────────── -->
@@ -399,7 +660,7 @@
             <circle cx="-20" cy="-22" r="6" fill="#ef4444"/>
             <text x="-20" y="-18.5" text-anchor="middle" font-size="8" font-weight="700" fill="white">!</text>
           </g>
-          <line x1="-22" y1="74" x2="22" y2="74" stroke-width="2" stroke-linecap="round"
+          <line x1="-22" y1="88" x2="22" y2="88" stroke-width="2" stroke-linecap="round"
                 :stroke="metricsTab==='diverter' ? '#4ade80' : 'transparent'"/>
         </g>
 
@@ -417,6 +678,7 @@
                 x-text="fmt($store.app.points.waterTemperatureAvg,'°C',1)"></text>
           <g x-show="$store.app.points.boostStatus">
             <text y="44" text-anchor="middle" font-size="8" fill="#f97316">⚡ Boost</text>
+            <text y="55" text-anchor="middle" font-size="8" fill="#f97316" x-text="boostRemaining()"></text>
           </g>
           <g x-show="!$store.app.points.boostStatus && Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 && ($store.app.points.solarStreamA||0) > 0.05">
             <text y="44" text-anchor="middle" font-size="8" fill="#facc15">☀ Solar</text>
@@ -437,7 +699,14 @@
 
       </svg>
 
-      <!-- (PD thumbnail moved to Hot Water card, left of temp ring) -->
+      <!-- Scale controls — bottom right -->
+      <div class="absolute bottom-1 right-1 flex items-center gap-1 pointer-events-auto">
+        <span class="text-[10px] font-semibold text-slate-500 mr-0.5 select-none">Scale</span>
+        <button @click="diagScale(-40)" title="Shrink diagram"
+                class="w-6 h-6 flex items-center justify-center rounded border border-slate-700 text-sm font-bold text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-700 transition-colors">−</button>
+        <button @click="diagScale(40)" title="Enlarge diagram"
+                class="w-6 h-6 flex items-center justify-center rounded border border-slate-700 text-sm font-bold text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-700 transition-colors">+</button>
+      </div>
     </div>
 
     <!-- Tab bar -->
@@ -462,6 +731,12 @@
               :class="metricsTab==='diverter' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-300'">
         Diverter
       </button>
+      <button x-show="$store.app.points['ext.battery_soc'] != null"
+              @click="metricsTab='battery'"
+              class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
+              :class="metricsTab==='battery' ? 'border-green-400 text-green-400' : 'border-transparent text-slate-500 hover:text-slate-300'">
+        Battery
+      </button>
     </div>
 
     <!-- ── Grid tab ──────────────────────────────────────────────────── -->
@@ -472,7 +747,7 @@
               :class="($store.app.points.phasePower || 0) < 0 ? 'text-amber-400' : 'text-green-400'"
               x-text="fmt(Math.abs($store.app.points.phasePower), 'kW', 2)"></span>
         <span class="text-sm text-slate-500 mb-1"
-              x-text="($store.app.points.phasePower || 0) < 0 ? 'import' : 'export'"></span>
+              x-text="Math.abs($store.app.points.phasePower||0) < 0.05 ? '' : ($store.app.points.phasePower||0) < 0 ? 'import' : 'export'"></span>
       </div>
 
       <table class="w-full text-xs">
@@ -541,8 +816,8 @@
         <div>
           <div class="text-xs text-slate-500 mb-0.5">Status</div>
           <span class="text-sm font-semibold rounded-full px-2.5 py-0.5"
-                :class="$store.app.points.heaterStatus==1 ? 'bg-brand/20 text-brand' : 'bg-slate-700 text-slate-400'"
-                x-text="$store.app.points.heaterStatus==1 ? 'Heating' : 'Idle'"></span>
+                :class="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? 'bg-brand/20 text-brand' : 'bg-slate-700 text-slate-400'"
+                x-text="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? 'Heating' : 'Idle'"></span>
         </div>
         <div>
           <div class="text-xs text-slate-500 mb-0.5">Avg</div>
@@ -571,7 +846,7 @@
 
       <!-- Secondary: T1/T2/T3 (smaller) -->
       <div class="grid grid-cols-3 gap-2 mb-3 text-center border-t border-slate-700/60 pt-2">
-        <template x-for="[label, key] in [['Bot T1','waterTemperature1'],['Mid T2','waterTemperature2'],['Top T3','waterTemperature3']]">
+        <template x-for="[label, key] in [['T1 Bottom','waterTemperature1'],['T2 Middle','waterTemperature2'],['T3 Top','waterTemperature3']]">
           <div>
             <div class="text-[10px] text-slate-600 mb-0.5" x-text="label"></div>
             <div class="text-sm font-semibold"
@@ -649,6 +924,19 @@
           <div class="flex items-center justify-between text-xs">
             <span class="text-slate-500">Device ID</span>
             <span class="font-mono text-slate-300 truncate max-w-[60%]" x-text="$store.app.deviceId || '—'"></span>
+          </div>
+
+          <!-- Timezone -->
+          <div class="flex items-center justify-between text-xs" x-show="$store.app.deviceTimezone">
+            <span class="text-slate-500">Timezone</span>
+            <span class="text-slate-300" x-text="$store.app.deviceTimezone"></span>
+          </div>
+
+          <!-- Address -->
+          <div class="flex items-center justify-between text-xs" x-show="$store.app.userAddress">
+            <span class="text-slate-500 shrink-0 mr-2">Location</span>
+            <span class="text-slate-300 text-right truncate max-w-[70%]"
+                  x-text="[$store.app.userAddress, $store.app.userCity].filter(Boolean).join(', ')"></span>
           </div>
 
           <!-- Firmware · Volume · Phase -->
@@ -750,49 +1038,106 @@
                     x-text="label"></span>
             </template>
           </div>
-          <!-- Active rule — label + dropdown + manage on one line (mobile) -->
+          <!-- Active rule — dropdown + Device Rules button (mobile) -->
           <div class="flex items-center gap-2">
             <span class="text-xs text-slate-500 shrink-0">Active Rule</span>
-            <select x-effect="
-                      const circuits = [
-                        {type:'command',  label:'PD',        point:'active_rule_id'},
-                        {type:'offpeak',  label:'Off-Peak',  point:'active_rule_offpeak_id'},
-                        {type:'heater2',  label:'Heater 2',  point:'active_rule_heater2_id'},
-                      ];
-                      let curVal = '';
-                      for (const c of circuits) {
-                        const id = $store.app.points[c.point] || '';
-                        if (id) { curVal = id; break; }
-                      }
-                      while ($el.options.length) $el.remove(0);
-                      $el.appendChild(new Option('No Rule Set', ''));
-                      for (const c of circuits) {
-                        const rules = _rulePickerRules.filter(r => r.type === c.type);
-                        if (!rules.length) continue;
-                        const grp = document.createElement('optgroup');
-                        grp.label = c.label;
-                        for (const rule of rules) {
-                          grp.appendChild(new Option(rule.name || rule.id, rule.id));
-                        }
-                        $el.appendChild(grp);
-                      }
-                      $el.value = curVal;
-                    "
-                    @change="
-                      const ruleId = $event.target.value;
-                      const rule = _rulePickerRules.find(r => r.id === ruleId);
-                      openRuleConfirm(ruleId, rule?.type || 'command');
-                    "
+            <select :value="rulePickerValue"
+                    @change="const r=_rulePickerRules.find(x=>x.id===$event.target.value); openRuleConfirm($event.target.value, r?.type||'command')"
                     class="flex-1 min-w-0 bg-white border border-slate-300 text-slate-800 text-xs rounded px-2 py-1 focus:outline-none focus:border-sky-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200">
-              <option value="">No Rule Set</option>
+              <template x-for="opt in rulePickerOptions" :key="opt.value">
+                <option :value="opt.value" :selected="opt.value === rulePickerValue" x-text="opt.label"></option>
+              </template>
             </select>
-            <button @click="$store.app.activeTab='rules'"
+            <button @click="deviceRulesOpen=true"
                     class="shrink-0 text-xs px-2.5 py-1 rounded-md bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors">
-              Manage rules
+              Device Rules
             </button>
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ── Battery tab ────────────────────────────────────────────────── -->
+    <div x-show="metricsTab==='battery'" x-cloak>
+      <div class="space-y-3">
+        <!-- Integration source -->
+        <div class="text-xs text-slate-500 mb-1" x-text="$store.app.batteryLabel ? $store.app.batteryLabel + ' — Battery Metrics' : 'Battery Metrics'"></div>
+
+        <!-- Battery metrics rows — compact, light-mode-aware -->
+        <div class="divide-y divide-slate-200 dark:divide-slate-700/50 text-xs">
+          <!-- SoC -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">State of Charge</span>
+            <span class="font-bold text-sm"
+                  :class="($store.app.points['ext.battery_soc']||0)>50?'text-green-500 dark:text-green-400':($store.app.points['ext.battery_soc']||0)>20?'text-amber-500 dark:text-amber-400':'text-red-500 dark:text-red-400'"
+                  x-text="fmt($store.app.points['ext.battery_soc'],'%',1)"></span>
+          </div>
+          <!-- Power -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">Power</span>
+            <span class="font-semibold"
+                  :class="($store.app.points['ext.battery_power_w']||0)>50?'text-green-500 dark:text-green-400':($store.app.points['ext.battery_power_w']||0)<-50?'text-amber-500 dark:text-amber-400':'text-slate-400'"
+                  x-text="$store.app.points['ext.battery_power_w'] != null ? fmt(Math.abs($store.app.points['ext.battery_power_w'])/1000,'kW',2)+' · '+(($store.app.points['ext.battery_power_w']||0)>50?'Charging':($store.app.points['ext.battery_power_w']||0)<-50?'Discharging':'Idle') : '—'"></span>
+          </div>
+          <!-- Home Load -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">Home Load</span>
+            <span class="font-semibold text-slate-700 dark:text-slate-200"
+                  x-text="$store.app.points['ext.home_load_w'] != null ? fmt(($store.app.points['ext.home_load_w']||0)/1000,'kW',2) : '—'"></span>
+          </div>
+          <!-- Operating Mode -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">Operating Mode</span>
+            <span class="font-medium text-sky-600 dark:text-sky-300"
+                  x-text="({1:'Backup',2:'Self-Consumption',3:'Time-of-Use'})[$store.app.points['ext.operating_mode']] || ($store.app.points['ext.operating_mode'] != null ? 'Mode '+$store.app.points['ext.operating_mode'] : '—')"></span>
+          </div>
+          <!-- Self Reserve SOC -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">Self Reserve SOC</span>
+            <span class="font-semibold text-slate-700 dark:text-slate-300"
+                  x-text="$store.app.points['ext.self_reserve_soc'] != null ? fmt($store.app.points['ext.self_reserve_soc'],'%',0) : '—'"></span>
+          </div>
+          <!-- TOU Reserve SOC -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">TOU Reserve SOC</span>
+            <span class="font-semibold text-slate-700 dark:text-slate-300"
+                  x-text="$store.app.points['ext.tou_reserve_soc'] != null ? fmt($store.app.points['ext.tou_reserve_soc'],'%',0) : '—'"></span>
+          </div>
+          <!-- SoH -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">State of Health</span>
+            <span class="font-semibold text-slate-700 dark:text-slate-300"
+                  x-text="$store.app.points['ext.battery_soh'] != null ? fmt($store.app.points['ext.battery_soh'],'%',1) : '—'"></span>
+          </div>
+          <!-- Capacity -->
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-500">Capacity</span>
+            <span class="font-semibold text-slate-700 dark:text-slate-300"
+                  x-text="$store.app.points['ext.battery_capacity_kwh'] != null ? fmt($store.app.points['ext.battery_capacity_kwh'],'kWh',1) : '—'"></span>
+          </div>
+          <!-- Grid Status (conditional) -->
+          <template x-if="$store.app.points['ext.battery_grid_status']">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Grid Status</span>
+              <span class="font-medium text-slate-700 dark:text-slate-300"
+                    x-text="$store.app.points['ext.battery_grid_status']"></span>
+            </div>
+          </template>
+          <!-- Solar PV ext (conditional) -->
+          <template x-if="$store.app.points['ext.solar_power_w'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Solar PV (External)</span>
+              <span class="font-bold text-yellow-500 dark:text-yellow-400"
+                    x-text="fmt($store.app.points['ext.solar_power_w']/1000,'kW',2)"></span>
+            </div>
+          </template>
+        </div>
+
+        <!-- Sources legend -->
+        <div class="text-[10px] text-slate-600 pt-1">
+          Sources: Modbus (SunSpec) · HA WebSocket · MQTT · REST integration
+        </div>
       </div>
     </div>
 
@@ -823,7 +1168,7 @@
         </div>
         <!-- Current temps strip -->
         <div class="flex items-center gap-4 px-4 py-2.5 border-b border-slate-700/60 text-xs">
-          <template x-for="[label, key, color] in [['T3 Top','waterTemperature3','#f43f5e'],['T2 Mid','waterTemperature2','#fb923c'],['T1 Bot','waterTemperature1','#60a5fa']]">
+          <template x-for="[label, key, color] in [['T3 Top','waterTemperature3','#f43f5e'],['T2 Middle','waterTemperature2','#fb923c'],['T1 Bottom','waterTemperature1','#60a5fa']]">
             <div class="flex items-center gap-1.5">
               <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${color}`"></span>
               <span class="text-slate-500" x-text="label"></span>
@@ -845,6 +1190,131 @@
     </div>
   </template>
 
+  <!-- ── Device Rules modal ───────────────────────────────────────────────────── -->
+  <template x-if="deviceRulesOpen">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="if(!['INPUT','SELECT','TEXTAREA'].includes($event.target.tagName)) deviceRulesOpen=false">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="deviceRulesOpen=false"></div>
+      <div class="relative bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+          <span class="font-semibold text-slate-100 text-sm">Device Rules</span>
+          <button @click="deviceRulesOpen=false" class="text-slate-500 hover:text-slate-300 transition-colors">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <!-- Three circuit rows -->
+        <div class="p-4 space-y-3">
+          <template x-for="[type, label, ptKey, icon] in [
+            ['command','PD (Main)','active_rule_id','⚡'],
+            ['offpeak','Off-Peak','active_rule_offpeak_id','🌙'],
+            ['heater2','Heater 2','active_rule_heater2_id','💧']
+          ]" :key="type">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400 w-20 shrink-0" x-text="icon + ' ' + label"></span>
+              <select
+                :value="$store.app.points[ptKey] || ''"
+                @change="
+                  const ruleId = $event.target.value;
+                  const r = _rulePickerRules.find(x => x.id === ruleId);
+                  deviceRulesOpen = false;
+                  $nextTick(() => openRuleConfirm(ruleId || '0', type))
+                "
+                class="flex-1 min-w-0 bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-sky-500">
+                <option value="">— none —</option>
+                <template x-for="r in _rulePickerRules.filter(r => r.type === type)" :key="r.id">
+                  <option :value="r.id" :selected="r.id === $store.app.points[ptKey]" x-text="r.name || r.id"></option>
+                </template>
+              </select>
+              <button
+                @click="$store.app.activeTab='rules'; deviceRulesOpen=false"
+                class="shrink-0 text-xs px-2 py-1.5 rounded bg-slate-700 text-slate-300 hover:text-white hover:bg-slate-600 transition-colors">
+                Edit
+              </button>
+            </div>
+          </template>
+        </div>
+        <!-- Footer -->
+        <div class="px-4 pb-4 flex justify-end gap-2 border-t border-slate-700 pt-3">
+          <button @click="$store.app.activeTab='rules'; deviceRulesOpen=false"
+                  class="text-xs px-3 py-1.5 rounded-md bg-slate-700 text-slate-300 hover:text-white hover:bg-slate-600 transition-colors font-medium">
+            Manage All Rules
+          </button>
+          <button @click="deviceRulesOpen=false"
+                  class="text-xs px-3 py-1.5 rounded-md bg-slate-600 text-slate-200 hover:bg-slate-500 transition-colors font-medium">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ── Weather Boost modal ──────────────────────────────────────────────────── -->
+  <template x-if="weatherBoostOpen">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+         @keydown.escape.window="weatherBoostOpen=false">
+      <div class="absolute inset-0" @click="weatherBoostOpen=false"></div>
+      <div class="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-5">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-semibold text-slate-100 text-sm">☁ Weather boost</span>
+          <button @click="weatherBoostOpen=false" class="text-slate-500 hover:text-slate-300 transition-colors">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Enable / Disable toggle -->
+        <p class="text-xs text-slate-400 mb-3">Weather boost setting</p>
+        <div class="grid grid-cols-2 gap-2 mb-5">
+          <button @click="wbPending=0"
+                  class="py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                  :class="wbPending===0 ? 'bg-red-800 text-white' : 'bg-slate-700/60 text-slate-400 hover:bg-slate-700'">
+            Disable
+          </button>
+          <button @click="wbPending=1"
+                  class="py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                  :class="wbPending===1 ? 'bg-orange-500 text-white' : 'bg-slate-700/60 text-slate-400 hover:bg-slate-700'">
+            Enable
+          </button>
+        </div>
+
+        <!-- WCR scores -->
+        <div class="flex gap-6 mb-6">
+          <div>
+            <div class="text-xs text-slate-500 mb-0.5">Today</div>
+            <span class="text-lg font-bold"
+                  :class="($store.app.points.wcr_today_score||0) >= 50 ? 'text-green-400' : 'text-amber-400'"
+                  x-text="($store.app.points.wcr_today_score ?? '—') + '%'"></span>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500 mb-0.5">Forecast</div>
+            <span class="text-lg font-bold"
+                  :class="($store.app.points.wcr_tomorrow_score||0) >= 50 ? 'text-green-400' : 'text-amber-400'"
+                  x-text="($store.app.points.wcr_tomorrow_score ?? '—') + '%'"></span>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3 justify-end">
+          <button @click="weatherBoostOpen=false"
+                  class="text-xs px-4 py-2 rounded-lg border border-red-500/60 text-red-400 hover:bg-red-500/10 transition-colors font-medium">
+            Cancel
+          </button>
+          <button @click="applyWeatherBoost()"
+                  :disabled="wbSaving"
+                  class="text-xs px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors font-semibold disabled:opacity-50">
+            <span x-text="wbSaving ? 'Saving…' : 'Apply'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
   <!-- ── Rule change confirm modal ────────────────────────────────────────────── -->
   <div x-show="_rulePickerConfirmOpen" x-cloak
        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
@@ -854,9 +1324,15 @@
     <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
 
       <div class="px-6 py-5">
-        <h3 class="font-semibold text-slate-100 mb-1">Change active rule?</h3>
+        <h3 class="font-semibold text-slate-100 mb-1"
+            x-text="_rulePickerPendingId === '0' ? 'Clear active rule?' : 'Change active rule?'"></h3>
         <p class="text-sm text-slate-400">
-          Enable <strong class="text-slate-200" x-text="'&quot;' + _rulePickerPendingName + '&quot;'"></strong> as the active rule.
+          <template x-if="_rulePickerPendingId !== '0'">
+            <span>Enable <strong class="text-slate-200" x-text="'&quot;' + _rulePickerPendingName + '&quot;'"></strong> as the active rule.</span>
+          </template>
+          <template x-if="_rulePickerPendingId === '0'">
+            <span>Remove the active rule for this circuit.</span>
+          </template>
         </p>
         <p x-show="_rulePickerError" x-text="_rulePickerError"
            class="mt-2 text-xs text-red-400 bg-red-900/20 border border-red-900/30 rounded px-2 py-1"></p>

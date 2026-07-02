@@ -23,6 +23,7 @@ const BOOST_PCT = {1: '25%', 2: '50%', 3: '75%', 4: '100%'}
 
 function dashboardTab() {
   return {
+    weatherNem: { weather: null, nem: null },
     boosting: false,
     cancelling: false,
     settingPower: false,
@@ -210,6 +211,20 @@ function dashboardTab() {
           this._rulePickerRules = rules
         }
       } catch (_) {}
+      this._fetchWeatherNem()
+      setInterval(() => this._fetchWeatherNem(), 300000)
+    },
+
+    async _fetchWeatherNem() {
+      try {
+        const r = await fetch('/api/weather-nem')
+        if (r.ok) {
+          const d = await r.json()
+          this.weatherNem = d
+          // Also push to Alpine.store('dashboard') so nested SVG x-data can read it
+          if (Alpine.store('dashboard')) Alpine.store('dashboard').weatherNem = d
+        }
+      } catch(e) {}
     },
 
     activeRuleName() {
@@ -259,6 +274,29 @@ function dashboardTab() {
         Alpine.store('app').addToast('Network error', 'error')
       } finally {
         this.toggling = null
+      }
+    },
+
+    async applyWeatherBoost() {
+      this.wbSaving = true
+      try {
+        const r = await fetch('/api/device/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { weatherSwitcherStatus: this.wbPending } }),
+        })
+        const d = await r.json()
+        if (!r.ok) {
+          Alpine.store('app').addToast(d.detail || 'Weather boost failed', 'error')
+        } else {
+          Alpine.store('app').points['sd.weatherSwitcherStatus'] = this.wbPending
+          Alpine.store('app').addToast(`Weather boost ${this.wbPending ? 'enabled' : 'disabled'}`, 'info')
+          this.weatherBoostOpen = false
+        }
+      } catch (e) {
+        Alpine.store('app').addToast('Network error', 'error')
+      } finally {
+        this.wbSaving = false
       }
     },
 
@@ -337,8 +375,33 @@ function dashboardTab() {
       this.setBoostPower(idx)
     },
 
-    // ── Rule confirm modal (triggered by inline select on Active Rule row) ──────
+    // ── Device Rules modal ────────────────────────────────────────────────────
+    deviceRulesOpen: false,
+    weatherBoostOpen: false,
+    wbPending: 0,
+    wbSaving: false,
+
+    // ── Rule confirm modal (triggered by Device Rules modal dropdowns) ────────
     _rulePickerRules: [],
+
+    get rulePickerOptions() {
+      const TYPE_LABEL = { command: 'PD', offpeak: 'Off-Peak', heater2: 'Heater 2' }
+      const types = [...new Set(this._rulePickerRules.map(r => r.type))]
+      const multiType = types.length > 1
+      const opts = [{ value: '', label: 'No Rule Set' }]
+      for (const type of ['command', 'offpeak', 'heater2']) {
+        const group = this._rulePickerRules.filter(r => r.type === type)
+        for (const r of group) {
+          opts.push({ value: r.id, label: (multiType ? TYPE_LABEL[type] + ': ' : '') + (r.name || r.id) })
+        }
+      }
+      return opts
+    },
+
+    get rulePickerValue() {
+      const pts = Alpine.store('app').points
+      return pts.active_rule_id || pts.active_rule_offpeak_id || pts.active_rule_heater2_id || ''
+    },
     _rulePickerConfirmOpen: false,
     _rulePickerPendingId: '',    // rule ID selected, awaiting confirm
     _rulePickerPendingName: '',  // display name for confirm modal
@@ -348,10 +411,11 @@ function dashboardTab() {
     openRuleConfirm(ruleId, ruleType) {
       const ptMap = { command: 'active_rule_id', offpeak: 'active_rule_offpeak_id', heater2: 'active_rule_heater2_id' }
       const current = Alpine.store('app').points?.[ptMap[ruleType] || 'active_rule_id'] || ''
-      if (!ruleId || ruleId === current) return
+      if (ruleId == null || ruleId === current) return
+      const clearing = ruleId === '0' || ruleId === ''
       const rule = this._rulePickerRules.find(r => r.id === ruleId)
-      this._rulePickerPendingId = ruleId
-      this._rulePickerPendingName = rule?.name || ruleId
+      this._rulePickerPendingId = clearing ? '0' : ruleId
+      this._rulePickerPendingName = clearing ? '(none — clear rule)' : (rule?.name || ruleId)
       this._rulePickerType = ruleType || rule?.type || 'command'
       this._rulePickerError = ''
       this._rulePickerConfirmOpen = true
@@ -372,6 +436,7 @@ function dashboardTab() {
       this._rulePickerError = ''
       try {
         const ruleType = this._rulePickerType || 'command'
+        const clearing = ruleId === '0'
         const r = await fetch('/api/device/set', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -380,8 +445,8 @@ function dashboardTab() {
         const d = await r.json()
         if (r.ok) {
           const ptMap = { command: 'active_rule_id', offpeak: 'active_rule_offpeak_id', heater2: 'active_rule_heater2_id' }
-          Alpine.store('app').points[ptMap[ruleType] || 'active_rule_id'] = ruleId
-          Alpine.store('app').addToast(`Rule "${this._rulePickerPendingName}" enabled`, 'success')
+          Alpine.store('app').points[ptMap[ruleType] || 'active_rule_id'] = clearing ? null : ruleId
+          Alpine.store('app').addToast(clearing ? 'Rule cleared' : `Rule "${this._rulePickerPendingName}" enabled`, 'success')
           this.cancelRuleConfirm()
         } else {
           this._rulePickerError = d.detail || `Error ${r.status}`
@@ -397,4 +462,42 @@ function dashboardTab() {
     tempRingOffset,
     tempRingColor,
   }
+}
+
+// ── Dashboard running-slot helpers (mirror rules_tab equivalents) ──────────
+function dashRunningSlot(rule) {
+  if (!rule) return null
+  const now = new Date()
+  const hhmm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0')
+  const jsDay = now.getDay()
+  const todayKey = `d${jsDay === 0 ? 7 : jsDay}`
+  const data = rule.data || {}
+  const everyday = rule.everyday || Object.keys(data).filter(k => /^d\d$/.test(k)).length === 7
+  const keys = everyday ? [todayKey] : Object.keys(data).filter(k => /^d\d$/.test(k))
+  for (const key of keys) {
+    for (const slot of (data[key] || [])) {
+      if (slot.timeFrom <= hhmm && hhmm < slot.timeTo) return slot
+    }
+  }
+  return null
+}
+
+function dashSlotCountdown(slot) {
+  if (!slot) return ''
+  const now = new Date()
+  const [endH, endM] = slot.timeTo.split(':').map(Number)
+  const rem = (endH * 60 + endM) - (now.getHours() * 60 + now.getMinutes())
+  if (rem <= 0) return '0:00'
+  return `${Math.floor(rem/60)}:${String(rem%60).padStart(2,'0')}`
+}
+
+function dashSlotProgress(slot) {
+  if (!slot) return 0
+  const now = new Date()
+  const cur = now.getHours() * 60 + now.getMinutes()
+  const [sh, sm] = slot.timeFrom.split(':').map(Number)
+  const [eh, em] = slot.timeTo.split(':').map(Number)
+  const start = sh * 60 + sm, end = eh * 60 + em
+  if (end <= start) return 0
+  return Math.min(100, Math.max(0, Math.round((cur - start) / (end - start) * 100)))
 }
