@@ -54,52 +54,51 @@
   <!-- Live stats strip (configurable; persisted to localStorage) -->
   <div class="hidden sm:flex items-center gap-3 ml-2"
        x-data="{fmt(v,u,dp){ if(v==null||v===undefined||v==='') return '—'; const n=parseFloat(v); return isNaN(n)?'—':`${n.toFixed(dp)}${u}` }}">
-    <!-- Avg Temp -->
-    <span x-show="$store.app.navCfg?.temp" class="flex items-center gap-1 text-xs text-slate-400 cursor-default" title="Avg Water Temp">
-      <img src="/static/icons/devices/hot-water-icon.png" class="w-4 h-4 object-contain" alt="temp"/>
+    <!-- Avg Temp — water heater cylinder (matches power flow card) -->
+    <span x-show="$store.app.navCfg?.temp" class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 cursor-default" title="Avg Water Temp">
+      <img src="/static/icons/devices/water-heater.svg" class="w-4 h-4 shrink-0" style="filter:invert(1) opacity(0.55)"/>
       <span x-text="fmt($store.app.points.waterTemperatureAvg,'°C',1)"></span>
     </span>
-    <!-- Grid kW -->
+    <!-- Grid kW — electricity pylon (matches power flow card) -->
     <span x-show="$store.app.navCfg?.grid" class="flex items-center gap-1 text-xs cursor-default" title="Grid Power">
-      <img src="/static/icons/devices/lightning-icon.svg" class="w-4 h-4 opacity-80" alt="grid"/>
-      <span :class="($store.app.points.phasePower||0)<-0.05?'text-amber-400':($store.app.points.phasePower||0)>0.05?'text-green-400':'text-slate-400'"
+      <img src="/static/icons/devices/electricity-icon.png" class="w-4 h-4 shrink-0" style="filter:saturate(1.2)"/>
+      <span :class="($store.app.points.phasePower||0)<-0.05?'text-amber-500 dark:text-amber-400':($store.app.points.phasePower||0)>0.05?'text-green-600 dark:text-green-400':'text-slate-500 dark:text-slate-400'"
             x-text="fmt(Math.abs($store.app.points.phasePower),'kW',2)"></span>
     </span>
-    <!-- Solar kW -->
-    <span x-show="$store.app.navCfg?.solar" class="flex items-center gap-1 text-xs text-slate-400 cursor-default" title="Solar Power">
-      <img src="/static/icons/devices/solar-icon.png" class="w-4 h-4 object-contain" alt="solar"/>
+    <!-- Solar kW — solar panel (matches power flow card) -->
+    <span x-show="$store.app.navCfg?.solar" class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 cursor-default" title="Solar Power">
+      <img src="/static/icons/devices/solar-icon.png" class="w-4 h-4 shrink-0"/>
       <span x-text="fmt($store.app.points.solarStreamA,'kW',2)"></span>
     </span>
-    <!-- Heater kW -->
-    <span x-show="$store.app.navCfg?.heater" class="flex items-center gap-1 text-xs text-slate-400 cursor-default" title="Heater Power">
-      <img src="/static/icons/devices/fire-icon.png" class="w-4 h-4 object-contain opacity-90" alt="heater"/>
+    <!-- Heater kW — heater element waves (matches power flow card) -->
+    <span x-show="$store.app.navCfg?.heater" class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 cursor-default" title="Heater Power">
+      <img src="/static/icons/devices/heater2-icon.svg" class="w-4 h-4 shrink-0"/>
       <span x-text="fmt(Math.abs($store.app.points.offPeakStreamHeaterPower),'kW',2)"></span>
     </span>
-    <!-- WiFi signal -->
+    <!-- WiFi signal bars — inactive uses light gray in light mode -->
     <span x-show="$store.app.navCfg?.wifi && typeof $store.app.points.signalWiFi === 'number'"
-          class="flex items-center gap-1 text-xs text-slate-400 cursor-default"
+          class="flex items-center gap-0.5 cursor-default"
           :title="'WiFi ' + ($store.app.points.signalWiFi ?? '?') + ' dBm'">
-      <span class="flex items-end gap-px h-3">
-        <span class="w-1 rounded-sm inline-block" style="height:4px"
-              :class="($store.app.points.signalWiFi||-100)>=-85?'bg-green-400':'bg-slate-600'"></span>
-        <span class="w-1 rounded-sm inline-block" style="height:6px"
-              :class="($store.app.points.signalWiFi||-100)>=-70?'bg-green-400':'bg-slate-600'"></span>
-        <span class="w-1 rounded-sm inline-block" style="height:9px"
-              :class="($store.app.points.signalWiFi||-100)>=-60?'bg-green-400':'bg-slate-600'"></span>
-        <span class="w-1 rounded-sm inline-block" style="height:12px"
-              :class="($store.app.points.signalWiFi||-100)>=-50?'bg-green-400':'bg-slate-600'"></span>
+      <span class="flex items-end gap-px" style="height:14px">
+        <span class="w-1 rounded-sm" style="height:4px"
+              :class="($store.app.points.signalWiFi||-100)>=-85?'bg-green-500 dark:bg-green-400':'bg-slate-300 dark:bg-slate-600'"></span>
+        <span class="w-1 rounded-sm" style="height:7px"
+              :class="($store.app.points.signalWiFi||-100)>=-70?'bg-green-500 dark:bg-green-400':'bg-slate-300 dark:bg-slate-600'"></span>
+        <span class="w-1 rounded-sm" style="height:10px"
+              :class="($store.app.points.signalWiFi||-100)>=-60?'bg-green-500 dark:bg-green-400':'bg-slate-300 dark:bg-slate-600'"></span>
+        <span class="w-1 rounded-sm" style="height:14px"
+              :class="($store.app.points.signalWiFi||-100)>=-50?'bg-green-500 dark:bg-green-400':'bg-slate-300 dark:bg-slate-600'"></span>
       </span>
     </span>
-    <!-- LoRa -->
+    <!-- LoRa — icon only, no text -->
     <span x-show="$store.app.navCfg?.lora && $store.app.points['dev.is_lora_enabled'] != null"
-          class="flex items-center gap-1 text-xs cursor-default" title="LoRa"
-          :class="$store.app.points['dev.is_lora_enabled'] == 1 ? 'text-green-400' : 'text-slate-500'">
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          class="flex items-center cursor-default" title="LoRa"
+          :class="$store.app.points['dev.is_lora_enabled'] == 1 ? 'text-green-500 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'">
+      <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M5 12.5c0-4.142 3.134-7.5 7-7.5s7 3.358 7 7.5"/>
         <path d="M8 12.5c0-2.485 1.79-4.5 4-4.5s4 2.015 4 4.5"/>
         <circle cx="12" cy="12.5" r="1.5" fill="currentColor"/>
       </svg>
-      <span x-text="$store.app.points['dev.is_lora_enabled'] == 1 ? 'LoRa' : 'LoRa off'"></span>
     </span>
   </div>
 
@@ -145,10 +144,24 @@
       <div x-show="showMenu" x-cloak
            class="absolute right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 min-w-[160px] py-1.5">
         <div class="px-3 py-1 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Show in topbar</div>
-        <template x-for="[key, label] in [['temp','🌡 Avg Temp'],['grid','⚡ Grid kW'],['solar','☀ Solar kW'],['heater','🔥 Heater kW'],['wifi','📶 WiFi'],['lora','〜 LoRa']]" :key="key">
+        <template x-for="[key, label, icon] in [
+          ['temp','Avg Temp','/static/icons/devices/water-heater.svg'],
+          ['grid','Grid kW','/static/icons/devices/electricity-icon.png'],
+          ['solar','Solar kW','/static/icons/devices/solar-icon.png'],
+          ['heater','Heater kW','/static/icons/devices/heater2-icon.svg'],
+          ['wifi','WiFi',''],
+          ['lora','LoRa','']
+        ]" :key="key">
           <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-700/60 cursor-pointer">
             <input type="checkbox" :checked="$store.app.navCfg[key]" @change="$store.app.setNavCfg(key, $event.target.checked)"
                    class="w-3.5 h-3.5 accent-brand"/>
+            <template x-if="icon">
+              <img :src="icon" class="w-3.5 h-3.5 shrink-0"
+                   :style="key==='temp' ? 'filter:invert(1) opacity(0.6)' : key==='grid' ? 'filter:saturate(1.2)' : ''"/>
+            </template>
+            <template x-if="!icon">
+              <span class="w-3.5 h-3.5 shrink-0 text-slate-400 text-center leading-none" x-text="key==='wifi' ? '▲▲▲▲' : '〜'" style="font-size:7px"></span>
+            </template>
             <span class="text-xs text-slate-300" x-text="label"></span>
           </label>
         </template>

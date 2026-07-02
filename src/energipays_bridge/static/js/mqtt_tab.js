@@ -1,9 +1,9 @@
 const HA_TYPE_COLOR = {
-  sensor:        'bg-blue-900/40 text-blue-300',
-  binary_sensor: 'bg-slate-700 text-slate-400',
-  switch:        'bg-green-900/40 text-green-300',
-  select:        'bg-purple-900/40 text-purple-300',
-  button:        'bg-amber-900/40 text-amber-300',
+  sensor:        'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  binary_sensor: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
+  switch:        'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  select:        'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  button:        'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
 }
 
 const HA_TYPE_LABEL = {

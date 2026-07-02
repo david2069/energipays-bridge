@@ -19,115 +19,93 @@
   </div>
 
   <!-- ── LOCAL toolbar ── -->
-  <div x-show="mode==='local'" class="space-y-2 mb-3">
+  <div x-show="mode==='local'" class="flex items-center gap-2 flex-wrap mb-3">
 
-    <!-- Row 1: Span + Res + chart style + export -->
-    <div class="flex items-center gap-2 flex-wrap">
-      <label class="text-xs text-slate-500 shrink-0">Range</label>
-      <select x-model="rangeOrCustom" @change="onRangeChange($event.target.value)"
-              class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
-        <optgroup label="Day view">
-          <option value="today">Today</option>
-          <option value="yesterday">Yesterday</option>
-          <option value="datepick">Pick date…</option>
-        </optgroup>
-        <optgroup label="Rolling window">
-          <option value="5m">Last 5 min</option>
-          <option value="15m">Last 15 min</option>
-          <option value="30m">Last 30 min</option>
-          <option value="1h">Last 1 h</option>
-          <option value="2h">Last 2 h</option>
-          <option value="4h">Last 4 h</option>
-          <option value="6h">Last 6 h</option>
-          <option value="8h">Last 8 h</option>
-          <option value="12h">Last 12 h</option>
-          <option value="18h">Last 18 h</option>
-          <option value="24h">Last 24 h</option>
-          <option value="5d">Last 5 d</option>
-          <option value="7d">Last 7 d</option>
-          <option value="14d">Last 14 d</option>
-          <option value="30d">Last 30 d</option>
-        </optgroup>
-        <option value="custom">Custom range…</option>
-      </select>
-      <!-- Date picker — shown when "Pick date…" is selected -->
-      <input x-show="rangeOrCustom === 'datepick'" x-cloak
-             type="date" x-model="localPickDate"
-             @change="if(localPickDate){ localDayMode='date'; _resetChart(); load() }"
-             class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand" />
+    <!-- Range selector — matches modbus bridge style -->
+    <select x-model="rangeOrCustom" @change="if($event.target.value==='custom'){showCustomRange=true}"
+            class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
+      <option value="today">Today</option>
+      <option value="yesterday">Yesterday</option>
+      <option value="30m">30 min</option>
+      <option value="1h">1 h</option>
+      <option value="2h">2 h</option>
+      <option value="4h">4 h</option>
+      <option value="6h">6 h</option>
+      <option value="8h">8 h</option>
+      <option value="12h">12 h</option>
+      <option value="18h">18 h</option>
+      <option value="24h">24 h</option>
+      <option value="3d">3 d</option>
+      <option value="7d">7 d</option>
+      <option value="14d">14 d</option>
+      <option value="30d">30 d</option>
+      <option value="custom">Range…</option>
+    </select>
 
-      <label class="text-xs text-slate-500 shrink-0">Bucket</label>
-      <select x-model="bucket" @change="setBucket(bucket)"
-              class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
-        <option value="1m">1 min</option>
-        <option value="5m">5 min</option>
-        <option value="15m">15 min</option>
-        <option value="1h">1 hour</option>
-      </select>
-
-      <div class="ml-auto flex items-center gap-2">
-        <!-- Flat/Signed toggle -->
-        <button @click="toggleSignedMode()"
-                :class="signedMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors"
-                :title="signedMode ? 'Showing true signed values — click for flat view' : 'Showing flat (abs) values — click for true signed view'"
-                x-text="signedMode ? '± Signed' : '∓ Flat'"></button>
-        <!-- Chart style toggle -->
-        <div class="flex rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700">
-          <button @click="setChartStyle('bars')"
-                  :class="chartStyle==='bars' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
-                  class="px-2.5 py-1.5 text-xs font-medium transition-colors" title="Bar chart">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9" rx="0.5"/><rect x="10" y="7" width="4" height="14" rx="0.5"/><rect x="17" y="4" width="4" height="17" rx="0.5"/></svg>
-          </button>
-          <button @click="setChartStyle('area')"
-                  :class="chartStyle==='area' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
-                  class="px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-slate-300 dark:border-slate-700" title="Area chart">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4V20H3z" fill="currentColor" opacity="0.2" stroke="none"/></svg>
-          </button>
-        </div>
-        <!-- Export -->
-        <div class="relative" x-data="{open:false}">
-          <button @click="open=!open" @click.outside="open=false"
-                  class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
-            ↓ Export ▾
-          </button>
-          <div x-show="open" x-cloak
-               class="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 min-w-max">
-            <button @click="exportCSV(); open=false"
-                    class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-t-lg">↓ CSV</button>
-            <button @click="exportJSON(); open=false"
-                    class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-b-lg">↓ JSON</button>
-          </div>
+    <!-- Metrics dropdown -->
+    <div class="relative" x-data="{open:false}" @click.outside="open=false">
+      <button @click="open=!open"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:text-slate-100 transition-colors">
+        <span>Metrics</span>
+        <span class="bg-brand/20 text-brand rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+              x-text="activeSeries.length"></span>
+        <span class="text-slate-500">▾</span>
+      </button>
+      <div x-show="open" x-cloak
+           class="absolute left-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-20 w-52">
+        <div class="py-1">
+          <template x-for="s in localSeries" :key="s.key">
+            <label class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-800 cursor-pointer select-none">
+              <input type="checkbox"
+                     :checked="activeSeries.includes(s.key)"
+                     @change="toggleSeries(s.key)"
+                     class="accent-brand rounded" />
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${s.color}`"></span>
+              <span class="text-xs text-slate-300" x-text="s.label"></span>
+            </label>
+          </template>
         </div>
       </div>
     </div>
 
-    <!-- Row 2: Metrics multi-select dropdown -->
-    <div class="flex items-center gap-2">
-      <div class="relative" x-data="{open:false}" @click.outside="open=false">
-        <button @click="open=!open"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:text-slate-100 transition-colors">
-          <span>Metrics</span>
-          <span class="bg-brand/20 text-brand rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                x-text="activeSeries.length"></span>
-          <span class="text-slate-500">▾</span>
+    <!-- Chart style toggle -->
+    <div class="flex rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700">
+      <button @click="setChartStyle('bars')"
+              :class="chartStyle==='bars' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="px-2.5 py-1.5 text-xs font-medium transition-colors" title="Bar chart">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9" rx="0.5"/><rect x="10" y="7" width="4" height="14" rx="0.5"/><rect x="17" y="4" width="4" height="17" rx="0.5"/></svg>
+      </button>
+      <button @click="setChartStyle('area')"
+              :class="chartStyle==='area' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-slate-300 dark:border-slate-700" title="Area chart">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4V20H3z" fill="currentColor" opacity="0.2" stroke="none"/></svg>
+      </button>
+    </div>
+
+    <!-- Export + Refresh (grouped right) -->
+    <div class="flex items-center gap-1.5 ml-auto">
+      <div class="relative" x-data="{open:false}">
+        <button @click="open=!open" @click.outside="open=false"
+                class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
+          ↓ Export ▾
         </button>
         <div x-show="open" x-cloak
-             class="absolute left-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-20 w-52">
-          <div class="py-1">
-            <template x-for="s in localSeries" :key="s.key">
-              <label class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-800 cursor-pointer select-none">
-                <input type="checkbox"
-                       :checked="activeSeries.includes(s.key)"
-                       @change="toggleSeries(s.key)"
-                       class="accent-brand rounded" />
-                <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${s.color}`"></span>
-                <span class="text-xs text-slate-300" x-text="s.label"></span>
-              </label>
-            </template>
-          </div>
+             class="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 min-w-max">
+          <button @click="exportCSV(); open=false"
+                  class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-t-lg">↓ CSV</button>
+          <button @click="exportJSON(); open=false"
+                  class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-b-lg">↓ JSON</button>
         </div>
       </div>
+      <button @click="load()" :disabled="loading" title="Refresh"
+              :class="loading ? 'bg-brand/10 border-brand/30 text-brand' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border disabled:opacity-70 transition-colors">
+        <svg class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''"
+             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span x-text="loading ? 'Loading…' : 'Refresh'"></span>
+      </button>
     </div>
   </div>
 
@@ -148,101 +126,113 @@
   </div>
 
   <!-- ── CLOUD toolbar ── -->
-  <div x-show="mode==='cloud'" class="mb-3">
-    <div class="flex items-center gap-2 flex-wrap">
-      <!-- Span selector -->
-      <select x-model="cloudSpan" @change="_resetChart(); load()"
-              class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
-        <optgroup label="Last N hours">
-          <option value="1h">Last 1 h</option>
-          <option value="2h">Last 2 h</option>
-          <option value="3h">Last 3 h</option>
-          <option value="6h">Last 6 h</option>
-        </optgroup>
-        <optgroup label="Full days">
-          <option value="1d">Today</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-        </optgroup>
-      </select>
-      <!-- Date picker -->
-      <div class="flex items-center gap-1">
-        <button @click="cloudDate = _prevDay(cloudDate); _resetChart(); load()"
-                class="px-2 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors">‹</button>
-        <input type="date" x-model="cloudDate" @change="_resetChart(); load()"
-               class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand" />
-        <button @click="cloudDate = _nextDay(cloudDate); _resetChart(); load()"
-                :disabled="cloudDate >= _toDateStr(new Date())"
-                class="px-2 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">›</button>
+  <div x-show="mode==='cloud'" class="flex items-center gap-2 flex-wrap mb-3">
+
+    <!-- Span selector -->
+    <select x-model="cloudSpan"
+            class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
+      <option value="1h">1 h</option>
+      <option value="2h">2 h</option>
+      <option value="3h">3 h</option>
+      <option value="6h">6 h</option>
+      <option value="1d">1 day</option>
+      <option value="7d">7 days</option>
+      <option value="30d">30 days</option>
+    </select>
+    <!-- Data granularity badge -->
+    <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 select-none" title="Cloud data is pre-aggregated at 30-minute intervals by energipays.com — bucket size cannot be changed">30 min data</span>
+
+    <!-- Date navigation -->
+    <div class="flex items-center gap-1">
+      <button @click="cloudDate = _prevDay(cloudDate)"
+              class="px-2 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors">‹</button>
+      <input type="date" x-model="cloudDate"
+             class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand" />
+      <button @click="cloudDate = _nextDay(cloudDate)"
+              :disabled="cloudDate >= _toDateStr(new Date())"
+              class="px-2 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">›</button>
+    </div>
+
+    <!-- Phase selector -->
+    <div class="flex rounded-lg overflow-hidden border border-slate-700">
+      <template x-for="[val, lbl] in [['sum','Sum'],['l1','L1'],['l2','L2'],['l3','L3']]" :key="val">
+        <button @click="cloudPhase = val"
+                :class="cloudPhase === val ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                class="px-2.5 py-1.5 text-xs font-medium transition-colors border-r border-slate-700 last:border-r-0"
+                x-text="lbl"></button>
+      </template>
+    </div>
+
+    <!-- Metrics dropdown -->
+    <div class="relative" x-data="{open:false}" @click.outside="open=false">
+      <button @click="open=!open"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:text-slate-100 transition-colors">
+        <span>Metrics</span>
+        <span class="bg-brand/20 text-brand rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+              x-text="activeCloudSeries.length"></span>
+        <span class="text-slate-500">▾</span>
+      </button>
+      <div x-show="open" x-cloak
+           class="absolute left-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-20 w-52">
+        <div class="py-1">
+          <template x-for="s in series" :key="s.key">
+            <label class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-800 cursor-pointer select-none">
+              <input type="checkbox"
+                     :checked="activeCloudSeries.includes(s.key)"
+                     @change="toggleSeries(s.key)"
+                     class="accent-brand rounded" />
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${s.color}`"></span>
+              <span class="text-xs text-slate-300" x-text="s.label"></span>
+            </label>
+          </template>
+        </div>
       </div>
-      <!-- Metrics dropdown (inline next to date picker) -->
-      <div class="relative" x-data="{open:false}" @click.outside="open=false">
-        <button @click="open=!open"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:text-slate-100 transition-colors">
-          <span>Metrics</span>
-          <span class="bg-brand/20 text-brand rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                x-text="activeCloudSeries.length"></span>
-          <span class="text-slate-500">▾</span>
+    </div>
+
+    <!-- Chart style toggle -->
+    <div class="flex rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700">
+      <button @click="setChartStyle('bars')"
+              :class="chartStyle==='bars' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="px-2.5 py-1.5 text-xs font-medium transition-colors" title="Bar chart">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9" rx="0.5"/><rect x="10" y="7" width="4" height="14" rx="0.5"/><rect x="17" y="4" width="4" height="17" rx="0.5"/></svg>
+      </button>
+      <button @click="setChartStyle('area')"
+              :class="chartStyle==='area' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-slate-300 dark:border-slate-700" title="Area chart">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4V20H3z" fill="currentColor" opacity="0.2" stroke="none"/></svg>
+      </button>
+    </div>
+
+    <!-- Flat toggle (suppress negatives — energipays.com style) -->
+    <button @click="toggleCloudFlat()"
+            :class="cloudFlat ? 'bg-brand/20 text-brand border-brand/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors"
+            title="Flat: suppress negatives (matches energipays.com chart style)">Flat</button>
+
+    <!-- Export + Refresh (grouped right) -->
+    <div class="flex items-center gap-1.5 ml-auto">
+      <div class="relative" x-data="{open:false}">
+        <button @click="open=!open" @click.outside="open=false"
+                class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
+          ↓ Export ▾
         </button>
         <div x-show="open" x-cloak
-             class="absolute left-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-20 w-52">
-          <div class="py-1">
-            <template x-for="s in series" :key="s.key">
-              <label class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-800 cursor-pointer select-none">
-                <input type="checkbox"
-                       :checked="activeCloudSeries.includes(s.key)"
-                       @change="toggleSeries(s.key)"
-                       class="accent-brand rounded" />
-                <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${s.color}`"></span>
-                <span class="text-xs text-slate-300" x-text="s.label"></span>
-              </label>
-            </template>
-          </div>
+             class="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 min-w-max">
+          <button @click="exportCSV(); open=false"
+                  class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-t-lg">↓ CSV</button>
+          <button @click="exportJSON(); open=false"
+                  class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-b-lg">↓ JSON</button>
         </div>
       </div>
-      <!-- Signed / Flat toggle -->
-      <button @click="toggleSignedMode()"
-              :class="signedMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
-              class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors"
-              :title="signedMode ? 'Showing true signed values — click for flat view' : 'Showing flat (abs) values — click for true signed view'"
-              x-text="signedMode ? '± Signed' : '∓ Flat'"></button>
-      <!-- Phase indicator (Sum only — L1/L2/L3 not applicable for single-phase) -->
-      <span class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-brand/20 text-brand border border-brand/30">Sum</span>
-      <!-- Refresh -->
-      <button @click="_resetChart(); load()" title="Refresh"
-              class="px-2 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <button @click="load()" :disabled="loading" title="Refresh"
+              :class="loading ? 'bg-brand/10 border-brand/30 text-brand' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border disabled:opacity-70 transition-colors">
+        <svg class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''"
+             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
+        <span x-text="loading ? 'Loading…' : 'Refresh'"></span>
       </button>
-      <!-- Chart style + export -->
-      <div class="ml-auto flex items-center gap-2">
-        <div class="flex rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700">
-          <button @click="setChartStyle('bars')"
-                  :class="chartStyle==='bars' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
-                  class="px-2.5 py-1.5 text-xs font-medium transition-colors" title="Bar chart">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9" rx="0.5"/><rect x="10" y="7" width="4" height="14" rx="0.5"/><rect x="17" y="4" width="4" height="17" rx="0.5"/></svg>
-          </button>
-          <button @click="setChartStyle('area')"
-                  :class="chartStyle==='area' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
-                  class="px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-slate-300 dark:border-slate-700" title="Area chart">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-5 4 3 4-6 4 4V20H3z" fill="currentColor" opacity="0.2" stroke="none"/></svg>
-          </button>
-        </div>
-        <div class="relative" x-data="{open:false}">
-          <button @click="open=!open" @click.outside="open=false"
-                  class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
-            ↓ Export ▾
-          </button>
-          <div x-show="open" x-cloak
-               class="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 min-w-max">
-            <button @click="exportCSV(); open=false"
-                    class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-t-lg">↓ CSV</button>
-            <button @click="exportJSON(); open=false"
-                    class="block w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 rounded-b-lg">↓ JSON</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -251,11 +241,16 @@
        class="mb-3 px-3 py-2 bg-red-900/30 border border-red-700/50 rounded-lg text-xs text-red-300"
        x-text="'Cloud error: ' + cloudError"></div>
 
+
   <!-- Chart — canvas always in DOM so Chart.js can measure it on iPhone -->
   <div class="card p-3 mb-4">
     <div style="position:relative;height:240px;width:100%;min-height:200px">
       <div x-show="loading"
-           class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm bg-slate-900/60 rounded-lg z-10">
+           class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-300 text-sm font-medium bg-slate-900/80 rounded-lg z-10">
+        <svg class="w-6 h-6 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
         Loading…
       </div>
       <canvas id="analyticsChart" style="width:100%;height:100%"></canvas>

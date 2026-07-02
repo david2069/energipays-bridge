@@ -18,7 +18,7 @@ const CLOUD_SERIES = [
   { key: 't2',   label: 'T2 Mid (°C)',        color: '#fb923c', type: 'line', yAxis: 'right' },
   { key: 't1',   label: 'T1 Bot (°C)',        color: '#60a5fa', type: 'line', yAxis: 'right' },
   // computed client-side as (t1+t2+t3)/3 — no direct API field
-  { key: '_tAvg', label: 'Average T (°C)',    color: '#06b6d4', type: 'line', yAxis: 'right', computed: true },
+  { key: '_tAvg', label: 'Average T (°C)',    color: '#e879f9', type: 'line', yAxis: 'right', computed: true },
 ]
 
 function analyticsTab() {
@@ -27,23 +27,19 @@ function analyticsTab() {
     mode: localStorage.getItem('analyticsSource') || 'cloud',   // 'local' | 'cloud'
 
     // ── local mode ────────────────────────────────────────────────────────
-    ranges: ['5m','15m','30m','1h','2h','4h','6h','8h','12h','18h','24h','5d','7d','14d','30d'],
-    buckets: ['1m','5m','15m','1h'],
     rangeOrCustom: '24h',
     localSeries: [
       { key: 'phasePower',          label: 'Grid (kW)',       color: '#f59e0b', type: 'line' },
       { key: 'today.IEct',          label: 'Import (kWh)',    color: '#ef4444', type: 'bar' },
       { key: 'today.EEct',          label: 'Export (kWh)',    color: '#22c55e', type: 'bar' },
       { key: 'today.DE_h',          label: 'Diverted (kWh)',  color: '#3b82f6', type: 'bar' },
-      { key: 'waterTemperatureAvg', label: 'Avg Temp (°C)',   color: '#f43f5e', type: 'line', yAxis: 'right' },
+      { key: 'waterTemperatureAvg', label: 'Avg Temp (°C)',   color: '#f97316', type: 'line', yAxis: 'right' },
       { key: 'waterTemperature3',   label: 'T3 Top (°C)',     color: '#a78bfa', type: 'line', yAxis: 'right' },
       { key: 'waterTemperature2',   label: 'T2 Mid (°C)',     color: '#fb923c', type: 'line', yAxis: 'right' },
       { key: 'waterTemperature1',   label: 'T1 Bot (°C)',     color: '#60a5fa', type: 'line', yAxis: 'right' },
     ],
     get series() { return this.mode === 'cloud' ? CLOUD_SERIES : this.localSeries },
     range: '24h',
-    localDayMode: 'rolling',   // 'today' | 'yesterday' | 'date' | 'rolling'
-    localPickDate: '',         // YYYY-MM-DD for 'date' mode
     bucket: '15m',
     activeSeries: JSON.parse(localStorage.getItem('analyticsLocalSeries') || 'null') || ['phasePower', 'today.IEct', 'today.EEct', 'today.DE_h'],
     activeCloudSeries: (() => { const s = JSON.parse(localStorage.getItem('analyticsCloudSeries') || 'null'); return s ? s.filter(k => k !== 't3' && k !== 't' && k !== 'EEP') : ['EIP', 'SP', 'GLPH', 'OLPH', '_tAvg']; })(),
@@ -59,6 +55,7 @@ function analyticsTab() {
     cloudDate: '',          // YYYY-MM-DD — end date for cloud view
     cloudSpan: '1d',        // '1d' | '7d' | '30d'
     cloudPhase: 'sum',      // 'sum' | 'l1' | 'l2' | 'l3'
+    cloudFlat: localStorage.getItem('analyticsCloudFlat') !== '0',  // true = suppress negatives (energipays.com style)
     cloudError: '',
 
     async init() {
@@ -68,17 +65,14 @@ function analyticsTab() {
       this.customFrom = _toDatetimeLocal(yesterday)
       // Default cloud date = today
       this.cloudDate = _toDateStr(now)
-      // On mobile: default local range to 1h, cloud span to 6h (less dense)
-      if (window.innerWidth < 768) {
-        this.rangeOrCustom = '1h'
-        this.cloudSpan = '2h'
-      }
-      // Defer chart build so the tab has time to become visible regardless
-      // of whether this is the starting tab or reached via the tab switcher.
-      setTimeout(() => {
+      // Defer chart build — retry until canvas has non-zero width (handles
+      // both starting-tab and late-navigate cases).
+      const _tryBuild = (attempts) => {
         this._buildChart()
-        if (this.$el._chart) this.load()
-      }, 80)
+        if (this.$el._chart) { this.load(); return }
+        if (attempts > 0) setTimeout(() => _tryBuild(attempts - 1), 150)
+      }
+      setTimeout(() => _tryBuild(10), 80)
       this.$watch('$store.app.activeTab', val => {
         if (val === 'analytics') {
           // setTimeout instead of $nextTick: Alpine removes x-show display:none
@@ -91,6 +85,24 @@ function analyticsTab() {
         }
       })
       this.$watch('$store.app.isDark', () => this._applyThemeToChart())
+
+      // Reload whenever any control changes — fire immediately, no nextTick dance
+      const _reload = () => { this._resetChart(); this.load() }
+      this.$watch('rangeOrCustom',      _reload)
+      this.$watch('cloudSpan',          _reload)
+      this.$watch('cloudDate',          _reload)
+      this.$watch('chartStyle',         _reload)
+      this.$watch('cloudPhase',         _reload)
+      this.$watch('cloudFlat',          _reload)
+      this.$watch('activeSeries',       _reload)
+      this.$watch('activeCloudSeries',  _reload)
+
+      // Auto-refresh: every 60s while analytics tab is visible
+      setInterval(() => {
+        if (Alpine.store('app').activeTab === 'analytics' && !this.loading) {
+          this.load()
+        }
+      }, 60000)
     },
 
     _chartColors() {
@@ -186,6 +198,8 @@ function analyticsTab() {
             },
             y: {
               type: 'linear', position: 'left', stacked: true,
+              suggestedMin: -3,
+              suggestedMax: 3,
               ticks: { color: c.ticks, font: { size: 10 } },
               grid:  { color: c.grid },
             },
@@ -201,54 +215,66 @@ function analyticsTab() {
       })
     },
 
+    toggleCloudFlat() {
+      this.cloudFlat = !this.cloudFlat
+      localStorage.setItem('analyticsCloudFlat', this.cloudFlat ? '1' : '0')
+    },
+
     // ── toggle mode ────────────────────────────────────────────────────────
     setMode(m) {
       this.mode = m
       localStorage.setItem('analyticsSource', m)
-      // default chart style per source if not yet overridden
       if (!localStorage.getItem('analyticsChartStyle')) {
         this.chartStyle = m === 'local' ? 'area' : 'bars'
       }
       this._resetChart()
-      this.load()
+      // Give Alpine time to show the correct toolbar before loading
+      this.$nextTick(() => this.load())
     },
 
     _resetChart() {
       if (this.$el._chart) {
         this.$el._chart.data.labels = []
         this.$el._chart.data.datasets = []
+        this.$el._chart._nowLabel = null
         this.$el._chart.update()
       }
     },
 
     // ── load dispatcher ────────────────────────────────────────────────────
     async load() {
+      if (!this.$el._chart) this._buildChart()
+      if (!this.$el._chart) return   // still no canvas (hidden layout)
       if (this.mode === 'cloud') await this._loadCloud()
       else await this._loadLocal()
     },
 
     // ── local SQLite load ─────────────────────────────────────────────────
+    _autoBucket(r) {
+      if (r === '30m')                           return '1m'
+      if (r === '1h' || r === '2h')             return '5m'
+      if (r === '4h' || r === '6h')             return '15m'
+      if (r === '8h' || r === '12h' || r === '18h' || r === '24h') return '15m'
+      if (r === 'today' || r === 'yesterday')   return '15m'
+      return '1h'  // 3d, 7d, 14d, 30d and custom
+    },
+
     _rangeParams() {
       if (this.useCustomRange && this.customFrom && this.customTo) {
         const from = new Date(this.customFrom).getTime() / 1000
         const to   = new Date(this.customTo).getTime()   / 1000
-        return `from=${from}&to=${to}&bucket=${this.bucket}`
+        return `from=${from}&to=${to}&bucket=${this._autoBucket('custom')}`
       }
-      if (this.localDayMode === 'today') {
+      if (this.rangeOrCustom === 'today') {
         const d = new Date(); d.setHours(0,0,0,0)
-        return `from=${d.getTime()/1000}&to=${Date.now()/1000}&bucket=${this.bucket}`
+        return `from=${d.getTime()/1000}&to=${Date.now()/1000}&bucket=${this._autoBucket('today')}`
       }
-      if (this.localDayMode === 'yesterday') {
+      if (this.rangeOrCustom === 'yesterday') {
         const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-1)
         const e = new Date(d); e.setDate(e.getDate()+1)
-        return `from=${d.getTime()/1000}&to=${e.getTime()/1000}&bucket=${this.bucket}`
+        return `from=${d.getTime()/1000}&to=${e.getTime()/1000}&bucket=${this._autoBucket('yesterday')}`
       }
-      if (this.localDayMode === 'date' && this.localPickDate) {
-        const d = new Date(this.localPickDate + 'T00:00:00')
-        const e = new Date(this.localPickDate + 'T00:00:00'); e.setDate(e.getDate()+1)
-        return `from=${d.getTime()/1000}&to=${e.getTime()/1000}&bucket=${this.bucket}`
-      }
-      return `range=${this.range}&bucket=${this.bucket}`
+      return `range=${this.range}&bucket=${this._autoBucket(this.range)}`
     },
 
     async _loadLocal() {
@@ -285,9 +311,16 @@ function analyticsTab() {
             spanGaps: false,
           })
           if (!labels.length) {
-            labels = d.data.map(p =>
-              new Date(p.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            )
+            const multiDay = ['3d','7d','14d','30d'].includes(this.rangeOrCustom) || this.useCustomRange
+            labels = d.data.map(p => {
+              const dt = new Date(p.ts * 1000)
+              if (!multiDay) return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              // Show "D MMM HH:MM" — date at midnight, time otherwise
+              const time = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              return dt.getHours() === 0 && dt.getMinutes() === 0
+                ? dt.toLocaleDateString([], { day: 'numeric', month: 'short' })
+                : time
+            })
           }
         }
         const hasRight = allDatasets.some(ds => ds.yAxisID === 'yRight')
@@ -298,9 +331,12 @@ function analyticsTab() {
         const localStacked = !this.signedMode
         this.$el._chart.options.scales.x.stacked = localStacked
         this.$el._chart.options.scales.y.stacked = localStacked
+        // Tick density: multi-day ranges need more ticks to show date labels
+        const multiDay = ['3d','7d','14d','30d'].includes(this.rangeOrCustom) || this.useCustomRange
+        this.$el._chart.options.scales.x.ticks.maxTicksLimit = multiDay ? 60 : 10
         // Show "Now" line for local mode (always current time) — HH:MM to match label format
         const _ln = new Date()
-        this.$el._chart._nowLabel = String(_ln.getHours()).padStart(2,'0') + ':' + String(_ln.getMinutes()).padStart(2,'0')
+        this.$el._chart._nowLabel = multiDay ? null : String(_ln.getHours()).padStart(2,'0') + ':' + String(_ln.getMinutes()).padStart(2,'0')
         this.$el._chart.update()
       } finally {
         this.loading = false
@@ -395,13 +431,13 @@ function analyticsTab() {
         }
       }
 
-      // For sub-day spans ('6h', '3h', '2h', '1h'): clip to N buckets ending at Now.
-      // Uses HH:MM labels (always populated) to find current position in the day.
+      // For sub-day spans ('6h', '3h', '2h', '1h') on TODAY: clip to N buckets ending at Now.
+      // For past dates, show the full day — clipping by current time makes no sense.
       const _subDayBuckets = { '1h': 2, '2h': 4, '3h': 6, '6h': 12 }
       const _nBuckets = _subDayBuckets[this.cloudSpan]
-      if (_nBuckets && rows.length > _nBuckets) {
+      const _isToday = this.cloudDate === _toDateStr(new Date())
+      if (_nBuckets && _isToday && rows.length > _nBuckets) {
         const nowHHMM = (() => { const d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') })()
-        // Find last label index whose HH:MM value is <= now (labels may be 'HH:MM' or 'DD/MM')
         let nowIdx = labels.reduce((best, lbl, i) => {
           const t = (lbl.length === 5 && lbl[2] === ':') ? lbl : null
           return t && t <= nowHHMM ? i : best
@@ -444,10 +480,10 @@ function analyticsTab() {
           if (v != null) _chartData.push({ point: cs.key, label: cs.label, ts: labels[i], value: v })
         })
 
-        // Display: apply abs in flat mode for bar series
+        // Display: apply abs when cloudFlat is on (suppress negatives — energipays.com style)
         const displayValues = values.map(v => {
           if (v == null) return null
-          return (cs.abs && !this.signedMode) ? Math.abs(v) : v
+          return (cs.abs && this.cloudFlat) ? Math.abs(v) : v
         })
 
         // Trim trailing null/zero values from line series (API pads future slots with 0)
@@ -521,8 +557,7 @@ function analyticsTab() {
     setChartStyle(s) {
       this.chartStyle = s
       localStorage.setItem('analyticsChartStyle', s)
-      this._resetChart()
-      this.load()
+      // $watch('chartStyle') handles the reload
     },
 
     toggleSignedMode() {
@@ -532,46 +567,11 @@ function analyticsTab() {
       this.load()
     },
 
-    onRangeChange(val) {
-      if (val === 'custom') {
-        this.showCustomRange = true
-      } else if (val === 'today' || val === 'yesterday') {
-        this.localDayMode = val
-        this.useCustomRange = false
-        this.showCustomRange = false
-        this.rangeOrCustom = val
-        // auto-switch to bars for day views
-        this.chartStyle = 'bars'
-        localStorage.setItem('analyticsChartStyle', 'bars')
-        this._resetChart()
-        this.load()
-      } else if (val === 'datepick') {
-        this.localDayMode = 'date'
-        this.useCustomRange = false
-        this.showCustomRange = false
-        this.rangeOrCustom = val
-        this.chartStyle = 'bars'
-        localStorage.setItem('analyticsChartStyle', 'bars')
-        this._resetChart()
-        this.load()
-      } else {
-        this.localDayMode = 'rolling'
-        this.setRange(val)
-      }
-    },
-
     setRange(r) {
       this.range = r
       this.rangeOrCustom = r
       this.useCustomRange = false
       this.showCustomRange = false
-      this._resetChart()
-      this.load()
-    },
-    setBucket(b) {
-      this.bucket = b
-      this._resetChart()
-      this.load()
     },
     applyCustomRange() {
       if (!this.customFrom || !this.customTo) return

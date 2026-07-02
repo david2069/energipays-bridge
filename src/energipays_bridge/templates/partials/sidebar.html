@@ -1,8 +1,9 @@
 <!-- Desktop sidebar nav -->
 <nav class="w-16 flex flex-col items-center py-4 bg-slate-800 border-r border-slate-700 shrink-0">
-  <!-- Energipays logo -->
+  <!-- Energipays logo — dark variant on dark background, clean on light -->
   <div class="mb-5">
-    <img src="/static/icons/devices/logo-small-clean.svg" alt="logo" class="w-8 h-8"
+    <img :src="$store.app.isDark ? '/static/icons/devices/logo-small-dark.svg' : '/static/icons/devices/logo-small-clean.svg'"
+         alt="logo" class="w-8 h-8"
          onerror="this.src='/static/icons/icon-192.png'" />
   </div>
 
@@ -17,19 +18,47 @@
       <!-- Use energipays.com sidebar icons where available, else fallback to inline SVG -->
       <template x-if="tab.id === 'dashboard'">
         <img src="/static/icons/devices/sidebar-devices.svg" class="w-5 h-5"
-             :style="$store.app.activeTab === 'dashboard' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:invert(60%) sepia(0%) saturate(0%) brightness(80%)'" alt=""/>
+             :style="$store.app.activeTab === 'dashboard' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
       <template x-if="tab.id === 'analytics'">
         <img src="/static/icons/devices/sidebar-analytics.svg" class="w-5 h-5"
-             :style="$store.app.activeTab === 'analytics' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:invert(60%) sepia(0%) saturate(0%) brightness(80%)'" alt=""/>
+             :style="$store.app.activeTab === 'analytics' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
       <template x-if="tab.id === 'rules'">
         <img src="/static/icons/devices/sidebar-rules.svg" class="w-5 h-5"
-             :style="$store.app.activeTab === 'rules' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:invert(60%) sepia(0%) saturate(0%) brightness(80%)'" alt=""/>
+             :style="$store.app.activeTab === 'rules' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
       <template x-if="tab.id !== 'dashboard' && tab.id !== 'analytics' && tab.id !== 'rules'">
         <span x-html="tab.icon" class="w-5 h-5"></span>
       </template>
     </button>
   </template>
+
+  <!-- Spacer pushes profile to bottom -->
+  <div class="flex-1"></div>
+
+  <!-- Profile avatar — initials circle with tooltip popup -->
+  <div class="relative mb-2" x-data="{open:false}" @mouseenter="open=true" @mouseleave="open=false">
+    <button class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold select-none
+                   bg-sky-700/60 text-sky-200 hover:bg-sky-600/70 transition-colors border border-sky-600/40"
+            :title="$store.app.userName || $store.app.userEmail || 'Profile'"
+            x-text="($store.app.userName || $store.app.userEmail || '?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()">
+    </button>
+    <!-- Tooltip card — appears to the right of sidebar -->
+    <div x-show="open" x-cloak
+         class="absolute bottom-0 left-14 z-50 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-xl p-3 text-xs space-y-1"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 translate-x-1"
+         x-transition:enter-end="opacity-100 translate-x-0">
+      <p class="font-semibold text-slate-100 truncate" x-text="$store.app.userName || '—'"></p>
+      <p class="text-slate-400 truncate" x-text="$store.app.userEmail || '—'"></p>
+      <template x-if="$store.app.deviceTimezone">
+        <p class="text-slate-500 truncate" x-text="$store.app.deviceTimezone.replace(/_/g,' ')"></p>
+      </template>
+      <template x-if="$store.app.userAddress || $store.app.userCity">
+        <p class="text-slate-500 leading-snug"
+           x-text="[$store.app.userAddress, $store.app.userCity, $store.app.userState].filter(Boolean).join(', ')"></p>
+      </template>
+    </div>
+  </div>
 </nav>

@@ -5,6 +5,8 @@ document.addEventListener('alpine:initialized', () => {
 })
 
 document.addEventListener('alpine:init', () => {
+  Alpine.store('dashboard', { weatherNem: { weather: null, nem: null } })
+
   Alpine.store('app', {
     activeTab: 'dashboard',
     points: {},
@@ -21,8 +23,10 @@ document.addEventListener('alpine:init', () => {
     devices: [],
     dataServer: '',
 
-    // All tabs — used by the sidebar (md+) which shows everything
-    tabs: [
+    mqttEnabled: false,
+
+    // All tabs — filtered so MQTT only appears when MQTT is enabled
+    _allTabs: [
       { id: 'dashboard', label: 'Home',     icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>' },
       { id: 'analytics', label: 'Analytics', icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>' },
       { id: 'rules',    label: 'Rules',    icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' },
@@ -31,10 +35,11 @@ document.addEventListener('alpine:init', () => {
       { id: 'settings', label: 'Settings', icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' },
       { id: 'logs',     label: 'Logs',     icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
     ],
+    get tabs() { return this._allTabs.filter(t => t.id !== 'mqtt' || this.mqttEnabled) },
     // Mobile bottom nav: primary tabs shown in bar
-    get mainTabs() { return this.tabs.filter(t => ['dashboard','analytics','rules','settings'].includes(t.id)) },
-    // Mobile "More" sheet: secondary tabs
-    get moreTabs() { return this.tabs.filter(t => ['raw','mqtt','logs'].includes(t.id)) },
+    get mainTabs() { return this._allTabs.filter(t => ['dashboard','analytics','rules','settings'].includes(t.id)) },
+    // Mobile "More" sheet: secondary tabs (MQTT only if enabled)
+    get moreTabs() { return this._allTabs.filter(t => ['raw','logs'].includes(t.id) || (t.id === 'mqtt' && this.mqttEnabled)) },
 
     toasts: [],
 
@@ -46,11 +51,19 @@ document.addEventListener('alpine:init', () => {
       return `${Math.round(ago / 60)}m ago`
     },
 
+    batteryLabel: '',
     needsSetup: false,
     setupModal: false,
     userName: '',
     userEmail: '',
     deviceName: '',
+    deviceTimezone: '',
+    deviceLat: null,
+    deviceLon: null,
+    userAddress: '',
+    userCity: '',
+    userState: '',
+    userCountry: '',
 
     init() {
       // Restore tab from URL hash on load
@@ -76,6 +89,15 @@ document.addEventListener('alpine:init', () => {
       this._fetchPoints()
       this._loadDevices()
       setInterval(() => this._fetchPoints(), 10000)
+      // Load battery integration name for SVG label
+      fetch('/api/integrations').then(r => r.ok ? r.json() : null).then(d => {
+        const batt = (d || []).find(i => i.type === 'battery' && i.enabled)
+        if (batt) this.batteryLabel = batt.name
+      }).catch(() => {})
+      // Load MQTT enabled state to show/hide MQTT tab
+      fetch('/api/mqtt/config').then(r => r.ok ? r.json() : null).then(d => {
+        if (d) this.mqttEnabled = d.enabled && !d.paused
+      }).catch(() => {})
     },
 
     async _loadDevices() {
@@ -129,7 +151,9 @@ document.addEventListener('alpine:init', () => {
         } else if (fresh.boostStatus) {
           this._boostPendingTs = 0
         }
-        this.points = fresh
+        // Only replace points when we have real data — an empty response
+        // (failed cloud poll, session expiry) should not wipe the last known values.
+        if (Object.keys(fresh).length > 0) this.points = fresh
         // Notify dashboard tab so it can anchor its client-side countdown
         const dash = Alpine.store('dashboard')
         if (dash && dash.onPointsUpdate) dash.onPointsUpdate(fresh)
@@ -150,6 +174,13 @@ document.addEventListener('alpine:init', () => {
         if (d.user_name) this.userName = d.user_name
         if (d.user_email) this.userEmail = d.user_email
         if (d.device_name) this.deviceName = d.device_name
+        if (d.device_timezone) this.deviceTimezone = d.device_timezone
+        if (d.device_lat != null) this.deviceLat = d.device_lat
+        if (d.device_lon != null) this.deviceLon = d.device_lon
+        if (d.user_address) this.userAddress = d.user_address
+        if (d.user_city) this.userCity = d.user_city
+        if (d.user_state) this.userState = d.user_state
+        if (d.user_country) this.userCountry = d.user_country
         this.needsSetup = d.needs_setup || false
         if (this.needsSetup && !this.setupModal) this.setupModal = true
       } catch (_) {}

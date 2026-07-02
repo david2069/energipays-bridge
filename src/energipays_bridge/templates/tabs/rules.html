@@ -13,6 +13,11 @@
         <input type="checkbox" x-model="showJSON" class="accent-blue-500" />
         JSON
       </label>
+      <label class="flex items-center gap-1.5 text-xs cursor-pointer"
+             :class="debugMode ? 'text-amber-400' : 'text-slate-400'">
+        <input type="checkbox" x-model="debugMode" class="accent-amber-500" />
+        Debug
+      </label>
       <button @click="refresh()" :class="loading ? 'animate-spin' : ''"
               class="text-slate-400 hover:text-slate-200 text-sm">↺</button>
       <button @click="openCreate()"
@@ -38,6 +43,49 @@
             x-text="allExpanded ? 'Collapse all' : 'Expand all'"></button>
   </div>
 
+  <!-- Persistent debug panel -->
+  <template x-if="debugMode && debugBefore">
+    <div class="mb-3 rounded-xl border border-amber-700/60 overflow-hidden text-[10px] font-mono bg-slate-950">
+      <div class="flex items-center gap-2 bg-amber-900/40 px-3 py-1.5 border-b border-amber-700/40">
+        <span class="text-amber-300 font-bold tracking-wide shrink-0">DEBUG</span>
+        <span class="text-slate-500 shrink-0" x-text="debugSnapshotLabel"></span>
+        <div class="flex gap-1 ml-auto">
+          <button @click="debugTab='before'"
+                  :class="debugTab==='before' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'"
+                  class="px-2 py-0.5 rounded text-[10px] transition-colors">Before</button>
+          <button @click="debugTab='sent'" :disabled="!debugDraft"
+                  :class="debugTab==='sent' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:text-slate-200 disabled:opacity-30'"
+                  class="px-2 py-0.5 rounded text-[10px] transition-colors">Sent</button>
+          <button @click="debugTab='returned'" :disabled="!debugServerReturn"
+                  :class="debugTab==='returned' ? 'bg-green-700 text-white' : 'text-slate-400 hover:text-slate-200 disabled:opacity-30'"
+                  class="px-2 py-0.5 rounded text-[10px] transition-colors">Returned</button>
+          <button @click="debugBefore=null;debugDraft=null;debugServerReturn=null;debugSnapshotLabel=''"
+                  class="text-slate-500 hover:text-red-400 px-1.5 text-xs ml-1">✕</button>
+        </div>
+      </div>
+      <div class="px-3 py-2 max-h-56 overflow-auto">
+        <template x-if="debugTab==='before'">
+          <div>
+            <div class="text-slate-500 font-semibold mb-1">BEFORE — server state when edit was opened</div>
+            <pre class="text-slate-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(debugBefore, null, 2)"></pre>
+          </div>
+        </template>
+        <template x-if="debugTab==='sent'">
+          <div>
+            <div class="text-sky-400 font-semibold mb-1">SENT — draft dispatched to server</div>
+            <pre class="text-sky-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(debugDraft, null, 2)"></pre>
+          </div>
+        </template>
+        <template x-if="debugTab==='returned'">
+          <div>
+            <div class="text-green-400 font-semibold mb-1">RETURNED — server response after refresh</div>
+            <pre class="text-green-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(debugServerReturn, null, 2)"></pre>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
   <div x-show="loading" class="text-slate-500 text-sm py-8 text-center">Loading rules…</div>
   <div x-show="!loading && filteredRules().length === 0" class="text-slate-500 text-sm py-8 text-center">No rules found.</div>
 
@@ -54,12 +102,15 @@
         <!-- ── Collapsed header (always visible) ─────────────────────── -->
         <div class="flex flex-col gap-1.5 cursor-pointer select-none" @click="open = !open">
 
-          <!-- Row 1: indicator + name + chevron -->
+          <!-- Row 1: indicator + name + timestamp + chevron -->
           <div class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full shrink-0 transition-colors"
                   :class="isActive(rule) ? 'bg-green-400 shadow-[0_0_6px_#4ade80]' : 'bg-slate-700'"></span>
-            <span class="text-xs font-medium text-slate-300 flex-1 min-w-0 truncate"
+            <span class="text-xs font-medium text-slate-300 min-w-0 truncate"
                   x-text="rule.name || rule.id"></span>
+            <span class="text-[10px] text-slate-600 shrink-0 ml-auto mr-1 tabular-nums"
+                  :title="rule.updated_at ? 'Updated: ' + new Date(rule.updated_at).toLocaleString() + '\nCreated: ' + new Date(rule.created_at).toLocaleString() : ''"
+                  x-text="rule.updated_at ? fmtAge(rule.updated_at) : ''"></span>
             <svg class="w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200"
                  :class="open && 'rotate-180'"
                  fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -81,14 +132,26 @@
             <!-- Circuit chip -->
             <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
                   :class="{
-                    'bg-sky-900/50 text-sky-300':   rule.type === 'command',
-                    'bg-violet-900/50 text-violet-300': rule.type === 'offpeak',
-                    'bg-amber-900/50 text-amber-300':   rule.type === 'heater2',
+                    'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300':       rule.type === 'command',
+                    'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300': rule.type === 'offpeak',
+                    'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300':   rule.type === 'heater2',
                   }"
                   x-text="circuitLabel(rule.type)"></span>
 
+            <!-- Device count (matches energipays.com: stacked-device icon + 0/1) -->
+            <span class="flex items-center gap-1 text-[10px] tabular-nums shrink-0"
+                  :class="isActive(rule) ? 'text-green-400' : 'text-slate-600'">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="7" rx="2"/>
+                <line x1="16" y1="6.5" x2="18" y2="6.5" stroke-width="2"/>
+                <rect x="2" y="14" width="20" height="7" rx="2"/>
+                <line x1="6" y1="17.5" x2="8" y2="17.5" stroke-width="2"/>
+              </svg>
+              <span x-text="isActive(rule) ? 1 : 0"></span>
+            </span>
+
             <div class="ml-auto flex items-center gap-1.5">
-              <!-- Enable button (inactive rules only) -->
+              <!-- Enable/Disable toggle -->
               <button x-show="!isActive(rule)"
                       @click.stop="setActiveRule(rule)"
                       :disabled="!!activating"
@@ -96,8 +159,6 @@
                 <span x-show="activating !== rule.id">Enable</span>
                 <span x-show="activating === rule.id">…</span>
               </button>
-
-              <!-- Disable button (active rule only) -->
               <button x-show="isActive(rule)"
                       @click.stop="disableRule(rule)"
                       :disabled="activating === '__disable__' + rule.type"
@@ -106,18 +167,52 @@
                 <span x-show="activating === '__disable__' + rule.type">…</span>
               </button>
 
-              <button @click.stop="openEdit(rule)"
-                      class="text-xs px-2 py-1 rounded bg-slate-700/60 text-slate-400 hover:bg-slate-600 hover:text-slate-200 transition-colors">
-                Edit
-              </button>
-
-              <button @click.stop="cloneRule(rule)"
-                      class="text-xs px-2 py-1 rounded bg-slate-700/60 text-slate-400 hover:bg-slate-600 hover:text-slate-200 transition-colors">
-                Clone
-              </button>
+              <!-- ✏ action menu -->
+              <div class="relative" x-data="{menuOpen:false}" @click.outside="menuOpen=false">
+                <button @click.stop="menuOpen=!menuOpen"
+                        class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 dark:hover:bg-slate-700 transition-colors">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                </button>
+                <div x-show="menuOpen" x-cloak
+                     class="absolute right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-30 min-w-[130px]">
+                  <button @click.stop="openEdit(rule); menuOpen=false"
+                          class="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-t-xl transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    Edit
+                  </button>
+                  <button @click.stop="openRename(rule); menuOpen=false"
+                          class="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    Rename
+                  </button>
+                  <button @click.stop="cloneRule(rule); menuOpen=false"
+                          class="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                    Clone
+                  </button>
+                  <button @click.stop="confirmDelete(rule); menuOpen=false"
+                          class="flex items-center gap-2 w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-b-xl transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+          <!-- Row 3: Running slot — only shown for active rule with a slot in progress -->
+          <template x-if="isActive(rule) && runningSlot(rule)">
+            <div class="flex items-center gap-2 pl-4 pt-0.5" @click.stop>
+              <span class="text-[10px] font-mono font-semibold text-green-400 shrink-0"
+                    x-text="'Running ' + slotCountdown(runningSlot(rule))"></span>
+              <div class="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-1000"
+                     :class="runningSlot(rule).command === 2 ? 'bg-orange-500' : 'bg-blue-500'"
+                     :style="`width:${slotProgress(runningSlot(rule))}%`"></div>
+              </div>
+            </div>
+          </template>
 
         <!-- ── Expanded body ────────────────────────────────────────────── -->
         <div x-show="open"
@@ -235,7 +330,7 @@
        x-transition:enter="transition ease-out duration-150"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100"
-       @click.self="closeEdit()">
+       >
     <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg">
 
       <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
@@ -254,17 +349,17 @@
 
         <!-- Day selector -->
         <div>
-          <label class="block text-xs text-slate-500 mb-2">Active days</label>
-          <div class="flex flex-wrap gap-1.5">
+          <label class="block text-xs text-slate-500 mb-1.5">Active days</label>
+          <div class="flex items-center gap-1">
             <button @click="toggleEveryday()"
                     :class="isEverydayActive() ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-slate-300 border border-slate-700'"
-                    class="px-3 h-9 rounded-full text-xs font-semibold transition-colors">
+                    class="px-2.5 h-7 rounded-full text-[11px] font-semibold transition-colors shrink-0">
               Every day
             </button>
             <template x-for="(day, di) in ['M','T','W','T','F','S','S']" :key="di">
               <button @click="toggleDay(di)"
                       :class="isDayActive(di) ? 'bg-brand text-white' : 'bg-slate-800 text-slate-500 hover:text-slate-300 border border-slate-700'"
-                      class="w-9 h-9 rounded-full text-xs font-semibold transition-colors"
+                      class="w-7 h-7 rounded-full text-[11px] font-semibold transition-colors shrink-0"
                       x-text="day"></button>
             </template>
           </div>
@@ -276,54 +371,43 @@
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-medium text-slate-400">All days (Mon–Sun)</span>
               <div class="flex items-center gap-2">
-                <button @click="openSpan(0)" class="text-xs px-2 py-0.5 rounded border border-sky-600/50 text-sky-400 hover:bg-sky-900/30 transition-colors">Span</button>
+                <button @click="openSpan(0)" class="text-xs px-2 py-0.5 rounded bg-orange-500 text-white hover:bg-orange-600 font-semibold transition-colors">Fix</button>
                 <button @click="addSlot(0)" class="text-xs text-blue-400 hover:text-blue-300">+ Add slot</button>
               </div>
             </div>
             <template x-for="(slot, si) in (draft.data['d1'] || [])" :key="si">
-              <div class="bg-slate-800 rounded-lg p-3 mb-2 space-y-2">
-                <div class="grid grid-cols-2 gap-2">
-                  <div>
-                    <label class="block text-xs text-slate-500 mb-1">From</label>
-                    <input type="time" x-model="slot.timeFrom"
-                           @change="snapTimes(0, si, 'timeFrom')"
-                           class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label class="block text-xs text-slate-500 mb-1">To</label>
-                    <input type="time" x-model="slot.timeTo"
-                           @change="snapTimes(0, si, 'timeTo')"
-                           class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
-                  </div>
+              <div class="bg-slate-800 rounded-lg px-2.5 py-2 mb-1.5">
+                <!-- Row 1: From → To + remove -->
+                <div class="flex items-center gap-1.5 mb-1.5">
+                  <input type="time" x-model="slot.timeFrom"
+                         @change="snapTimes(0, si, 'timeFrom')"
+                         class="flex-1 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
+                  <span class="text-slate-500 text-xs shrink-0">→</span>
+                  <input type="time" x-model="slot.timeTo"
+                         @change="snapTimes(0, si, 'timeTo')"
+                         class="flex-1 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
+                  <button @click="removeSlot(0, si)" class="text-slate-600 hover:text-red-400 text-base leading-none shrink-0" title="Remove slot">×</button>
                 </div>
-                <div class="grid grid-cols-3 gap-2">
-                  <div>
-                    <label class="block text-xs text-slate-500 mb-1">Command</label>
-                    <select x-model.number="slot.command"
-                            class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
-                      <option value="2">Boost</option>
-                      <option value="1">Disable device</option>
-                    </select>
+                <!-- Row 2: Command + Power + Temp -->
+                <div class="flex items-center gap-1.5">
+                  <select x-model.number="slot.command"
+                          class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
+                    <option value="2">Boost</option>
+                    <option value="1">Disable</option>
+                  </select>
+                  <select x-show="slot.command == 2" x-model.number="slot.boost_power"
+                          class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
+                    <option value="">Default %</option>
+                    <option value="1">25%</option>
+                    <option value="2">50%</option>
+                    <option value="3">75%</option>
+                    <option value="4">100%</option>
+                  </select>
+                  <div x-show="slot.command == 2" class="flex items-center gap-1">
+                    <input type="number" x-model.number="slot.temperature_min" min="0" max="85" placeholder="—"
+                           class="w-14 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
+                    <span class="text-slate-500 text-[10px] shrink-0">°C min</span>
                   </div>
-                  <div x-show="slot.command == 2">
-                    <label class="block text-xs text-slate-500 mb-1">Power limit</label>
-                    <select x-model.number="slot.boost_power"
-                            class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
-                      <option value="">Default</option>
-                      <option value="1">25%</option>
-                      <option value="2">50%</option>
-                      <option value="3">75%</option>
-                      <option value="4">100%</option>
-                    </select>
-                  </div>
-                  <div x-show="slot.command == 2">
-                    <label class="block text-xs text-slate-500 mb-1">Min temp (°C)</label>
-                    <input type="number" x-model.number="slot.temperature_min" min="0" max="85"
-                           class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
-                  </div>
-                </div>
-                <div class="flex justify-end">
-                  <button @click="removeSlot(0, si)" class="text-xs text-red-400 hover:text-red-300">Remove slot</button>
                 </div>
               </div>
             </template>
@@ -343,54 +427,43 @@
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-xs font-medium text-slate-400" x-text="day"></span>
                   <div class="flex items-center gap-2">
-                    <button @click="openSpan(di)" class="text-xs px-2 py-0.5 rounded border border-sky-600/50 text-sky-400 hover:bg-sky-900/30 transition-colors">Span</button>
+                    <button @click="openSpan(di)" class="text-xs px-2 py-0.5 rounded bg-orange-500 text-white hover:bg-orange-600 font-semibold transition-colors">Fix</button>
                     <button @click="addSlot(di)" class="text-xs text-blue-400 hover:text-blue-300">+ Add slot</button>
                   </div>
                 </div>
                 <template x-for="(slot, si) in (draft.data[`d${di+1}`] || [])" :key="si">
-                  <div class="bg-slate-800 rounded-lg p-3 mb-2 space-y-2">
-                    <div class="grid grid-cols-2 gap-2">
-                      <div>
-                        <label class="block text-xs text-slate-500 mb-1">From</label>
-                        <input type="time" x-model="slot.timeFrom"
-                               @change="snapTimes(di, si, 'timeFrom')"
-                               class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label class="block text-xs text-slate-500 mb-1">To</label>
-                        <input type="time" x-model="slot.timeTo"
-                               @change="snapTimes(di, si, 'timeTo')"
-                               class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
-                      </div>
+                  <div class="bg-slate-800 rounded-lg px-2.5 py-2 mb-1.5">
+                    <!-- Row 1: From → To + remove -->
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                      <input type="time" x-model="slot.timeFrom"
+                             @change="snapTimes(di, si, 'timeFrom')"
+                             class="flex-1 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
+                      <span class="text-slate-500 text-xs shrink-0">→</span>
+                      <input type="time" x-model="slot.timeTo"
+                             @change="snapTimes(di, si, 'timeTo')"
+                             class="flex-1 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
+                      <button @click="removeSlot(di, si)" class="text-slate-600 hover:text-red-400 text-base leading-none shrink-0" title="Remove slot">×</button>
                     </div>
-                    <div class="grid grid-cols-3 gap-2">
-                      <div>
-                        <label class="block text-xs text-slate-500 mb-1">Command</label>
-                        <select x-model.number="slot.command"
-                                class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
-                          <option value="2">Boost</option>
-                          <option value="1">Disable device</option>
-                        </select>
+                    <!-- Row 2: Command + Power + Temp -->
+                    <div class="flex items-center gap-1.5">
+                      <select x-model.number="slot.command"
+                              class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
+                        <option value="2">Boost</option>
+                        <option value="1">Disable</option>
+                      </select>
+                      <select x-show="slot.command == 2" x-model.number="slot.boost_power"
+                              class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
+                        <option value="">Default %</option>
+                        <option value="1">25%</option>
+                        <option value="2">50%</option>
+                        <option value="3">75%</option>
+                        <option value="4">100%</option>
+                      </select>
+                      <div x-show="slot.command == 2" class="flex items-center gap-1">
+                        <input type="number" x-model.number="slot.temperature_min" min="0" max="85" placeholder="—"
+                               class="w-14 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
+                        <span class="text-slate-500 text-[10px] shrink-0">°C min</span>
                       </div>
-                      <div x-show="slot.command == 2">
-                        <label class="block text-xs text-slate-500 mb-1">Power limit</label>
-                        <select x-model.number="slot.boost_power"
-                                class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
-                          <option value="">Default</option>
-                          <option value="1">25%</option>
-                          <option value="2">50%</option>
-                          <option value="3">75%</option>
-                          <option value="4">100%</option>
-                        </select>
-                      </div>
-                      <div x-show="slot.command == 2">
-                        <label class="block text-xs text-slate-500 mb-1">Min temp (°C)</label>
-                        <input type="number" x-model.number="slot.temperature_min" min="0" max="85"
-                               class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" />
-                      </div>
-                    </div>
-                    <div class="flex justify-end">
-                      <button @click="removeSlot(di, si)" class="text-xs text-red-400 hover:text-red-300">Remove slot</button>
                     </div>
                   </div>
                 </template>
@@ -420,21 +493,32 @@
           <span x-text="saveMsg"></span>
         </div>
         <div x-show="saveResult === 'warn'"
-             class="flex items-start gap-2 text-sm text-amber-300 bg-amber-900/20 border border-amber-700/50 rounded-lg px-3 py-2">
-          <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+             class="flex items-start gap-2 text-sm text-white bg-orange-700 border border-orange-500 rounded-lg px-3 py-2">
+          <svg class="w-4 h-4 shrink-0 mt-0.5 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
           </svg>
           <div>
-            <div x-text="saveMsg"></div>
-            <div class="text-xs text-amber-400/70 mt-0.5">Click Save again to save anyway.</div>
+            <div class="font-medium" x-text="saveMsg"></div>
+            <div class="text-xs text-orange-200 mt-0.5">Click Save again to save anyway.</div>
           </div>
         </div>
+        <!-- Debug live diff (in modal) -->
+        <template x-if="debugMode && draft">
+          <div class="mt-3 rounded-xl border border-amber-700/50 overflow-hidden text-[10px] font-mono bg-slate-950">
+            <div class="bg-amber-900/30 px-3 py-1 border-b border-amber-700/40">
+              <span class="text-amber-300 font-bold">DEBUG — live draft</span>
+            </div>
+            <div class="px-2 py-2 max-h-40 overflow-auto">
+              <pre class="text-sky-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(draft, null, 2)"></pre>
+            </div>
+          </div>
+        </template>
       </div></template>
 
       <div class="flex items-center gap-3 px-6 py-4 border-t border-slate-700">
         <button @click="confirmDelete(draft)"
                 :disabled="deleting || saving"
-                class="px-3 py-2 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 border border-red-900/30 disabled:opacity-40 transition-colors">
+                class="px-3 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors">
           <span x-show="!deleting">Delete</span>
           <span x-show="deleting">Deleting…</span>
         </button>
@@ -453,14 +537,46 @@
     </div>
   </div>
 
+  <!-- ── Rename modal ──────────────────────────────────────────────────────── -->
+  <div x-show="renameModal" x-cloak
+       class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+        <h3 class="font-semibold text-slate-100">Rename rule</h3>
+        <button @click="closeRename()" class="text-slate-400 hover:text-slate-200 text-xl leading-none">&times;</button>
+      </div>
+      <div class="px-6 py-5">
+        <label class="block text-xs text-slate-400 mb-1">Name</label>
+        <input x-model="renameDraft"
+               @keydown.enter="saveRename()"
+               @keydown.escape="closeRename()"
+               class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand"
+               placeholder="Rule name" />
+        <p x-show="renameMsg" class="mt-2 text-xs text-red-400" x-text="renameMsg"></p>
+      </div>
+      <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-700">
+        <button @click="closeRename()"
+                class="px-4 py-2 text-sm rounded-lg text-slate-300 hover:text-slate-100 transition-colors">Cancel</button>
+        <button @click="saveRename()"
+                :disabled="renaming || !renameDraft.trim()"
+                class="px-4 py-2 text-sm rounded-lg bg-brand text-white font-semibold hover:bg-brand/90 disabled:opacity-50 transition-colors">
+          <span x-show="!renaming">Save</span>
+          <span x-show="renaming">Saving…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Delete confirm modal ───────────────────────────────────────────────── -->
   <div x-show="deleteConfirm" x-cloak
        class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
        x-transition:enter="transition ease-out duration-150"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm"
-         @click.outside="cancelDelete()">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
       <div class="px-6 py-5">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center shrink-0">
@@ -498,31 +614,34 @@
        x-transition:enter="transition ease-out duration-150"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm"
-         @click.outside="spanModal = false">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
       <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-        <h3 class="font-semibold text-slate-100">Fill time gaps</h3>
+        <h3 class="font-semibold text-slate-100">Fix slots</h3>
         <button @click="spanModal = false" class="text-slate-400 hover:text-slate-200 text-xl leading-none">&times;</button>
       </div>
       <div class="px-6 py-5 space-y-3">
-        <p class="text-xs text-slate-400">Choose how to fill undefined time slots for this day.</p>
+        <button @click="applySpan('disable_remainder')"
+                class="w-full text-left px-4 py-3 rounded-xl bg-slate-800 border border-blue-700/50 hover:border-blue-500 hover:bg-slate-800/80 transition-colors group">
+          <div class="font-medium text-blue-300 text-sm">Disable remainder <span class="text-[10px] bg-blue-900/50 text-blue-400 rounded px-1.5 py-0.5 ml-1">recommended</span></div>
+          <div class="text-xs text-slate-500 mt-0.5">Required for VPP/Amber users — prevents Power Diverter from consuming grid exports you need for your VPP or battery</div>
+        </button>
 
         <button @click="applySpan('between')"
                 class="w-full text-left px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:border-sky-500/50 hover:bg-slate-800/80 transition-colors group">
           <div class="font-medium text-slate-200 text-sm group-hover:text-sky-300 transition-colors">Fill gaps in between</div>
-          <div class="text-xs text-slate-500 mt-0.5">Add Disable slots in the gaps between existing Disable and Boost slots</div>
+          <div class="text-xs text-slate-500 mt-0.5">Add Disable slots only in the gaps between existing slots</div>
         </button>
 
-        <button @click="applySpan('disable_remainder')"
-                class="w-full text-left px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500/50 hover:bg-slate-800/80 transition-colors group">
-          <div class="font-medium text-slate-200 text-sm group-hover:text-blue-300 transition-colors">Disable remainder</div>
-          <div class="text-xs text-slate-500 mt-0.5">Fill all uncovered time with a Disable slot</div>
+        <button @click="applySpan('join')"
+                class="w-full text-left px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 hover:border-slate-500 hover:bg-slate-800/80 transition-colors group">
+          <div class="font-medium text-slate-200 text-sm group-hover:text-slate-100 transition-colors">Join — make times continuous</div>
+          <div class="text-xs text-slate-500 mt-0.5">Snap each slot's start to the previous slot's end (no new slots added)</div>
         </button>
 
         <button @click="applySpan('boost_remainder')"
-                class="w-full text-left px-4 py-3 rounded-xl bg-slate-800 border border-red-900/30 hover:border-red-500/50 hover:bg-slate-800/80 transition-colors group">
-          <div class="font-medium text-slate-200 text-sm group-hover:text-red-300 transition-colors">Boost remainder</div>
-          <div class="text-xs text-slate-500 mt-0.5">Fill all uncovered time with a Boost slot</div>
+                class="w-full text-left px-4 py-3 rounded-xl bg-slate-800 border border-red-900/40 hover:border-red-500/50 hover:bg-slate-800/80 transition-colors group">
+          <div class="font-medium text-slate-200 text-sm group-hover:text-red-300 transition-colors">Boost remainder <span class="text-[10px] bg-red-900/50 text-red-400 rounded px-1.5 py-0.5 ml-1">⚠ high power use</span></div>
+          <div class="text-xs text-slate-500 mt-0.5">Fills uncovered time with Boost — caution: extended periods at high power limits (e.g. 2+ hrs at 100%) will heat continuously and may waste energy</div>
         </button>
       </div>
       <div class="flex justify-end px-6 py-4 border-t border-slate-700">
@@ -540,19 +659,47 @@
        x-transition:enter="transition ease-out duration-150"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm"
-         @click.outside="createModal = false">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
 
       <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-        <h3 class="font-semibold text-slate-100">New Rule</h3>
+        <h3 class="font-semibold text-slate-100" x-text="createStep === 'warn' ? 'Active Rule Warning' : 'New Rule'"></h3>
         <button @click="createModal = false" class="text-slate-400 hover:text-slate-200 text-xl leading-none">&times;</button>
       </div>
 
-      <div class="px-6 py-5 space-y-4">
+      <!-- Step 1: Warning screen — shown when another rule is active -->
+      <div x-show="createStep === 'warn'" class="px-6 py-6 space-y-4">
+        <div class="flex gap-3">
+          <svg class="w-8 h-8 shrink-0 text-amber-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+          </svg>
+          <div>
+            <p class="text-sm font-semibold text-amber-300 mb-1">This will change your active rule</p>
+            <p class="text-sm text-slate-300">
+              Creating a new rule will <span class="font-semibold text-white">immediately activate it</span> and deactivate
+              <span class="font-semibold text-white" x-text="'&ldquo;' + (activeRuleForNewType()?.name || 'current rule') + '&rdquo;'"></span>.
+            </p>
+            <p class="text-sm text-slate-400 mt-2">Your device will switch to the new (empty) rule straight away. You can re-enable the old rule manually afterwards.</p>
+          </div>
+        </div>
+      </div>
+      <div x-show="createStep === 'warn'" class="flex gap-3 px-6 py-4 border-t border-slate-700">
+        <button @click="createModal = false"
+                class="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-slate-600 text-slate-300 hover:bg-slate-800 transition-colors">
+          No — keep current rule
+        </button>
+        <button @click="createStep = 'form'"
+                class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white transition-colors">
+          Yes — create new rule
+        </button>
+      </div>
+
+      <!-- Step 2: Form screen -->
+      <div x-show="createStep === 'form'" class="px-6 py-5 space-y-4">
         <div>
           <label class="block text-xs text-slate-500 mb-1">Rule name</label>
           <input type="text" x-model="newRuleName" placeholder="e.g. Morning boost"
                  @keydown.enter="createRule()"
+                 x-ref="newRuleNameInput"
                  class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500" />
         </div>
         <div>
@@ -570,8 +717,7 @@
         <p class="text-xs text-slate-500">After creating, the schedule editor will open so you can add time slots and active days.</p>
         <div x-show="createMsg" class="text-xs text-red-400" x-text="createMsg"></div>
       </div>
-
-      <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-700">
+      <div x-show="createStep === 'form'" class="flex justify-end gap-3 px-6 py-4 border-t border-slate-700">
         <button @click="createModal = false"
                 class="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">
           Cancel

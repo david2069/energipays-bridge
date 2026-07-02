@@ -1,200 +1,398 @@
-<!-- Setup / onboarding modal — shown when no credentials are configured -->
-<div
-  x-show="$store.app.setupModal"
-  x-cloak
-  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-  x-transition:enter="transition ease-out duration-200"
-  x-transition:enter-start="opacity-0"
-  x-transition:enter-end="opacity-100"
-  x-transition:leave="transition ease-in duration-150"
-  x-transition:leave-start="opacity-100"
-  x-transition:leave-end="opacity-0"
-  x-data="setupForm()"
->
-  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
+<!-- Setup wizard — shown on first run (needs_setup=true) or manually triggered -->
+<div x-show="$store.app.setupModal" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+     x-transition:enter="transition ease-out duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-data="setupWizard()">
+
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
 
     <!-- Header -->
-    <div class="flex items-center gap-3 mb-6">
-      <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-        </svg>
+    <div class="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-slate-800 shrink-0">
+      <img src="/static/icons/devices/logo-small-dark.svg" alt="" class="w-7 h-7 shrink-0"/>
+      <div class="min-w-0">
+        <div class="font-semibold text-slate-100" x-text="steps[step].title"></div>
+        <div class="text-xs text-slate-500" x-text="'Step ' + (step+1) + ' of ' + steps.length"></div>
       </div>
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Connect to Energipays</h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Enter your account credentials to get started</p>
-      </div>
-    </div>
-
-    <!-- Status banner -->
-    <div x-show="status" class="mb-4 rounded-lg px-4 py-3 text-sm font-medium"
-         :class="{
-           'bg-green-50 text-green-800 border border-green-200': status === 'success',
-           'bg-red-50 text-red-800 border border-red-200': status === 'error',
-           'bg-blue-50 text-blue-800 border border-blue-200': status === 'testing' || status === 'saving'
-         }">
-      <!-- Testing -->
-      <div x-show="status === 'testing'" class="flex items-center gap-2">
-        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-        </svg>
-        Verifying credentials…
-      </div>
-      <!-- Saving -->
-      <div x-show="status === 'saving'" class="flex items-center gap-2">
-        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-        </svg>
-        Connecting and saving…
-      </div>
-      <!-- Success -->
-      <div x-show="status === 'success'" class="flex items-center gap-2">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-        </svg>
-        <span>Connected as <strong x-text="userName"></strong> — starting poller…</span>
-      </div>
-      <!-- Error -->
-      <div x-show="status === 'error'" class="flex items-center gap-2">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-        </svg>
-        <span x-text="errorMsg"></span>
+      <!-- Step dots -->
+      <div class="ml-auto flex items-center gap-1.5">
+        <template x-for="(s,i) in steps" :key="i">
+          <span class="w-2 h-2 rounded-full transition-colors"
+                :class="i === step ? 'bg-brand' : i < step ? 'bg-brand/40' : 'bg-slate-700'"></span>
+        </template>
       </div>
     </div>
 
-    <!-- Form -->
-    <form @submit.prevent="save()" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email address</label>
-        <input
-          type="email"
-          x-model="email"
-          placeholder="you@example.com"
-          autocomplete="username"
-          :disabled="status === 'saving' || status === 'success'"
-          class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          required
-        />
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
-        <div class="relative">
-          <input
-            :type="showPw ? 'text' : 'password'"
-            x-model="password"
-            placeholder="••••••••"
-            autocomplete="current-password"
-            :disabled="status === 'saving' || status === 'success'"
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-            required
-          />
-          <button type="button" @click="showPw = !showPw"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-            <svg x-show="!showPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+    <!-- Body (scrollable) -->
+    <div class="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+
+      <!-- ── Step 0: Credentials ──────────────────────────────────── -->
+      <template x-if="step === 0">
+        <div class="space-y-4">
+          <p class="text-sm text-slate-400">Enter your Energipays account credentials to connect the bridge to the cloud API.</p>
+
+          <!-- Status banner -->
+          <div x-show="credMsg" class="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
+               :class="credOk ? 'bg-green-900/30 border border-green-700/40 text-green-300' : 'bg-red-900/30 border border-red-700/40 text-red-300'">
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path x-show="credOk" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              <path x-show="!credOk" stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <svg x-show="showPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
-            </svg>
-          </button>
+            <span x-text="credMsg"></span>
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Email address</label>
+            <input type="email" x-model="credEmail" placeholder="you@example.com"
+                   :disabled="credBusy"
+                   class="w-full bg-slate-800 text-slate-100 text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-brand disabled:opacity-50"/>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Password</label>
+            <div class="relative">
+              <input :type="showCredPw ? 'text' : 'password'" x-model="credPassword" placeholder="••••••••"
+                     :disabled="credBusy"
+                     class="w-full bg-slate-800 text-slate-100 text-sm rounded-lg px-3 py-2 pr-9 border border-slate-600 focus:outline-none focus:border-brand disabled:opacity-50"/>
+              <button type="button" @click="showCredPw=!showCredPw"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path x-show="!showCredPw" stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  <path x-show="showCredPw" stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            Stored AES-256 encrypted on this server only
+          </p>
+          <div class="flex gap-2">
+            <button type="button" @click="testCreds()"
+                    :disabled="credBusy || !credEmail || !credPassword"
+                    class="flex-1 py-2 rounded-lg text-sm border border-slate-600 text-slate-300 hover:border-slate-400 transition-colors disabled:opacity-40">
+              <span x-show="credBusy && !credOk">Testing…</span>
+              <span x-show="!(credBusy && !credOk)">Test connection</span>
+            </button>
+            <button type="button" @click="saveCreds()"
+                    :disabled="credBusy || !credEmail || !credPassword"
+                    class="flex-1 py-2 rounded-lg text-sm font-semibold bg-brand hover:bg-brand/90 text-white transition-colors disabled:opacity-40">
+              <span x-show="credBusy && credOk">Saving…</span>
+              <span x-show="!(credBusy && credOk)">Save &amp; connect</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
 
-      <!-- Encryption note -->
-      <p class="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-        </svg>
-        Stored encrypted (AES-256) on this server only
-      </p>
+      <!-- ── Step 1: MQTT ─────────────────────────────────────────── -->
+      <template x-if="step === 1">
+        <div class="space-y-4">
+          <p class="text-sm text-slate-400">
+            MQTT Discovery publishes all device sensors and controls as Home Assistant entities automatically.
+            Enable by setting <code class="text-slate-300 bg-slate-800 px-1 rounded">MQTT_ENABLED=true</code> in your environment and configuring the broker.
+          </p>
 
-      <!-- Buttons -->
-      <div class="flex gap-3 pt-2">
-        <button
-          type="button"
-          @click="test()"
-          :disabled="!email || !password || status === 'testing' || status === 'saving' || status === 'success'"
-          class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Test connection
-        </button>
-        <button
-          type="submit"
-          :disabled="!email || !password || status === 'testing' || status === 'saving' || status === 'success'"
-          class="flex-1 rounded-lg bg-blue-600 text-white py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Save &amp; connect
-        </button>
-      </div>
-    </form>
+          <!-- Feature cards — optional modules -->
+          <div class="space-y-2">
+            <div class="rounded-xl border p-4 transition-colors"
+                 :class="wantMqtt ? 'border-brand/50 bg-brand/5' : 'border-slate-700 bg-slate-800/40'">
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" x-model="wantMqtt" class="mt-0.5 w-4 h-4 accent-brand shrink-0"/>
+                <div>
+                  <div class="text-sm font-medium text-slate-200">Enable MQTT Discovery</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Requires a running MQTT broker (e.g. Mosquitto). Set broker host, port and credentials in environment variables.</div>
+                </div>
+              </label>
+              <template x-if="wantMqtt">
+                <div class="mt-3 pt-3 border-t border-slate-700 space-y-2">
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <div class="text-[10px] text-slate-500 mb-1">MQTT_HOST</div>
+                      <input type="text" x-model="mqttHost" placeholder="192.168.0.1"
+                             class="w-full bg-slate-700 text-slate-100 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+                    </div>
+                    <div>
+                      <div class="text-[10px] text-slate-500 mb-1">MQTT_PORT</div>
+                      <input type="number" x-model="mqttPort" placeholder="1883"
+                             class="w-full bg-slate-700 text-slate-100 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-slate-600">Broker credentials and TLS settings are configured via env vars (MQTT_USERNAME, MQTT_PASSWORD, MQTT_TLS).</p>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div class="text-xs text-slate-500 bg-slate-800/60 rounded-lg px-3 py-2">
+            You can always enable or disable MQTT later in Settings → MQTT Discovery.
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Step 2: Integrations ─────────────────────────────────── -->
+      <template x-if="step === 2">
+        <div class="space-y-3">
+          <p class="text-sm text-slate-400">
+            Connect external devices so their data appears in the power flow chart and Battery analytics tab.
+          </p>
+
+          <div class="rounded-xl border p-4 transition-colors"
+               :class="wantBattery ? 'border-brand/50 bg-brand/5' : 'border-slate-700 bg-slate-800/40'">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" x-model="wantBattery" class="mt-0.5 w-4 h-4 accent-brand shrink-0"/>
+              <div>
+                <div class="text-sm font-medium text-slate-200">🔋 Battery (e.g. FranklinWH)</div>
+                <div class="text-xs text-slate-500 mt-0.5">Shows SoC ring, charge/discharge power, home load and operating mode in the dashboard power flow.</div>
+              </div>
+            </label>
+          </div>
+
+          <div class="rounded-xl border p-4 transition-colors"
+               :class="wantSolar ? 'border-brand/50 bg-brand/5' : 'border-slate-700 bg-slate-800/40'">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" x-model="wantSolar" class="mt-0.5 w-4 h-4 accent-brand shrink-0"/>
+              <div>
+                <div class="text-sm font-medium text-slate-200">☀️ Solar PV inverter</div>
+                <div class="text-xs text-slate-500 mt-0.5">Adds an external solar node to the power flow chart. Supports REST, Modbus TCP, HA WebSocket, and MQTT.</div>
+              </div>
+            </label>
+          </div>
+
+          <div x-show="wantBattery || wantSolar"
+               class="text-xs text-slate-500 bg-slate-800/60 rounded-lg px-3 py-2">
+            After finishing setup, go to <strong class="text-slate-300">Settings → External Integrations</strong> to configure the connection details (host, protocol, register mappings).
+          </div>
+
+          <div class="text-xs text-slate-500 bg-slate-800/60 rounded-lg px-3 py-2">
+            No integrations? No problem — you can add them any time from Settings.
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Step 3: Home Assistant Notifications ─────────────────── -->
+      <template x-if="step === 3">
+        <div class="space-y-3">
+          <p class="text-sm text-slate-400">
+            Receive push notifications on your phone via Home Assistant when the device boosts, goes offline, or reaches a temperature threshold.
+          </p>
+
+          <div class="rounded-xl border p-4 transition-colors"
+               :class="wantNotif ? 'border-brand/50 bg-brand/5' : 'border-slate-700 bg-slate-800/40'">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" x-model="wantNotif" class="mt-0.5 w-4 h-4 accent-brand shrink-0"/>
+              <div>
+                <div class="text-sm font-medium text-slate-200">Enable push notifications</div>
+                <div class="text-xs text-slate-500 mt-0.5">Sends via Home Assistant's mobile companion app notify service. Requires a Home Assistant instance with a long-lived token.</div>
+              </div>
+            </label>
+          </div>
+
+          <template x-if="wantNotif">
+            <div class="space-y-2 text-xs text-slate-400 bg-slate-800/60 rounded-lg p-3">
+              <div class="font-medium text-slate-300">What you'll configure in Settings:</div>
+              <ul class="space-y-1 list-disc list-inside text-slate-500">
+                <li>Home Assistant instance URL + long-lived token</li>
+                <li>Companion device (mobile_app_your_phone)</li>
+                <li>Which events trigger notifications (boost, offline, temperature…)</li>
+              </ul>
+            </div>
+          </template>
+
+          <div class="text-xs text-slate-500 bg-slate-800/60 rounded-lg px-3 py-2">
+            Push notifications can be enabled or configured later in Settings → Push Notifications.
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Step 4: Done ─────────────────────────────────────────── -->
+      <template x-if="step === 4">
+        <div class="space-y-4 text-center py-2">
+          <div class="w-16 h-16 rounded-full bg-green-900/30 border border-green-700/40 flex items-center justify-center mx-auto">
+            <svg class="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-lg font-semibold text-slate-100 mb-1">All set!</div>
+            <div class="text-sm text-slate-400">Your bridge is configured and running.</div>
+          </div>
+
+          <!-- Summary -->
+          <div class="text-left space-y-2 bg-slate-800/60 rounded-xl p-4">
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Configured</div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                    :class="credSaved ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-500'">
+                <span x-text="credSaved ? '✓' : '—'"></span>
+              </span>
+              <span :class="credSaved ? 'text-slate-200' : 'text-slate-500'">Energipays account</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                    :class="wantMqtt ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-500'">
+                <span x-text="wantMqtt ? '✓' : '—'"></span>
+              </span>
+              <span :class="wantMqtt ? 'text-slate-200' : 'text-slate-500'">MQTT Discovery</span>
+              <span x-show="wantMqtt" class="text-xs text-slate-500">(configure env vars)</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                    :class="(wantBattery||wantSolar) ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-500'">
+                <span x-text="(wantBattery||wantSolar) ? '✓' : '—'"></span>
+              </span>
+              <span :class="(wantBattery||wantSolar) ? 'text-slate-200' : 'text-slate-500'">
+                External integrations
+                <template x-if="wantBattery && wantSolar"><span> (Battery + Solar)</span></template>
+                <template x-if="wantBattery && !wantSolar"><span> (Battery)</span></template>
+                <template x-if="!wantBattery && wantSolar"><span> (Solar PV)</span></template>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                    :class="wantNotif ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-500'">
+                <span x-text="wantNotif ? '✓' : '—'"></span>
+              </span>
+              <span :class="wantNotif ? 'text-slate-200' : 'text-slate-500'">Push notifications</span>
+              <span x-show="wantNotif" class="text-xs text-slate-500">(finish in Settings)</span>
+            </div>
+          </div>
+
+          <div x-show="wantBattery || wantSolar || wantNotif"
+               class="text-xs text-slate-500">
+            Head to <strong class="text-slate-300">Settings</strong> to finish configuring the optional modules you selected.
+          </div>
+        </div>
+      </template>
+
+    </div>
+
+    <!-- Footer nav -->
+    <div class="flex items-center gap-3 px-6 py-4 border-t border-slate-800 shrink-0">
+      <button x-show="step > 0" type="button" @click="step--"
+              class="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 transition-colors">
+        Back
+      </button>
+      <div class="flex-1"></div>
+      <!-- Skip (only on optional steps 1-3 and not the last step) -->
+      <button x-show="step > 0 && step < steps.length - 1" type="button"
+              @click="step++"
+              class="px-4 py-2 rounded-lg text-sm text-slate-500 hover:text-slate-300 transition-colors">
+        Skip
+      </button>
+      <!-- Next / Finish -->
+      <button type="button" @click="advance()"
+              :disabled="step === 0 && !credSaved"
+              class="px-5 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40"
+              :class="step === steps.length - 1 ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-brand hover:bg-brand/90 text-white'">
+        <span x-text="step === steps.length - 1 ? 'Go to dashboard' : 'Next'"></span>
+      </button>
+    </div>
+
   </div>
 </div>
 
 <script>
-function setupForm() {
+function setupWizard() {
   return {
-    email: '',
-    password: '',
-    showPw: false,
-    status: '',       // '' | 'testing' | 'saving' | 'success' | 'error'
-    errorMsg: '',
-    userName: '',
+    step: 0,
+    steps: [
+      { title: 'Connect your account' },
+      { title: 'MQTT Discovery' },
+      { title: 'External integrations' },
+      { title: 'Push notifications' },
+      { title: 'Setup complete' },
+    ],
 
-    async test() {
-      this.status = 'testing'
-      this.errorMsg = ''
+    // Step 0 — credentials
+    credEmail: '',
+    credPassword: '',
+    showCredPw: false,
+    credBusy: false,
+    credMsg: '',
+    credOk: false,
+    credSaved: false,
+
+    // Step 1 — MQTT
+    wantMqtt: false,
+    mqttHost: '',
+    mqttPort: '1883',
+
+    // Step 2 — integrations
+    wantBattery: false,
+    wantSolar: false,
+
+    // Step 3 — notifications
+    wantNotif: false,
+
+    async init() {
+      // Pre-fill if already connected
+      const app = Alpine.store('app')
+      if (app.userEmail) { this.credEmail = app.userEmail; this.credSaved = true }
+      // Check MQTT enabled
+      try {
+        const r = await fetch('/api/mqtt/config')
+        if (r.ok) { const d = await r.json(); this.wantMqtt = d.enabled; this.mqttHost = d.host || ''; this.mqttPort = String(d.port || 1883) }
+      } catch (_) {}
+      // Check existing integrations
+      try {
+        const r = await fetch('/api/integrations')
+        if (r.ok) {
+          const list = await r.json()
+          this.wantBattery = list.some(i => i.type === 'battery' && i.enabled)
+          this.wantSolar = list.some(i => i.type === 'solar' && i.enabled)
+        }
+      } catch (_) {}
+    },
+
+    async testCreds() {
+      this.credBusy = true; this.credMsg = ''; this.credOk = false
       try {
         const r = await fetch('/api/setup/test', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({email: this.email, password: this.password}),
+          body: JSON.stringify({email: this.credEmail, password: this.credPassword}),
         })
         const d = await r.json()
-        if (d.ok) {
-          this.userName = d.user?.name || d.user?.email || this.email
-          this.status = 'success'
-          // Reset to allow saving after successful test
-          setTimeout(() => { this.status = '' }, 2500)
-        } else {
-          this.errorMsg = d.error || 'Login failed — check your credentials'
-          this.status = 'error'
-        }
-      } catch (e) {
-        this.errorMsg = 'Network error — is the server running?'
-        this.status = 'error'
-      }
+        this.credOk = d.ok
+        this.credMsg = d.ok ? `Connected as ${d.user?.name || this.credEmail}` : (d.error || 'Login failed')
+      } catch (_) { this.credMsg = 'Network error'; this.credOk = false }
+      finally { this.credBusy = false }
     },
 
-    async save() {
-      this.status = 'saving'
-      this.errorMsg = ''
+    async saveCreds() {
+      this.credBusy = true; this.credMsg = ''; this.credOk = false
       try {
         const r = await fetch('/api/setup/save', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({email: this.email, password: this.password}),
+          body: JSON.stringify({email: this.credEmail, password: this.credPassword}),
         })
         const d = await r.json()
+        this.credOk = d.ok
         if (d.ok) {
-          this.userName = d.user?.name || d.user?.email || this.email
-          this.status = 'success'
-          Alpine.store('app').addToast('Connected as ' + this.userName, 'success')
-          // Give the poller a moment to start, then dismiss modal
-          setTimeout(() => {
-            Alpine.store('app').setupModal = false
-            Alpine.store('app').needsSetup = false
-          }, 1500)
+          this.credSaved = true
+          this.credMsg = `Saved — connected as ${d.user?.name || this.credEmail}`
+          Alpine.store('app').addToast('Account connected', 'success')
         } else {
-          this.errorMsg = d.error || 'Login failed — check your credentials'
-          this.status = 'error'
+          this.credMsg = d.error || 'Login failed'
         }
-      } catch (e) {
-        this.errorMsg = 'Network error — is the server running?'
-        this.status = 'error'
+      } catch (_) { this.credMsg = 'Network error'; this.credOk = false }
+      finally { this.credBusy = false }
+    },
+
+    advance() {
+      if (this.step < this.steps.length - 1) {
+        this.step++
+      } else {
+        // Done — close modal
+        Alpine.store('app').setupModal = false
+        Alpine.store('app').needsSetup = false
+        Alpine.store('app').activeTab = 'dashboard'
+        if (this.wantBattery || this.wantSolar || this.wantNotif) {
+          setTimeout(() => {
+            Alpine.store('app').addToast('Head to Settings to finish configuring optional modules', 'info')
+          }, 500)
+        }
       }
     },
   }

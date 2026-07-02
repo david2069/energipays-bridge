@@ -1,75 +1,101 @@
 <!-- Raw Metrics tab -->
 <div x-show="$store.app.activeTab === 'raw'" x-data="rawTab()">
 
-  <!-- Header + mode toggle -->
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="font-semibold text-slate-100">Raw Metrics</h2>
-    <div class="flex gap-2">
-      <button @click="mode = 'tree'"
-              :class="mode === 'tree' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-              class="px-2 py-1 rounded text-xs bg-slate-800 transition-colors">Tree</button>
-      <button @click="mode = 'terminal'"
-              :class="mode === 'terminal' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-              class="px-2 py-1 rounded text-xs bg-slate-800 transition-colors">Terminal</button>
-    </div>
-  </div>
+  <h2 class="font-semibold text-slate-800 dark:text-slate-100 mb-4">Raw Metrics</h2>
 
-  <!-- ── Tree view ───────────────────────────────────────────────────────── -->
-  <div x-show="mode === 'tree'" class="card">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-xs text-slate-500"
-            x-text="'Points: ' + Object.keys($store.app.points).length + ' · updated ' + $store.app.lastPollLabel"></span>
-      <button @click="exportTreeJSON()"
-              class="text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded px-2 py-0.5 bg-slate-800">
-        ↓ JSON
-      </button>
-    </div>
-    <div class="space-y-0.5">
-      <template x-for="[k, v] in Object.entries($store.app.points).sort()" :key="k">
-        <div class="flex justify-between items-center py-1 px-2 rounded hover:bg-slate-800 group">
-          <span class="font-mono text-xs text-slate-400 group-hover:text-slate-300" x-text="k"></span>
-          <span class="font-mono text-xs text-slate-200 ml-4 tabular-nums"
-                x-text="typeof v === 'number' ? v.toLocaleString(undefined, {maximumFractionDigits: 4}) : String(v)"></span>
-        </div>
-      </template>
-    </div>
-  </div>
+  <!-- Command selector + description -->
+  <div class="card p-3 space-y-3 mb-3">
 
-  <!-- ── Terminal / command runner ─────────────────────────────────────── -->
-  <div x-show="mode === 'terminal'" class="space-y-3">
-
-    <!-- Command bar -->
+    <!-- Row 1: dropdown → Run → method badge → endpoint -->
     <div class="flex flex-wrap items-center gap-2">
-      <select x-model="selectedCmd"
+      <select x-model="selectedCmd" @change="onCmdChange()"
               class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-slate-500 flex-1 min-w-40">
-        <template x-for="c in commands" :key="c.id">
-          <option :value="c.id" x-text="c.label"></option>
-        </template>
+        <optgroup label="── Read ──">
+          <template x-for="c in commands.filter(c => !c.danger)" :key="c.id">
+            <option :value="c.id" x-text="c.label"></option>
+          </template>
+        </optgroup>
+        <optgroup label="── Write (modifies device) ──">
+          <template x-for="c in commands.filter(c => c.danger)" :key="c.id">
+            <option :value="c.id" x-text="c.label"></option>
+          </template>
+        </optgroup>
       </select>
-      <code class="text-xs text-slate-500 font-mono truncate max-w-48" x-text="selectedEndpoint"></code>
-      <button @click="runCommand()"
-              :disabled="cmdLoading"
-              class="px-3 py-1.5 rounded text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium">
+
+      <!-- Run button — fixed position right after dropdown -->
+      <button @click="runCommand()" :disabled="cmdLoading"
+              :class="currentCmd.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'"
+              class="shrink-0 px-3 py-1.5 rounded text-xs text-white disabled:opacity-50 transition-colors font-medium">
         <span x-show="!cmdLoading">▶ Run</span>
         <span x-show="cmdLoading">…</span>
       </button>
-      <button @click="exportCmdJSON()" x-show="cmdOutput !== null"
-              class="px-2 py-1.5 rounded text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
+
+      <!-- Method badge -->
+      <span class="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded"
+            :class="currentCmd.danger ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'"
+            x-text="currentCmd.method || 'GET'"></span>
+
+      <!-- Endpoint -->
+      <code class="text-xs text-slate-500 font-mono truncate flex-1 min-w-0" x-text="selectedEndpoint"></code>
+    </div>
+
+    <!-- Description -->
+    <p class="text-xs text-slate-500 italic" x-text="currentCmd.desc"></p>
+
+    <!-- Param inputs -->
+    <template x-if="currentCmd.params && currentCmd.params.filter(p => p.type !== 'hidden').length">
+      <div class="flex flex-wrap gap-3 pt-1 border-t border-slate-700/50">
+        <template x-for="p in currentCmd.params.filter(p => p.type !== 'hidden')" :key="p.key">
+          <div class="flex flex-col gap-1 min-w-[120px]">
+            <label class="text-[10px] text-slate-500 font-medium" x-text="p.label + (p.required ? ' *' : '')"></label>
+            <template x-if="p.type === 'select'">
+              <select x-model="paramValues[p.key]"
+                      class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-slate-500">
+                <template x-if="!p.required"><option value="">(default)</option></template>
+                <template x-for="(opt, i) in p.options" :key="opt">
+                  <option :value="opt" x-text="p.optionLabels ? p.optionLabels[i] : opt"></option>
+                </template>
+              </select>
+            </template>
+            <template x-if="p.type === 'date'">
+              <input type="date" x-model="paramValues[p.key]"
+                     class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-slate-500" />
+            </template>
+            <template x-if="p.type === 'text'">
+              <input type="text" x-model="paramValues[p.key]" :placeholder="p.placeholder || ''"
+                     class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-slate-500 w-40" />
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Danger warning -->
+    <template x-if="currentCmd.danger">
+      <div class="flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">
+        <span>⚠</span>
+        <span>This command modifies the device. Safe Mode does not block Raw Metrics commands.</span>
+      </div>
+    </template>
+
+  </div>
+
+  <!-- Output -->
+  <div class="card p-0 overflow-hidden">
+    <div x-show="cmdOutput !== null" class="flex items-center justify-between px-3 pt-2 pb-1 border-b border-slate-700/50">
+      <span class="text-[10px] text-slate-500 font-mono" x-text="selectedEndpoint"></span>
+      <button @click="exportCmdJSON()"
+              class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
         ↓ JSON
       </button>
     </div>
-
-    <!-- Output -->
-    <div class="card p-0 overflow-hidden">
-      <div x-show="cmdError" class="text-xs text-red-400 font-mono px-3 py-2" x-text="cmdError"></div>
-      <div x-show="!cmdOutput && !cmdError" class="text-xs text-slate-500 px-3 py-4 text-center">
-        Select a command and press Run
-      </div>
-      <pre x-show="cmdOutput !== null"
-           class="font-mono text-xs text-green-400 overflow-x-auto whitespace-pre-wrap leading-relaxed p-3 max-h-[60vh] overflow-y-auto"
-           x-text="cmdOutputStr"></pre>
+    <div x-show="cmdError" class="text-xs text-red-400 font-mono px-3 py-2" x-text="cmdError"></div>
+    <div x-show="!cmdOutput && !cmdError" class="text-xs text-slate-500 px-3 py-4 text-center">
+      Select a command and press Run
     </div>
-
+    <pre x-show="cmdOutput !== null"
+         class="font-mono text-xs text-slate-800 dark:text-green-400 overflow-x-auto whitespace-pre-wrap leading-relaxed p-3 max-h-[60vh] overflow-y-auto"
+         x-text="cmdOutputStr"></pre>
   </div>
 
 </div>

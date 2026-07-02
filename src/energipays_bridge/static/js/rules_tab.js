@@ -10,6 +10,12 @@ function rulesTab() {
     rules: [],
     loading: false,
     showJSON: false,
+    debugMode: false,
+    debugBefore: null,
+    debugDraft: null,
+    debugServerReturn: null,
+    debugSnapshotLabel: '',
+    debugTab: 'sent',   // 'before' | 'sent' | 'returned'
     filter: 'all',           // 'all' | 'active' | 'inactive'
     allExpanded: false,
     // Create modal
@@ -18,6 +24,8 @@ function rulesTab() {
     newRuleType: 'command',   // command=PD, offpeak, heater2
     creating: false,
     createMsg: '',
+    createConfirmActive: false,  // true = user saw active-rule warning and confirmed
+    createStep: 'form',          // 'warn' | 'form'
     activating: null,         // rule id being set as active
     // Edit modal
     editModal: false,
@@ -27,13 +35,33 @@ function rulesTab() {
     saveMsg: '',
     saveWarnBypass: false,   // true = user acknowledged gap warning, proceed on next click
     draft: null,
+    // Running slot ticker (updates every 30s for countdown)
+    _rulesTick: 0,
+    // Rename modal
+    renameModal: false,
+    renameTarget: null,
+    renameDraft: '',
+    renaming: false,
+    renameMsg: '',
     // Delete confirm modal
     deleteConfirm: null,
     // Span modal
     spanModal: false,
     spanDayIdx: null,
 
-    async init() { await this.refresh() },
+    async init() {
+      await this.refresh()
+      setInterval(() => { this._rulesTick++ }, 30000)
+    },
+
+    fmtAge(iso) {
+      if (!iso) return ''
+      const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+      if (sec < 60) return `${sec}s ago`
+      if (sec < 3600) return `${Math.floor(sec/60)}m ago`
+      if (sec < 86400) return `${Math.floor(sec/3600)}h ago`
+      return `${Math.floor(sec/86400)}d ago`
+    },
 
     // ── expand / collapse (per-card x-data handles local state; parent dispatches global events) ──
 
@@ -65,7 +93,15 @@ function rulesTab() {
 
     // ── rule helpers ──────────────────────────────────────────────────────────
 
+    ruleIsEveryday(rule) {
+      // energipays.com shows "Everyday" when active_day is set (any non-null value)
+      if (rule.active_day) return true
+      // also true if all 7 data keys present (our expanded format)
+      return [1,2,3,4,5,6,7].every(i => `d${i}` in (rule.data || {}))
+    },
+
     ruleHasDay(rule, di) {
+      if (this.ruleIsEveryday(rule)) return true   // all pills lit for everyday rules
       return !!(rule.data && `d${di+1}` in rule.data)
     },
 
@@ -103,6 +139,9 @@ function rulesTab() {
       this.newRuleName = ''
       this.newRuleType = 'command'
       this.createMsg = ''
+      this.createConfirmActive = false
+      // If a rule is already active, show the warning screen first
+      this.createStep = this.activeRuleForNewType() ? 'warn' : 'form'
       this.createModal = true
     },
 
@@ -154,8 +193,15 @@ function rulesTab() {
       }
     },
 
+    activeRuleForNewType() {
+      // Returns the active rule for the currently selected new rule type, or null
+      const activeId = this.activeRuleIdForType(this.newRuleType)
+      return activeId ? (this.rules.find(r => r.id === activeId) || null) : null
+    },
+
     async createRule() {
       if (!this.newRuleName.trim() || this.creating) return
+      this.createConfirmActive = false
       this.creating = true
       this.createMsg = ''
       try {
@@ -299,6 +345,18 @@ function rulesTab() {
 
     applySpan(mode) {
       const di = this.spanDayIdx
+      // "join" mode: make slot times continuous in-place (no gap fills)
+      if (mode === 'join') {
+        const jKey = di === 0 && this.isEverydayActive() ? 'd1' : `d${di + 1}`
+        const jSlots = this.draft?.data?.[jKey]
+        if (jSlots && jSlots.length >= 2) {
+          jSlots.sort((a, b) => (a.timeFrom || '').localeCompare(b.timeFrom || ''))
+          for (let i = 1; i < jSlots.length; i++) jSlots[i].timeFrom = jSlots[i - 1].timeTo
+        }
+        this.spanModal = false
+        this._clearWarn()
+        return
+      }
       const key = `d${di + 1}`
       if (!this.draft.data[key]) this.draft.data[key] = []
       const covered = this._getCovered(di)
@@ -335,6 +393,19 @@ function rulesTab() {
       // Sort slots by timeFrom
       this.draft.data[key].sort((a, b) => a.timeFrom.localeCompare(b.timeFrom))
       this.spanModal = false
+      this._clearWarn()
+    },
+
+    // joinGaps: make slot times continuous — end of slot N becomes start of slot N+1
+    joinGaps(dayIdx) {
+      const key = dayIdx === 0 && this.isEverydayActive() ? 'd1' : `d${dayIdx + 1}`
+      const slots = this.draft?.data?.[key]
+      if (!slots || slots.length < 2) return
+      slots.sort((a, b) => (a.timeFrom || '').localeCompare(b.timeFrom || ''))
+      for (let i = 1; i < slots.length; i++) {
+        slots[i].timeFrom = slots[i - 1].timeTo
+      }
+      this._clearWarn()
     },
 
     async refresh() {
@@ -343,7 +414,24 @@ function rulesTab() {
         const r = await fetch('/api/rules')
         if (!r.ok) return
         const d = await r.json()
-        this.rules = Array.isArray(d) ? d : (d.data || [])
+        const raw = Array.isArray(d) ? d : (d.data || [])
+        // Server stores everyday rules as a single active_day template.
+        // Expand to d1-d7 so the UI correctly shows "every day" mode.
+        this.rules = raw.map(rule => {
+          // Server returns data:[] for new empty rules — must be {} for day keys to survive JSON.stringify
+          if (!rule.data || Array.isArray(rule.data)) rule = { ...rule, data: {} }
+          const keys = Object.keys(rule.data).filter(k => /^d\d$/.test(k))
+          // active_day === "d1" is energipays's specific marker for everyday rules.
+          // Any other value (null, "d3", "d6", etc.) means single-day — do NOT expand.
+          if (keys.length === 1 && rule.active_day === 'd1') {
+            const serverKey = keys[0]
+            const template = rule.data[serverKey]
+            rule = { ...rule, data: {}, _serverKey: serverKey }
+            for (let i = 1; i <= 7; i++)
+              rule.data[`d${i}`] = JSON.parse(JSON.stringify(template))
+          }
+          return rule
+        })
         // Signal cards to expand the active rule after load
         const aid = this.activeRuleId()
         if (aid) window.dispatchEvent(new CustomEvent('rules-expand-active', { detail: aid }))
@@ -368,11 +456,11 @@ function rulesTab() {
     },
 
     allDaySlots(rule) {
-      // Returns [{day, dayLabel, slots}] for days that have slots
+      const everyday = this.ruleIsEveryday(rule)
       const entries = []
       for (let i = 0; i < 7; i++) {
         const slots = this.slotsFor(rule, i)
-        if (slots.length) entries.push({ day: i, dayLabel: DAYS[i], slots })
+        if (slots.length) entries.push({ day: i, dayLabel: everyday ? 'Every day' : DAYS[i], slots })
       }
       return entries
     },
@@ -384,13 +472,16 @@ function rulesTab() {
 
     // timeline bar: percent width and position for a time slot
     slotStyle(slot, color) {
-      const pct = t => {
+      const toMin = t => {
         const [h, m] = (t || '00:00').split(':').map(Number)
-        return ((h * 60 + m) / 1440) * 100
+        return h * 60 + m
       }
-      const left = pct(slot.timeFrom)
-      const width = Math.max(0.5, pct(slot.timeTo) - left)
-      return `left:${left}%;width:${width}%;background:${color}`
+      const left = toMin(slot.timeFrom)
+      // '00:00' as timeTo means midnight end-of-day (1440), not start-of-day (0)
+      let end = toMin(slot.timeTo)
+      if (end === 0) end = 1440
+      const width = Math.max(2, end - left)
+      return `left:${(left/1440*100).toFixed(2)}%;width:${(width/1440*100).toFixed(2)}%;background:${color}`
     },
 
     // ── day toggles ───────────────────────────────────────────────────────────
@@ -405,8 +496,8 @@ function rulesTab() {
     },
 
     _defaultSlot() {
-      return { timeFrom: '08:00', timeTo: '10:00', command: 2, boost_power: null,
-               temperature_min: 60, price_max: null, price_min: null }
+      return { timeFrom: '00:00', timeTo: '23:59', command: 1, boost_power: null,
+               temperature_min: null, price_max: null, price_min: null }
     },
 
     toggleDay(di) {
@@ -442,8 +533,58 @@ function rulesTab() {
 
     // ── edit modal ────────────────────────────────────────────────────────────
 
+    runningSlot(rule) {
+      void this._rulesTick  // reactive dependency
+      const now = new Date()
+      const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+      const jsDay = now.getDay()
+      const todayKey = `d${jsDay === 0 ? 7 : jsDay}`
+      const data = rule.data || {}
+      const keys = this.ruleIsEveryday(rule)
+        ? [todayKey]
+        : Object.keys(data).filter(k => /^d\d$/.test(k))
+      for (const key of keys) {
+        for (const slot of (data[key] || [])) {
+          if (slot.timeFrom <= hhmm && hhmm < slot.timeTo) return slot
+        }
+      }
+      return null
+    },
+
+    slotCountdown(slot) {
+      const now = new Date()
+      const [endH, endM] = slot.timeTo.split(':').map(Number)
+      const rem = (endH * 60 + endM) - (now.getHours() * 60 + now.getMinutes())
+      if (rem <= 0) return '0:00'
+      return `${Math.floor(rem/60)}:${String(rem%60).padStart(2,'0')}`
+    },
+
+    slotProgress(slot) {
+      const now = new Date()
+      const [sh, sm] = slot.timeFrom.split(':').map(Number)
+      const [eh, em] = slot.timeTo.split(':').map(Number)
+      const nowMin = now.getHours() * 60 + now.getMinutes()
+      const startMin = sh * 60 + sm
+      const endMin = eh * 60 + em
+      if (endMin <= startMin) return 100
+      return Math.min(100, Math.max(0, ((nowMin - startMin) / (endMin - startMin)) * 100))
+    },
+
     openEdit(rule) {
       this.draft = JSON.parse(JSON.stringify(rule))  // deep clone
+      // For new empty rules, pre-select today's day — matches energipays.com client-side default.
+      // Not persisted until user adds slots and saves.
+      const dataKeys = Object.keys(this.draft.data || {}).filter(k => /^d\d$/.test(k))
+      if (dataKeys.length === 0) {
+        const jsDay = new Date().getDay() // 0=Sun, 1=Mon…6=Sat
+        const ourKey = `d${jsDay === 0 ? 7 : jsDay}` // d1=Mon…d7=Sun
+        this.draft.data = { [ourKey]: [] }
+      }
+      this.draftOriginalName = rule.name             // track for rename detection
+      this.debugBefore = JSON.parse(JSON.stringify(rule))  // frozen copy for debug diff
+      this.debugDraft = null
+      this.debugServerReturn = null
+      this.debugTab = 'before'
       this.saveResult = ''
       this.saveMsg = ''
       this.saveWarnBypass = false
@@ -451,8 +592,51 @@ function rulesTab() {
     },
 
     closeEdit() {
+      if (this.debugMode && this.draft) {
+        this.debugDraft = JSON.parse(JSON.stringify(this.draft))
+        this.debugSnapshotLabel = 'dismissed'
+      }
       this.editModal = false
       this.draft = null
+    },
+
+    openRename(rule) {
+      this.renameTarget = rule
+      this.renameDraft = rule.name
+      this.renameMsg = ''
+      this.renaming = false
+      this.renameModal = true
+      this.$nextTick(() => this.$el.querySelector('[x-model="renameDraft"]')?.focus())
+    },
+
+    closeRename() {
+      this.renameModal = false
+      this.renameTarget = null
+    },
+
+    async saveRename() {
+      if (!this.renameDraft.trim() || !this.renameTarget) return
+      this.renaming = true
+      this.renameMsg = ''
+      try {
+        const res = await fetch(`/api/rules/${this.renameTarget.id}/name`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: this.renameDraft.trim() }),
+        })
+        if (!res.ok) throw new Error(await res.text())
+        this.closeRename()
+        await this.refresh()
+      } catch (e) {
+        this.renameMsg = e.message || 'Rename failed'
+      } finally {
+        this.renaming = false
+      }
+    },
+
+    _clearWarn() {
+      if (this.saveResult === 'warn') { this.saveResult = ''; this.saveMsg = '' }
+      this.saveWarnBypass = false
     },
 
     addSlot(dayIdx) {
@@ -463,12 +647,14 @@ function rulesTab() {
         command: 2, boost_power: null,
         temperature_min: 60, price_max: null, price_min: null,
       })
+      this._clearWarn()
     },
 
     removeSlot(dayIdx, slotIdx) {
       const key = `d${dayIdx + 1}`
       this.draft.data[key].splice(slotIdx, 1)
       if (!this.draft.data[key].length) delete this.draft.data[key]
+      this._clearWarn()
     },
 
     snapTimes(dayIdx, slotIdx, field) {
@@ -480,6 +666,7 @@ function rulesTab() {
       } else if (field === 'timeFrom' && slotIdx > 0) {
         slots[slotIdx - 1].timeTo = slots[slotIdx].timeFrom
       }
+      this._clearWarn()
     },
 
     _checkGaps() {
@@ -513,10 +700,13 @@ function rulesTab() {
         if (/^d\d$/.test(key) && Array.isArray(this.draft.data[key]))
           this.draft.data[key].sort((a, b) => (a.timeFrom || '').localeCompare(b.timeFrom || ''))
       }
-      // In "every day" mode, sync d1 slots to all other days before saving
+      // Collapse everyday rules back to the ORIGINAL server key before saving.
+      // Never change active_day — preserve exactly what the server gave us.
       if (this.isEverydayActive() && this.draft.data['d1']) {
         const template = JSON.parse(JSON.stringify(this.draft.data['d1']))
-        for (let i = 2; i <= 7; i++) this.draft.data[`d${i}`] = JSON.parse(JSON.stringify(template))
+        const serverKey = this.draft._serverKey || 'd1'
+        this.draft.data = { [serverKey]: template }
+        delete this.draft._serverKey
       }
       // Gap check — warn once, bypass on second click
       if (!this.saveWarnBypass) {
@@ -529,9 +719,29 @@ function rulesTab() {
         }
       }
       this.saveWarnBypass = false
+      if (this.debugMode) {
+        this.debugDraft = JSON.parse(JSON.stringify(this.draft))
+        this.debugSnapshotLabel = 'saved at ' + new Date().toLocaleTimeString()
+      }
       this.saving = true
       this.saveResult = ''
       try {
+        // Step 1: rename if name changed (separate PUT — server treats name and data independently)
+        const nameChanged = this.draft.name && this.draft.name !== this.draftOriginalName
+        if (nameChanged) {
+          const rn = await fetch(`/api/rules/${this.draft.id}/name`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: this.draft.name }),
+          })
+          if (!rn.ok) {
+            const dn = await rn.json().catch(() => ({}))
+            this.saveResult = 'error'
+            this.saveMsg = dn.detail || dn.error || 'Rename failed — check logs'
+            return
+          }
+        }
+        // Step 2: save schedule data
         const r = await fetch(`/api/rules/${this.draft.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -542,9 +752,23 @@ function rulesTab() {
           this.saveResult = 'ok'
           this.saveMsg = `Rule "${this.draft.name}" saved successfully.`
           Alpine.store('app').addToast('Rule saved', 'success')
+          const savedId = this.draft.id
           setTimeout(async () => {
             this.closeEdit()
-            await this.refresh()   // reload from server so UI reflects what cloud actually saved
+            await this.refresh()
+            if (this.debugMode) {
+              const returned = this.rules.find(r => r.id === savedId)
+              if (returned) {
+                this.debugServerReturn = JSON.parse(JSON.stringify(returned))
+                const beforeTs = this.debugBefore?.updated_at
+                const afterTs = returned.updated_at
+                const changed = beforeTs !== afterTs
+                this.debugSnapshotLabel = changed
+                  ? `✓ saved ${new Date(afterTs).toLocaleTimeString()} (was ${new Date(beforeTs).toLocaleTimeString()})`
+                  : `⚠ saved but updated_at unchanged (${afterTs})`
+                this.debugTab = 'returned'
+              }
+            }
           }, 1200)
         } else {
           this.saveResult = 'error'
