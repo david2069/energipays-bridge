@@ -1,4 +1,4 @@
-## [1.0.4] [2026-07-03] — Fix all static assets under Ingress + manual AES key fallback
+## 1.0.4 — Fix all static assets under Ingress + manual AES key fallback
 
 ### Fixed
 - **All icons and images broken under HA Ingress** — every `/static/...` absolute path
@@ -19,7 +19,7 @@
 
 ---
 
-## [1.0.3] [2026-07-03] — Fix AES key extraction on first HA add-on run
+## 1.0.3 — Fix AES key extraction on first HA add-on run
 
 ### Fixed
 - **"AES key not set" on first login** — `DATA_DIR` was written to the
@@ -33,7 +33,7 @@
 
 ---
 
-## [1.0.2] [2026-07-03] — Fix Ingress static file 404s
+## 1.0.2 — Fix Ingress static file 404s
 
 ### Fixed
 - **Static files 404 via HA Ingress** — setting `scope["root_path"]` caused
@@ -45,7 +45,7 @@
 
 ---
 
-## [1.0.1] [2026-07-03] — HA Ingress + startup fix
+## 1.0.1 — HA Ingress + startup fix
 
 ### Added
 - **HA Ingress support** — add-on UI now opens inside the HA sidebar via the Ingress
@@ -60,7 +60,7 @@
 
 ---
 
-## [1.0.0] [2026-07-03] — External integrations, setup wizard, MQTT toggle, dashboard UX
+## 1.0.0 — External integrations, setup wizard, MQTT toggle, dashboard UX
 
 ### Added
 - **External integrations framework** — REST, Modbus TCP, HA WebSocket, MQTT pollers;
