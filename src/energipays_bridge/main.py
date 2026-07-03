@@ -265,25 +265,20 @@ def create_app() -> FastAPI:
 
 
 class _HAIngressMiddleware:
-    """Strip the HA Supervisor ingress path prefix injected via X-Ingress-Path."""
+    """Handle HA Supervisor Ingress routing.
+
+    HA already strips the ingress prefix from the path before forwarding to the
+    container, so no path rewriting is needed here. The middleware is kept as a
+    pass-through; the X-Ingress-Path header is read directly by ui.py to inject
+    the <base href> tag. Do NOT set scope["root_path"] — doing so causes
+    Starlette's StaticFiles to prepend the prefix to the on-disk lookup path,
+    resulting in 404s for all static assets.
+    """
 
     def __init__(self, inner):
         self._inner = inner
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] in ("http", "websocket"):
-            headers = {k: v for k, v in scope.get("headers", [])}
-            prefix = headers.get(b"x-ingress-path", b"").decode()
-            if prefix:
-                scope = dict(scope)
-                scope["root_path"] = prefix
-                path: str = scope.get("path", "")
-                if path.startswith(prefix):
-                    scope["path"] = path[len(prefix):] or "/"
-                prefix_b = prefix.encode()
-                raw: bytes = scope.get("raw_path", b"")
-                if raw.startswith(prefix_b):
-                    scope["raw_path"] = raw[len(prefix_b):] or b"/"
         await self._inner(scope, receive, send)
 
 

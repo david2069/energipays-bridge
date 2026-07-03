@@ -16,5 +16,5 @@ async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"cache_bust": int(time.time()), "root_path": request.scope.get("root_path", "")},
+        context={"cache_bust": int(time.time()), "root_path": request.headers.get("x-ingress-path", "")},
     )

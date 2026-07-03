@@ -1,3 +1,15 @@
+## [1.0.2] [2026-07-03] — Fix Ingress static file 404s
+
+### Fixed
+- **Static files 404 via HA Ingress** — setting `scope["root_path"]` caused
+  Starlette's `StaticFiles` to prepend the ingress prefix to the on-disk file
+  lookup path. HA already strips the ingress prefix before forwarding to the
+  container, so no path rewriting is needed. Middleware simplified to a
+  pass-through; `X-Ingress-Path` header is now read directly in `ui.py` to
+  inject the `<base href>` tag.
+
+---
+
 ## [1.0.1] [2026-07-03] — HA Ingress + startup fix
 
 ### Added
