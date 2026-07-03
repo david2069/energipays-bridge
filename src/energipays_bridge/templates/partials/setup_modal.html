@@ -71,37 +71,31 @@
             Stored AES-256 encrypted on this server only
           </p>
 
-          <!-- Manual AES key — shown only after an AES error or on demand -->
-          <div x-data="{open: false, aesKey: '', aesMsg: '', aesOk: false}">
+          <!-- Terminal -->
+          <div x-data="setupTerminal()">
             <button type="button" @click="open=!open"
                     class="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2">
-              <span x-text="open ? '▲ Hide advanced' : '▼ AES key extraction failed? Enter manually'"></span>
+              <span x-text="open ? '▲ Hide terminal' : '▼ Open terminal'"></span>
             </button>
             <template x-if="open">
-              <div class="mt-2 space-y-2">
-                <p class="text-xs text-slate-500">
-                  If login shows "AES key not set", open <strong class="text-slate-300">energipays.com</strong> in your browser,
-                  open DevTools → Sources → search for <code class="bg-slate-800 px-1 rounded">Base64.parse</code>
-                  and paste the 44-character base64 string below.
-                </p>
-                <div class="flex gap-2">
-                  <input type="text" x-model="aesKey" placeholder="44-char base64 AES key…"
-                         class="flex-1 bg-slate-800 text-slate-100 text-xs rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
-                  <button type="button" @click="async () => {
-                    if (!aesKey.trim()) return
-                    try {
-                      const r = await fetch('/api/setup/set-key', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key: aesKey.trim()})})
-                      const d = await r.json()
-                      aesOk = d.ok
-                      aesMsg = d.ok ? 'Key saved — try login now' : (d.error || 'Failed')
-                    } catch(_) { aesMsg = 'Network error'; aesOk = false }
-                  }()"
-                  class="px-3 py-2 rounded-lg text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600">
-                    Set key
+              <div class="mt-2 space-y-1">
+                <p class="text-xs text-slate-500">Run CLI commands on the bridge server. Try <code class="bg-slate-800 px-1 rounded text-slate-300">energipays key</code> to extract the AES key.</p>
+                <!-- Output -->
+                <div class="bg-black rounded-lg p-3 font-mono text-xs text-green-300 min-h-[80px] max-h-48 overflow-y-auto whitespace-pre-wrap" x-ref="output" x-text="output || 'Ready.'"></div>
+                <!-- Input row -->
+                <div class="flex gap-2 items-center">
+                  <span class="text-xs text-green-500 font-mono shrink-0">$</span>
+                  <input type="text" x-model="cmd" x-ref="input"
+                         @keydown.enter="run()"
+                         @keydown.up.prevent="historyUp()"
+                         @keydown.down.prevent="historyDown()"
+                         placeholder="energipays key  |  energipays-bridge status  |  energipays --help"
+                         class="flex-1 bg-slate-900 text-green-300 text-xs font-mono rounded px-2 py-1.5 border border-slate-700 focus:outline-none focus:border-green-700 placeholder-slate-700"/>
+                  <button type="button" @click="run()" :disabled="busy"
+                          class="px-3 py-1.5 rounded text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 disabled:opacity-40">
+                    <span x-show="busy">…</span><span x-show="!busy">Run</span>
                   </button>
                 </div>
-                <div x-show="aesMsg" class="text-xs px-2 py-1 rounded"
-                     :class="aesOk ? 'text-green-400' : 'text-red-400'" x-text="aesMsg"></div>
               </div>
             </template>
           </div>
@@ -433,6 +427,51 @@ function setupWizard() {
           }, 500)
         }
       }
+    },
+  }
+}
+
+function setupTerminal() {
+  return {
+    open: false,
+    cmd: '',
+    output: '',
+    busy: false,
+    history: [],
+    histIdx: -1,
+    async run() {
+      const c = this.cmd.trim()
+      if (!c || this.busy) return
+      this.history.unshift(c)
+      this.histIdx = -1
+      this.busy = true
+      this.output = '$ ' + c + '\n…'
+      try {
+        const r = await fetch('api/setup/run-cli', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({cmd: c})
+        })
+        const d = await r.json()
+        this.output = '$ ' + c + '\n' + (d.output || '(no output)')
+      } catch(e) {
+        this.output = '$ ' + c + '\nNetwork error: ' + e
+      }
+      this.busy = false
+      this.$nextTick(() => {
+        if (this.$refs.output) this.$refs.output.scrollTop = 9999
+        if (this.$refs.input) this.$refs.input.focus()
+      })
+    },
+    historyUp() {
+      if (this.history.length === 0) return
+      this.histIdx = Math.min(this.histIdx + 1, this.history.length - 1)
+      this.cmd = this.history[this.histIdx]
+    },
+    historyDown() {
+      if (this.histIdx <= 0) { this.histIdx = -1; this.cmd = ''; return }
+      this.histIdx--
+      this.cmd = this.history[this.histIdx]
     },
   }
 }

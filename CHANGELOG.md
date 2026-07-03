@@ -1,3 +1,13 @@
+## 1.0.8 — Terminal in setup wizard
+
+### Added
+- **Terminal in setup wizard Step 1** — click "▼ Open terminal" to run
+  `energipays` or `energipays-bridge` CLI commands directly from the login screen.
+  Supports command history (↑/↓ arrows). Use `energipays key` to extract and
+  diagnose the AES key without leaving the UI.
+
+---
+
 ## 1.0.7 — Diagnose AES key extraction failure + HA config field
 
 ### Added

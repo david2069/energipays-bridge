@@ -110,6 +110,36 @@ async def setup_set_key(body: AesKeyBody, request: Request) -> dict:
         return JSONResponse(status_code=500, content={"ok": False, "error": str(exc)})
 
 
+class CliBody(BaseModel):
+    cmd: str
+
+
+@router.post("/api/setup/run-cli")
+async def setup_run_cli(body: CliBody) -> dict:
+    """Run an energipays or energipays-bridge CLI command and return stdout+stderr."""
+    import shlex, subprocess
+    cmd = body.cmd.strip()
+    if not cmd:
+        return {"output": ""}
+    try:
+        args = shlex.split(cmd)
+    except ValueError as exc:
+        return {"output": f"Parse error: {exc}"}
+    allowed = {"energipays", "energipays-bridge"}
+    if not args or args[0] not in allowed:
+        return {"output": f"Only 'energipays' and 'energipays-bridge' commands are allowed."}
+    try:
+        result = await asyncio.to_thread(
+            lambda: subprocess.run(args, capture_output=True, text=True, timeout=30)
+        )
+        out = (result.stdout or "") + (result.stderr or "")
+        return {"output": out.strip() or "(no output)"}
+    except subprocess.TimeoutExpired:
+        return {"output": "Timed out after 30s"}
+    except Exception as exc:
+        return {"output": f"Error: {exc}"}
+
+
 @router.post("/api/setup/test")
 async def setup_test(body: CredentialsBody) -> dict:
     """Test credentials without saving. Returns success/failure + user info."""
