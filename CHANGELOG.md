@@ -1,3 +1,12 @@
+## 1.0.5 — Pre-extract AES key at startup
+
+### Fixed
+- **AES key not set on login** — app now calls the same JS-bundle extraction
+  that the client uses internally, during startup, before credentials are loaded.
+  Failures appear in the add-on log instead of surfacing as a login error.
+
+---
+
 ## 1.0.4 — Fix all static assets under Ingress + manual AES key fallback
 
 ### Fixed
