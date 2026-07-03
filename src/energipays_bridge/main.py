@@ -101,6 +101,8 @@ async def lifespan(app: FastAPI):
 
     # ── 6. Login + device discovery (skipped if no credentials) ──────────────
     poller: EnergipaysPoller | None = None
+    device_id: str = settings.energipays_device_id
+    data_server: str = "https://data-au-1.energipays.com"
     if email and password:
         try:
             client = EnergipaysClient(email=email, password=password, auto_login=False)
@@ -112,8 +114,6 @@ async def lifespan(app: FastAPI):
             log.info("Login OK")
             app.state.client = client
 
-            device_id = settings.energipays_device_id
-            data_server = "https://data-au-1.energipays.com"
             if not device_id:
                 try:
                     resp = await asyncio.to_thread(client.devices)
