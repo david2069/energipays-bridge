@@ -13,6 +13,10 @@
 #     Reset for a repeat first-run test:  docker compose -f docker-compose.dev.yml down -v
 #   - No credential env vars: the setup wizard must appear and work.
 #   - MQTT disabled so the dev instance never publishes to the live broker.
+#   - READ_ONLY=true by default: this instance runs against your REAL
+#     Energipays account and REAL hot-water device once you log in — it
+#     should observe, never actuate. Set READ_ONLY=false here temporarily
+#     if you need to dev-test an actual write.
 #
 # Promote to production only after first-install startup + wizard login pass here.
 services:
@@ -27,6 +31,7 @@ services:
       - DATA_DIR=/app/data
       - LOG_LEVEL=DEBUG
       - MQTT_ENABLED=false
+      - READ_ONLY=true
     restart: "no"
 
 volumes:

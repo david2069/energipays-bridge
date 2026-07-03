@@ -84,7 +84,7 @@ async def health(request: Request) -> dict:
             "last_poll_ts": poller.last_poll_ts if poller else 0,
             "last_error": poller.last_error if poller else "",
         },
-        "safe_mode": request.app.state.safe_mode,
+        "read_only": request.app.state.settings.read_only,
         "device_id": request.app.state.device_id,
     }
 
@@ -246,13 +246,10 @@ class ConfigBody(BaseModel):
 
 @router.put("/api/config/{key}")
 async def put_cfg(key: str, body: ConfigBody, request: Request) -> dict:
-    allowed = {"safe_mode", "poll_interval", "raw_age_days", "retention_days", "log_level"}
+    allowed = {"poll_interval", "raw_age_days", "retention_days", "log_level"}
     if key not in allowed:
         from fastapi import HTTPException
         raise HTTPException(400, f"Unknown config key '{key}'")
     val = str(body.value)
     await set_config(request.app.state.db, key, val)
-    # Apply safe_mode immediately
-    if key == "safe_mode":
-        request.app.state.safe_mode = val == "1"
     return {"key": key, "value": val}

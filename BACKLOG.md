@@ -15,58 +15,13 @@ Issues; this file stays the release-packaging layer.)
 
 ---
 
-## Package 1 — v1.1.2: remove Safe Mode, add READ_ONLY flag, fix unconfigured 500s
-
-**Status: approved — SHIP FIRST.** Confirmed 2026-07-04: this must land before
-Package 3 even though Package 3 is separately marked HIGH — Safe Mode defaults
-to blocking ALL writes on any fresh install with no UI to disable it, so a new
-HA add-on user hits a dead end before MQTT setup would even matter. Fix the
-thing that breaks new installs, then fix MQTT setup.
-
-### 1a. [defect] Delete legacy Safe Mode (approved 2026-07-04)
-It default-blocks ALL writes on fresh installs with no UI to disable (prod only
-works because an old DB row has `safe_mode=0`), and MQTT bypasses it anyway.
-- `main.py:63-65` — remove the safe_mode DB load from the lifespan
-- `api/devices.py:251-254` — remove `_require_writes()` + its 8 call sites
-  (`/api/device/set`, `/api/device/switch`, `/api/boost`, `/api/boost/cancel`,
-  rule create/update/rename/delete)
-- `api/admin.py` — drop `safe_mode` from allowed config keys (~249), the
-  immediate-apply branch (~256), and the GET /api/config payload (~87)
-- `api/points.py:26` — drop `safe_mode` from `/api/points/latest`
-- `static/js/app.js:71` dead `safeMode: false` + stale comment ~225;
-  `templates/tabs/raw.html:77` stale Safe Mode help text
-- Remove readers + writer in the SAME commit (admin.py/points.py read
-  `app.state.safe_mode` directly → AttributeError if only main.py changes)
-
-### 1b. [enh] Add READ_ONLY env flag (approved design)
-- `settings.py`: `read_only: bool = False` — env-driven only, NEVER DB-persisted
-- Enforce at the single choke point where all device writes converge, covering
-  REST + `mqtt_publisher._handle_command` + future scheduler
-- Blocked writes log the exact would-be request:
-  `DRY RUN: would POST /boost {period: 2, boost_power: 3}` (debugging aid)
-- UI: topbar "read-only" badge; write controls disabled with tooltip
-- `docker-compose.dev.yml`: `READ_ONLY=true` by default (dev observes, never
-  actuates the real hot-water system); prod/HA default false. Optional HA
-  config.yaml field via ha_options.py.
-
-### 1c. [defect] Graceful "not connected yet" instead of 500s
-Routes using `app.state.client` crash with `AttributeError('NoneType')` before
-poller init (fresh install pre-credentials, or the window between wizard
-"Save & connect" and `_start_poller` completing). Observed live on v1.1.1.
-- Shared guard → 503 `{"error": "bridge not connected yet"}` on all cloud
-  routes (`devices.py:79` list_rules etc., `cloud_stats.py`)
-- `rules_tab.js refresh()` (~425): `if (!r.ok) return` silently swallows errors
-  leaving "No rules found" forever → visible connecting/error state + retry
-  (or refetch on tab activation)
-
----
-
 ## Package 3 — HA-native MQTT setup: Supervisor auto-discovery + working wizard step
 
-**Status: approved — HIGH priority, ships second** (after Package 1; see that
-package's note for why). Bundled as ONE release covering wizard + Settings +
-re-run affordance — not split further. Planned 2026-07-04 as a phased build;
-phases are dependency-ordered, not independently shippable except Phase 4.
+**Status: approved — HIGH priority, ships next.** Package 1 (Safe Mode
+removal, READ_ONLY flag, rules-race 500 fix) shipped as v1.1.2 on 2026-07-04
+— see Shipped below. This is now the next package to build. Bundled as ONE
+release covering wizard + Settings + re-run affordance — not split further.
+Phases are dependency-ordered, not independently shippable except Phase 4.
 
 **Root cause underlying 3a/3c looking "decorative":** MQTT config today is
 boot-time-only and env-only — `main.py:177-192` builds `MqttSettings()` from
@@ -297,4 +252,16 @@ chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
   repo; Dockerfile now pins commit SHA), in-wizard key diagnostics that
   self-repair, browser-console extraction fallback, entrypoint cache-poisoning
   removed, docker-compose.dev.yml added. Verified: fresh-install login works.
-- **Unreleased on main (`1831f9f`)** — NEM/weather fetch hardening (see 2c note)
+- **v1.1.2 (2026-07-04) — Package 1 complete**: Safe Mode removed entirely
+  (1a); `READ_ONLY` env flag added, enforced at both REST (`_check_writable`
+  in `api/devices.py`) and MQTT (`MqttPublisher._handle_command`), with
+  dry-run logging and a topbar badge — `docker-compose.dev.yml` defaults it
+  to `true` (1b); rules-tab 500s fixed via a shared `_get_client()` 503 guard
+  + visible error/retry state in the Rules tab instead of a silent permanent
+  empty list (1c). NEM/weather fetch hardening (`1831f9f`, previously
+  unreleased on main) folded into this release too. Verified in the dev
+  container: fresh-install `/api/rules` returns 503 not 500; `READ_ONLY`
+  blocks both a simulated REST write and a simulated MQTT command without
+  ever calling the underlying client; `safe_mode` config key rejected as
+  unknown; zero remaining `safe_mode`/`safeMode` references anywhere in the
+  codebase (`grep` swept clean).

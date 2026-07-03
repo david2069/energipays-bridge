@@ -74,7 +74,7 @@
     <template x-if="currentCmd.danger">
       <div class="flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">
         <span>⚠</span>
-        <span>This command modifies the device. Safe Mode does not block Raw Metrics commands.</span>
+        <span>This command modifies the device — it calls the same live endpoint as the UI and is blocked when READ_ONLY is set.</span>
       </div>
     </template>
 

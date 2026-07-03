@@ -4,11 +4,10 @@ energipays-bridge — FastAPI application.
 Startup sequence (lifespan):
   1. Load settings (env vars / .env file)
   2. Init SQLite DB + run migrations
-  3. Load safe_mode from DB
-  4. Authenticate EnergipaysClient
-  5. Auto-discover device_id if not configured
-  6. Start EnergipaysPoller → SampleBus → MetricsRecorder
-  7. Start metrics archival background loop
+  3. Authenticate EnergipaysClient
+  4. Auto-discover device_id if not configured
+  5. Start EnergipaysPoller → SampleBus → MetricsRecorder
+  6. Start metrics archival background loop
 """
 from __future__ import annotations
 
@@ -59,12 +58,10 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     set_log_db(db)
     app.state.settings = settings
+    if settings.read_only:
+        log.warning("READ_ONLY mode active — all device-modifying commands will be refused")
 
-    # ── 3. Safe mode ──────────────────────────────────────────────────────────
-    safe_mode_val = await get_config(db, "safe_mode", "1")
-    app.state.safe_mode = safe_mode_val == "1"
-
-    # ── 4. Energipays credentials ─────────────────────────────────────────────
+    # ── 3. Energipays credentials ─────────────────────────────────────────────
     try:
         from energipays import EnergipaysClient
     except ImportError:
@@ -96,7 +93,7 @@ async def lifespan(app: FastAPI):
     app.state.device_id = None
     app.state.data_server = "https://data-au-1.energipays.com"
 
-    # ── 5. SampleBus (always created so setup endpoint can subscribe later) ───
+    # ── 4. SampleBus (always created so setup endpoint can subscribe later) ───
     bus = SampleBus()
     app.state.bus = bus
     app.state.latest_points: dict = {}
@@ -115,7 +112,7 @@ async def lifespan(app: FastAPI):
 
     bus.subscribe(_store_latest)
 
-    # ── 6. Login + device discovery (skipped if no credentials) ──────────────
+    # ── 5. Login + device discovery (skipped if no credentials) ──────────────
     poller: EnergipaysPoller | None = None
     device_id: str = settings.energipays_device_id
     data_server: str = "https://data-au-1.energipays.com"
@@ -173,7 +170,7 @@ async def lifespan(app: FastAPI):
 
     app.state.poller = poller
 
-    # ── 7. MQTT publisher ─────────────────────────────────────────────────────
+    # ── 6. MQTT publisher ─────────────────────────────────────────────────────
     mqtt_settings = MqttSettings()
     mqtt_publisher: MqttPublisher | None = None
     if mqtt_settings.enabled:
@@ -184,6 +181,7 @@ async def lifespan(app: FastAPI):
             password=mqtt_settings.password or None,
             tls=mqtt_settings.tls,
             discovery_prefix=mqtt_settings.discovery_prefix,
+            read_only=settings.read_only,
         )
         await mqtt_publisher.start()
         if await get_config(db, "mqtt_paused", "0") == "1":
@@ -212,19 +210,19 @@ async def lifespan(app: FastAPI):
         log.info("MQTT disabled — set MQTT_ENABLED=true to enable")
     app.state.mqtt_publisher = mqtt_publisher
 
-    # ── 8. Integration registry ───────────────────────────────────────────────
+    # ── 7. Integration registry ───────────────────────────────────────────────
     integration_registry = IntegrationRegistry(db, bus)
     await integration_registry.start_all()
     app.state.integration_registry = integration_registry
     log.info("Integration registry started")
 
-    # ── 8b. Notification trigger ──────────────────────────────────────────────
+    # ── 7b. Notification trigger ──────────────────────────────────────────────
     from .notifications.trigger import NotificationTrigger
     notif_trigger = NotificationTrigger(db, device_id or "")
     bus.subscribe(notif_trigger)
     log.info("NotificationTrigger registered")
 
-    # ── 9. Metrics archival loop ──────────────────────────────────────────────
+    # ── 8. Metrics archival loop ──────────────────────────────────────────────
     async def _archival_loop():
         while True:
             await asyncio.sleep(3600)
@@ -236,7 +234,7 @@ async def lifespan(app: FastAPI):
 
     archival_task = asyncio.create_task(_archival_loop(), name="metrics-archival")
 
-    # ── 10. Log cleanup loop ──────────────────────────────────────────────────
+    # ── 9. Log cleanup loop ──────────────────────────────────────────────────
     async def _cleanup_logs():
         while True:
             await asyncio.sleep(86400)

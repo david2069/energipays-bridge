@@ -68,7 +68,7 @@ document.addEventListener('alpine:init', () => {
     isDark: false,
     moreOpen: false,
     lastPollTs: 0,
-    safeMode: false,
+    readOnly: false,
     navCfg: {temp:1,grid:1,solar:1,heater:1,wifi:1,lora:1},
     _prevConnected: null,   // tracks last known state for transition toasts
     deviceId: '',
@@ -222,7 +222,7 @@ document.addEventListener('alpine:init', () => {
           }
         }
         this._prevConnected = this.connected
-        // safe_mode removed
+        this.readOnly = !!d.read_only
         if (d.device_id) { this.deviceId = d.device_id; this.selectedDeviceId = d.device_id }
         if (d.user_name) this.userName = d.user_name
         if (d.user_email) this.userEmail = d.user_email

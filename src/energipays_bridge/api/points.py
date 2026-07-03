@@ -23,7 +23,7 @@ async def latest_points(request: Request) -> dict:
         "last_error": request.app.state.poller.last_error if request.app.state.poller else "",
         "needs_setup": needs_setup,
         "device_id": getattr(request.app.state, "device_id", ""),
-        "safe_mode": getattr(request.app.state, "safe_mode", True),
+        "read_only": getattr(request.app.state.settings, "read_only", False),
         # User identity + device location extracted from device profile
         "user_email": pts.get("user.email", ""),
         "user_name": pts.get("user.name", ""),

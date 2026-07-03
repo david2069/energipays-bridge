@@ -9,6 +9,8 @@ function rulesTab() {
   return {
     rules: [],
     loading: false,
+    loadError: '',           // non-empty message when the last refresh() failed
+    _retryAttempt: 0,        // capped auto-retry counter (bridge-not-connected-yet race)
     showJSON: false,
     debugMode: false,
     debugBefore: null,
@@ -423,7 +425,22 @@ function rulesTab() {
       this.loading = true
       try {
         const r = await fetch('/api/rules')
-        if (!r.ok) return
+        if (!r.ok) {
+          // 503 = bridge hasn't finished connecting yet (fresh install / just after
+          // the setup wizard) — this used to render as a silent, permanent "No rules
+          // found" with no indication anything failed. Show it and retry a few times
+          // with backoff instead of leaving the user stuck.
+          let detail = ''
+          try { detail = (await r.json()).error || '' } catch (_) {}
+          this.loadError = detail || `Failed to load rules (HTTP ${r.status})`
+          if (this._retryAttempt < 5) {
+            this._retryAttempt++
+            setTimeout(() => this.refresh(), Math.min(2000 * this._retryAttempt, 10000))
+          }
+          return
+        }
+        this.loadError = ''
+        this._retryAttempt = 0
         const d = await r.json()
         const raw = Array.isArray(d) ? d : (d.data || [])
         // Server stores everyday rules as a single active_day template.
@@ -446,7 +463,8 @@ function rulesTab() {
         // Signal cards to expand the active rule after load
         const aid = this.activeRuleId()
         if (aid) window.dispatchEvent(new CustomEvent('rules-expand-active', { detail: aid }))
-      } catch (_) {
+      } catch (e) {
+        this.loadError = 'Network error loading rules'
         Alpine.store('app').addToast('Failed to load rules', 'error')
       } finally {
         this.loading = false

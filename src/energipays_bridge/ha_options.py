@@ -23,6 +23,7 @@ KEY_MAP = {
     "mqtt_username":       "MQTT_USERNAME",
     "mqtt_password":       "MQTT_PASSWORD",
     "log_level":           "LOG_LEVEL",
+    "read_only":           "READ_ONLY",
 }
 
 try:

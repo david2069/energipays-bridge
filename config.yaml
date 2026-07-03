@@ -1,6 +1,6 @@
 name: "Energipays Bridge"
 description: "Unofficial self-hosted integration and dashboard for Powerdiverter solar PV diverters using the Energipays Cloud."
-version: "1.1.1"
+version: "1.1.2"
 slug: "energipays_bridge"
 url: "https://github.com/david2069/energipays-bridge"
 init: false
@@ -35,6 +35,7 @@ options:
   mqtt_username: ""
   mqtt_password: ""
   log_level: "info"
+  read_only: false
 
 schema:
   energipays_email: str
@@ -47,6 +48,7 @@ schema:
   mqtt_username: str
   mqtt_password: str
   log_level: "list(trace|debug|info|notice|warning|error|fatal)"
+  read_only: bool
 
 panel_icon: "mdi:water-boiler"
 panel_title: "Energipays"

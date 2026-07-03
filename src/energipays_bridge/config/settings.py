@@ -36,6 +36,10 @@ class BridgeSettings(BaseSettings):
     admin_port: int = 8080
     admin_host: str = "0.0.0.0"
 
+    # Safety
+    read_only: bool = False                  # env-only, never DB-persisted; blocks all
+                                              # device-modifying commands (REST + MQTT)
+
     # Storage
     data_dir: str = "./data"                 # SQLite + cache files live here
     raw_age_days: int = 7                    # full-resolution retention

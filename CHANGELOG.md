@@ -1,6 +1,24 @@
-## Unreleased
+## 1.1.2 — Remove Safe Mode, add READ_ONLY, fix rules-tab 500s + NEM fetch hardening
 
 ### Fixed
+- **Safe Mode removed entirely** — it defaulted to blocking ALL device writes
+  on any fresh install (a new DB has no `safe_mode` row, so it read as `"1"`)
+  with no UI control to disable it, and MQTT commands bypassed it anyway, so
+  it never actually protected anything consistently. Removed the DB-backed
+  flag, the `_require_writes()` guard and its 8 REST call sites, the
+  `/api/config` allowed-key entry, and all UI/help-text references
+  (`main.py`, `api/devices.py`, `api/admin.py`, `api/points.py`,
+  `static/js/app.js`, `templates/tabs/raw.html`).
+- **Rules tab "No rules found" on fresh installs / just after setup** — routes
+  using the Energipays client (`GET /api/rules` and every other cloud route in
+  `api/devices.py`) crashed with `AttributeError` → unhandled 500 whenever the
+  client hadn't finished initialising yet (pre-credentials, or the window
+  between the wizard's "Save & connect" and poller start). The Rules tab's
+  `refresh()` silently swallowed that failure (`if (!r.ok) return`), rendering
+  a permanent, misleading empty list. Now: a shared `_get_client()` guard
+  returns a proper `503 {"detail": "bridge not connected yet"}`, and the Rules
+  tab shows the real error with a capped auto-retry (backoff up to 10s, 5
+  attempts) plus a manual "Retry now" button.
 - **NEM price fetch failing in Docker (TLS ConnectTimeout)** — the AEMO `5MIN`
   report is ~700 KB per call; concurrent fetches (no single-flight) piled up TLS
   handshakes inside the Docker NAT until they timed out. Switched to the
@@ -9,6 +27,20 @@
   misses share one upstream request, failure negative-caching (120s), and
   serve-stale-on-error. Verified: 12 concurrent `/api/weather-nem` requests →
   exactly one upstream call per host.
+
+### Added
+- **`READ_ONLY` env flag** (`BridgeSettings.read_only`, env-only, never
+  DB-persisted) — when set, every device-modifying command is refused with a
+  logged dry-run line showing the exact request that would have been sent
+  (e.g. `READ_ONLY: blocked POST /api/boost period=2`), instead of reaching
+  the cloud API or the physical device. Enforced at the REST guard
+  (`_check_writable()` in `api/devices.py`) and the MQTT command handler
+  (`MqttPublisher._handle_command`), so both write paths are covered
+  consistently — Safe Mode never covered MQTT at all.
+  `docker-compose.dev.yml` sets `READ_ONLY=true` by default, since the dev
+  instance runs against a real account and a real device. Also exposed as an
+  optional HA add-on config field (`read_only`, default `false`).
+- **Read-only badge** in the topbar whenever `READ_ONLY` is active.
 
 ---
 

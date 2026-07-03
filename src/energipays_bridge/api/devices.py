@@ -11,13 +11,13 @@ router = APIRouter()
 
 @router.get("/api/devices")
 async def list_devices(request: Request) -> dict:
-    client = request.app.state.client
+    client = _get_client(request)
     return await _thread(client.devices)
 
 
 @router.get("/api/device/status")
 async def device_status(request: Request) -> dict:
-    client = request.app.state.client
+    client = _get_client(request)
     device_id = request.app.state.device_id
     return await _thread(client.device_status, [device_id])
 
@@ -25,7 +25,7 @@ async def device_status(request: Request) -> dict:
 @router.get("/api/device/profile")
 async def device_profile(request: Request) -> dict:
     """Full device object from GET /api/devices/{id} — includes status_data, device_statuses, telemetryData."""
-    client = request.app.state.client
+    client = _get_client(request)
     device_id = request.app.state.device_id
     return await _thread(client.device, device_id)
 
@@ -48,8 +48,8 @@ _FIELD_LABELS = {
 
 @router.post("/api/device/set")
 async def set_device_status(body: DeviceStatusBody, request: Request) -> dict:
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"POST /api/device/set {body.fields or {'rule_id': body.rule_id}}")
     device_id = request.app.state.device_id
     if body.rule_id is not None:
         # Quick-set or clear active rule for a circuit (no status_data needed)
@@ -75,7 +75,7 @@ async def set_device_status(body: DeviceStatusBody, request: Request) -> dict:
 
 @router.get("/api/rules")
 async def list_rules(request: Request) -> dict:
-    client = request.app.state.client
+    client = _get_client(request)
     return await _thread(client.rules)
 
 
@@ -87,8 +87,8 @@ class CreateRuleBody(BaseModel):
 @router.post("/api/rules")
 async def create_rule(body: CreateRuleBody, request: Request) -> dict:
     import logging as _log
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"POST /api/rules name={body.name!r} type={body.type!r}")
     result = await _thread(client.create_rule, body.name, body.type)
     _log.getLogger(__name__).info("rules: created rule '%s' (type=%s)", body.name, body.type)
     return result
@@ -102,8 +102,8 @@ class RuleBody(BaseModel):
 async def update_rule(rule_id: str, body: RuleBody, request: Request) -> dict:
     import logging as _log
     from fastapi import HTTPException
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"PUT /api/rules/{rule_id} {body.rule}")
     result = await _thread(client.update_rule, rule_id, body.rule)
     # _handle() returns {"error": ..., "status": N} on cloud HTTP errors (doesn't raise)
     if isinstance(result, dict) and "error" in result:
@@ -127,8 +127,8 @@ class RuleNameBody(BaseModel):
 async def rename_rule(rule_id: str, body: RuleNameBody, request: Request) -> dict:
     import logging as _log
     from fastapi import HTTPException
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"PUT /api/rules/{rule_id}/name name={body.name!r}")
     result = await _thread(client.rename_rule, rule_id, body.name)
     if isinstance(result, dict) and "error" in result:
         status = result.get("status", 502)
@@ -144,8 +144,8 @@ async def rename_rule(rule_id: str, body: RuleNameBody, request: Request) -> dic
 @router.delete("/api/rules/{rule_id}")
 async def delete_rule(rule_id: str, request: Request) -> dict:
     import logging as _log
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"DELETE /api/rules/{rule_id}")
     result = await _thread(client.delete_rule, rule_id)
     _log.getLogger(__name__).info("rules: deleted rule %s", rule_id)
     return result
@@ -157,15 +157,15 @@ class DeviceSwitchBody(BaseModel):
 
 @router.get("/api/device/list")
 async def list_devices_v2(request: Request) -> dict:
-    client = request.app.state.client
+    client = _get_client(request)
     return await _thread(client.devices)
 
 
 @router.post("/api/device/switch")
 async def switch_device(body: DeviceSwitchBody, request: Request) -> dict:
     import logging as _log
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"POST /api/device/switch device_id={body.device_id!r}")
 
     raw = await _thread(client.devices)
     devices: list = raw.get("data", raw) if isinstance(raw, dict) else raw
@@ -206,10 +206,10 @@ class BoostBody(BaseModel):
 
 @router.post("/api/boost")
 async def boost(body: BoostBody, request: Request):
-    _require_writes(request)
     if body.period not in (1, 2, 3):
         raise HTTPException(400, "period must be 1, 2, or 3")
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, f"POST /api/boost period={body.period}")
     device_id = request.app.state.device_id
     data_server = request.app.state.data_server
     result = await _thread(client.boost_device, device_id, data_server, period=body.period)
@@ -226,8 +226,8 @@ async def boost(body: BoostBody, request: Request):
 
 @router.post("/api/boost/cancel")
 async def cancel_boost(request: Request):
-    _require_writes(request)
-    client = request.app.state.client
+    client = _get_client(request)
+    _check_writable(request, "POST /api/boost/cancel")
     device_id = request.app.state.device_id
     data_server = request.app.state.data_server
     result = await _thread(client.cancel_boost, device_id, data_server)
@@ -248,7 +248,26 @@ async def _thread(fn, *args, **kwargs):
     return await asyncio.to_thread(fn, *args, **kwargs)
 
 
-def _require_writes(request: Request) -> None:
-    safe = request.app.state.safe_mode
-    if safe:
-        raise HTTPException(403, "Safe Mode is enabled — writes are disabled")
+def _get_client(request: Request):
+    """Return the EnergipaysClient, or 503 if the bridge hasn't finished connecting yet.
+
+    Fresh installs (pre-credentials) and the window between the setup wizard's
+    "Save & connect" and poller-init completing both leave app.state.client as
+    None; without this guard those routes crash with AttributeError -> 500,
+    which the Rules tab (and others) render as a misleading empty state.
+    """
+    client = request.app.state.client
+    if client is None:
+        raise HTTPException(503, "bridge not connected yet")
+    return client
+
+
+def _check_writable(request: Request, description: str) -> None:
+    """Block device-modifying commands when READ_ONLY is set.
+
+    Logs the exact write that would have been sent — useful for dry-run
+    debugging of this reverse-engineered API — then refuses with 403.
+    """
+    if request.app.state.settings.read_only:
+        log.warning("READ_ONLY: blocked %s", description)
+        raise HTTPException(403, f"Bridge is read-only (READ_ONLY=true) — blocked: {description}")

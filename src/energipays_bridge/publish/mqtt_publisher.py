@@ -40,6 +40,7 @@ class MqttPublisher:
         password: str | None = None,
         tls: bool = False,
         discovery_prefix: str = "homeassistant",
+        read_only: bool = False,
     ) -> None:
         self._host = host
         self._port = port
@@ -47,6 +48,7 @@ class MqttPublisher:
         self._password = password
         self._tls = tls
         self._discovery_prefix = discovery_prefix
+        self._read_only = read_only
 
         self._queue: asyncio.Queue[tuple[str, str, bool]] = asyncio.Queue(maxsize=_QUEUE_MAX)
         self._client: mqtt.Client | None = None
@@ -273,6 +275,13 @@ class MqttPublisher:
             return
         slug = topic[len(prefix):]
         log.info("cmd (MQTT): %s = %r", slug, payload)
+
+        if self._read_only:
+            log.warning("READ_ONLY: blocked MQTT cmd %s = %r", slug, payload)
+            await self._publish_cmd_result(
+                f"{slug} → {payload!r}: BLOCKED (bridge is read-only)"
+            )
+            return
 
         try:
             if slug == "power_diverter_sw":

@@ -96,7 +96,15 @@
   </template>
 
   <div x-show="loading" class="text-slate-500 text-sm py-8 text-center">Loading rules…</div>
-  <div x-show="!loading && filteredRules().length === 0" class="text-slate-500 text-sm py-8 text-center">No rules found.</div>
+  <div x-show="!loading && loadError" class="text-sm py-8 text-center space-y-2">
+    <div class="text-amber-400" x-text="loadError"></div>
+    <div class="text-slate-500 text-xs" x-show="_retryAttempt > 0 && _retryAttempt < 5">Retrying…</div>
+    <button @click="_retryAttempt = 0; refresh()"
+            class="text-xs px-3 py-1.5 rounded border border-slate-600 text-slate-300 hover:border-slate-400 transition-colors">
+      Retry now
+    </button>
+  </div>
+  <div x-show="!loading && !loadError && filteredRules().length === 0" class="text-slate-500 text-sm py-8 text-center">No rules found.</div>
 
   <!-- Rule cards -->
   <div class="space-y-2" x-show="!loading">
