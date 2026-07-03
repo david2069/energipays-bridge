@@ -1111,6 +1111,23 @@
             <span class="font-semibold text-slate-700 dark:text-slate-300"
                   x-text="$store.app.points['ext.battery_capacity_kwh'] != null ? fmt($store.app.points['ext.battery_capacity_kwh'],'kWh',1) : '—'"></span>
           </div>
+          <!-- Energy Available (conditional) -->
+          <template x-if="$store.app.points['ext.energy_available_kwh'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Energy Available</span>
+              <span class="font-semibold text-green-600 dark:text-green-400"
+                    x-text="fmt($store.app.points['ext.energy_available_kwh'],'kWh',1)"></span>
+            </div>
+          </template>
+          <!-- Battery State (conditional, derived from power sign) -->
+          <template x-if="$store.app.points['ext.battery_state']">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Battery State</span>
+              <span class="font-medium capitalize"
+                    :class="$store.app.points['ext.battery_state']==='charging' ? 'text-green-500 dark:text-green-400' : $store.app.points['ext.battery_state']==='discharging' ? 'text-amber-500 dark:text-amber-400' : 'text-slate-500'"
+                    x-text="$store.app.points['ext.battery_state']"></span>
+            </div>
+          </template>
           <!-- Grid Status (conditional) -->
           <template x-if="$store.app.points['ext.battery_grid_status']">
             <div class="flex items-center justify-between py-1.5">

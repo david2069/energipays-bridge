@@ -70,14 +70,16 @@ MODEL_AUTO_POINTS: dict[int, list[tuple[int, str, str, int | None, str]]] = {
     113: [(12, "W", "float32", None, "solar_power_w")],
     # Model 701 DER AC Measurement — W (int32) at offset 0, W_SF at 2
     701: [(0, "W", "int32", 2, "solar_power_w")],
-    # Model 713 DER Storage Capacity — SoC at data[2], SoH at data[3], Pct_SF at data[6]
-    # WHRtg (Wh) at data[0], WH_SF at data[5]
+    # Model 713 DER Storage Capacity
+    # data[0]=WHRtg, data[1]=WHAvail, data[2]=SoC, data[3]=SoH, data[5]=WH_SF, data[6]=Pct_SF
     713: [
-        (2, "SoC",   "uint16", 6, "battery_soc"),
-        (3, "SoH",   "uint16", 6, "battery_soh"),
-        (0, "WHRtg", "uint16", 5, "battery_capacity_kwh", 0.001),  # Wh → kWh
+        (0, "WHRtg",   "uint16", 5, "battery_capacity_kwh", 0.001),  # Wh → kWh
+        (1, "WHAvail", "uint16", 5, "energy_available_kwh", 0.001),  # Wh → kWh
+        (2, "SoC",     "uint16", 6, "battery_soc"),
+        (3, "SoH",     "uint16", 6, "battery_soh"),
     ],
     # Model 714 DER DC Measurement — DCW at data[4], DCW_SF at data[15]
+    # Sign: positive = charging (power absorbed), negative = discharging (power injected)
     714: [
         (4, "DCW", "int16", 15, "battery_power_w"),
     ],

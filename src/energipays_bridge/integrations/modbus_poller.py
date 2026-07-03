@@ -144,4 +144,9 @@ class ModbusPoller(IntegrationPoller):
             values = await read_registers(self.host, self.port, self.unit_id, fc, address, count, reg_type)
             if values:
                 result[m.target_metric] = values[0] * scale
+        # Derive battery_state from battery_power_w sign (M714.DCW convention:
+        # positive = charging, negative = discharging; FranklinWH M713.Sta always 0)
+        if "battery_power_w" in result and "battery_state" not in result:
+            pw = result["battery_power_w"]
+            result["battery_state"] = "charging" if pw > 50 else "discharging" if pw < -50 else "idle"
         return result
