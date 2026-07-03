@@ -163,32 +163,6 @@
       </template>
     </div>
 
-    <!-- Metrics dropdown -->
-    <div class="relative" x-data="{open:false}" @click.outside="open=false">
-      <button @click="open=!open"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:text-slate-100 transition-colors">
-        <span>Metrics</span>
-        <span class="bg-brand/20 text-brand rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-              x-text="activeCloudSeries.length"></span>
-        <span class="text-slate-500">▾</span>
-      </button>
-      <div x-show="open" x-cloak
-           class="absolute left-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-20 w-52">
-        <div class="py-1">
-          <template x-for="s in series" :key="s.key">
-            <label class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-800 cursor-pointer select-none">
-              <input type="checkbox"
-                     :checked="activeCloudSeries.includes(s.key)"
-                     @change="toggleSeries(s.key)"
-                     class="accent-brand rounded" />
-              <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${s.color}`"></span>
-              <span class="text-xs text-slate-300" x-text="s.label"></span>
-            </label>
-          </template>
-        </div>
-      </div>
-    </div>
-
     <!-- Chart style toggle -->
     <div class="flex rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700">
       <button @click="setChartStyle('bars')"
@@ -203,14 +177,23 @@
       </button>
     </div>
 
-    <!-- Flat toggle (suppress negatives — energipays.com style) -->
-    <button @click="toggleCloudFlat()"
-            :class="cloudFlat ? 'bg-brand/20 text-brand border-brand/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors"
-            title="Flat: suppress negatives (matches energipays.com chart style)">Flat</button>
-
-    <!-- Export + Refresh (grouped right) -->
+    <!-- Export + Refresh + Energy totals + Settings (grouped right) -->
     <div class="flex items-center gap-1.5 ml-auto">
+      <!-- Energy totals modal button (analytics icon) -->
+      <button @click="openEnergyModal()" title="Energy totals for this date"
+              class="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-brand hover:border-brand/40 transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 28 28" fill="currentColor">
+          <path d="M23.19 21.55a10.51 10.51 0 10-1.65 1.65l3.64 3.64 1.66-1.66-3.65-3.63zm-4.43 2.46a7.25 7.25 0 110-14.5 7.25 7.25 0 010 14.5zm-.38-9.75l3.17 4.76-1.89 1.38-3.12-5.5L14.82 12l3.57-2.25.95 1.51h-1.96zM21.36 12.34l-3.02 2.04c.75.33 1.4.84 1.87 1.49L24.94 6l-1.89-1.38-1.69 2.7-3.25 2.18a7.18 7.18 0 011.35.84z"/>
+        </svg>
+      </button>
+      <!-- Chart settings modal button (gear icon) -->
+      <button @click="settingsModal = true" title="Chart settings"
+              class="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-brand hover:border-brand/40 transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </button>
       <div class="relative" x-data="{open:false}">
         <button @click="open=!open" @click.outside="open=false"
                 class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors">
@@ -254,6 +237,135 @@
         Loading…
       </div>
       <canvas id="analyticsChart" style="width:100%;height:100%"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Chart Settings modal ─────────────────────────────────────────────── -->
+  <div x-show="settingsModal" x-cloak
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+       @keydown.escape.window="settingsModal = false">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="settingsModal = false"></div>
+    <div x-data="{ _dt: cloudDataType, _gr: cloudGranularity }"
+         class="relative bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm">
+      <div class="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+        <h3 class="text-base font-semibold text-white">Chart settings</h3>
+        <button @click="settingsModal = false" class="text-slate-500 hover:text-slate-300 transition-colors">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="px-5 py-4 space-y-5">
+        <!-- Data type -->
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Chart data type</p>
+          <div class="flex rounded-xl overflow-hidden border border-slate-700">
+            <button @click="_dt='power'"
+                    :class="_dt==='power' ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                    class="flex-1 py-2.5 text-sm font-medium transition-colors">Power</button>
+            <button @click="_dt='energy'"
+                    :class="_dt==='energy' ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                    class="flex-1 py-2.5 text-sm font-medium transition-colors border-l border-slate-700">Energy</button>
+          </div>
+        </div>
+        <!-- Granularity -->
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">View chart data by</p>
+          <div class="flex rounded-xl overflow-hidden border border-slate-700">
+            <button @click="_gr='15m'"
+                    :class="_gr==='15m' ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                    class="flex-1 py-2.5 text-sm font-medium transition-colors">15 min</button>
+            <button @click="_gr='1h'"
+                    :class="_gr==='1h' ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                    class="flex-1 py-2.5 text-sm font-medium transition-colors border-l border-slate-700">1 hour</button>
+          </div>
+        </div>
+        <!-- Metric visibility -->
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Metrics</p>
+          <div class="space-y-0.5 max-h-52 overflow-y-auto pr-1">
+            <template x-for="s in series" :key="s.key">
+              <label class="flex items-center justify-between py-2 px-1 hover:bg-slate-800/60 rounded-lg cursor-pointer select-none">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-3 h-3 rounded-full shrink-0" :style="`background:${s.color}`"></span>
+                  <span class="text-sm text-slate-300" x-text="s.label"></span>
+                </div>
+                <button @click="toggleSeries(s.key)"
+                        :class="activeCloudSeries.includes(s.key) ? 'bg-brand' : 'bg-slate-700'"
+                        class="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none">
+                  <span :class="activeCloudSeries.includes(s.key) ? 'translate-x-4' : 'translate-x-0.5'"
+                        class="inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transform transition-transform duration-200"></span>
+                </button>
+              </label>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-3 px-5 py-4 border-t border-slate-700">
+        <button @click="settingsModal = false"
+                class="flex-1 py-2.5 rounded-xl text-sm text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 transition-colors">
+          Cancel
+        </button>
+        <button @click="saveChartSettings(_dt, _gr)"
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-brand text-white hover:bg-brand/80 transition-colors">
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Energy Totals modal ────────────────────────────────────────────────── -->
+  <div x-show="energyModal.open" x-cloak
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+       @keydown.escape.window="energyModal.open = false">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="energyModal.open = false"></div>
+    <div class="relative bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm">
+      <div class="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-semibold text-white">Energy totals</h3>
+          <p class="text-xs text-slate-400 mt-0.5" x-text="energyModal.date"></p>
+        </div>
+        <button @click="energyModal.open = false" class="text-slate-500 hover:text-slate-300 transition-colors">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Loading -->
+      <div x-show="energyModal.loading" class="flex items-center justify-center py-12">
+        <svg class="w-6 h-6 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </div>
+      <!-- Error -->
+      <div x-show="!energyModal.loading && energyModal.error"
+           class="px-5 py-6 text-sm text-red-400 text-center" x-text="energyModal.error"></div>
+      <!-- Rows -->
+      <div x-show="!energyModal.loading && !energyModal.error && energyModal.rows.length"
+           class="px-5 py-2">
+        <div class="flex items-center justify-between px-1 py-1.5 mb-1 border-b border-slate-700">
+          <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Metric</span>
+          <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">kWh</span>
+        </div>
+        <template x-for="row in energyModal.rows" :key="row.key">
+          <div class="flex items-center justify-between py-2.5 border-b border-slate-800/60 last:border-0">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${row.color}`"></span>
+              <span class="text-sm text-slate-300" x-text="row.label"></span>
+            </div>
+            <span class="text-sm font-semibold tabular-nums"
+                  :class="row.value >= 0 ? 'text-slate-100' : 'text-amber-400'"
+                  x-text="Math.abs(row.value) < 10 ? row.value.toFixed(2) : row.value.toFixed(1)"></span>
+          </div>
+        </template>
+      </div>
+      <div class="px-5 py-3 border-t border-slate-700">
+        <button @click="energyModal.open = false"
+                class="w-full py-2.5 rounded-xl text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+          Close
+        </button>
+      </div>
     </div>
   </div>
 

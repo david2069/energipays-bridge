@@ -56,7 +56,12 @@ function analyticsTab() {
     cloudSpan: '1d',        // '1d' | '7d' | '30d'
     cloudPhase: 'sum',      // 'sum' | 'l1' | 'l2' | 'l3'
     cloudFlat: localStorage.getItem('analyticsCloudFlat') !== '0',  // true = suppress negatives (energipays.com style)
+    cloudDataType: localStorage.getItem('analyticsDataType') || 'power',   // 'power' | 'energy'
+    cloudGranularity: localStorage.getItem('analyticsGranularity') || '15m', // '15m' | '1h'
     cloudError: '',
+    // ── modals ────────────────────────────────────────────────────────────
+    settingsModal: false,
+    energyModal: { open: false, loading: false, date: '', rows: [], error: '' },
 
     async init() {
       const now = new Date()
@@ -94,6 +99,8 @@ function analyticsTab() {
       this.$watch('chartStyle',         _reload)
       this.$watch('cloudPhase',         _reload)
       this.$watch('cloudFlat',          _reload)
+      this.$watch('cloudDataType',      _reload)
+      this.$watch('cloudGranularity',   _reload)
       this.$watch('activeSeries',       _reload)
       this.$watch('activeCloudSeries',  _reload)
 
@@ -218,6 +225,56 @@ function analyticsTab() {
     toggleCloudFlat() {
       this.cloudFlat = !this.cloudFlat
       localStorage.setItem('analyticsCloudFlat', this.cloudFlat ? '1' : '0')
+    },
+
+    saveChartSettings(dataType, granularity) {
+      this.cloudDataType = dataType
+      this.cloudGranularity = granularity
+      localStorage.setItem('analyticsDataType', dataType)
+      localStorage.setItem('analyticsGranularity', granularity)
+      this.settingsModal = false
+    },
+
+    async openEnergyModal() {
+      const m = this.energyModal
+      m.open = true
+      m.loading = true
+      m.error = ''
+      m.rows = []
+      m.date = this.cloudDate
+      try {
+        const url = `/api/cloud/stats?date_from=${this.cloudDate}&date_to=${this.cloudDate}&data_type=energy&phase=${this.cloudPhase}`
+        const r = await fetch(url)
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`) }
+        const json = await r.json()
+        // Parse totals — API returns { raw: { analytics: { ... } | { data: [...] } } }
+        const raw = json.raw || json
+        const LABELS = { EIP:'Home import', EEP:'Home export', SP:'Solar gen.', GLPH:'Diverted heater', GLPE:'Diverted extra', OLPH:'Heater', OLPE:'Extra plug', WHD:'Off-Peak heater', EPD:'Off-Peak extra', t1:'T1 Bot (°C)', t2:'T2 Mid (°C)', t3:'T3 Top (°C)', _tAvg:'Avg T (°C)' }
+        const COLORS = { EIP:'#22d3ee', EEP:'#f59e0b', SP:'#4ade80', GLPH:'#0891b2', GLPE:'#059669', OLPH:'#ec4899', OLPE:'#8b5cf6', WHD:'#f97316', EPD:'#a78bfa', t1:'#60a5fa', t2:'#fb923c', t3:'#f43f5e', _tAvg:'#e879f9' }
+        // Build totals from time-series data
+        const totals = {}
+        let rows
+        if (Array.isArray(raw.data)) rows = raw.data
+        else if (raw.analytics) rows = Object.values(raw.analytics)
+        else rows = []
+        for (const row of rows) {
+          for (const [k, v] of Object.entries(row)) {
+            if (k === 'time' || k === 'date' || typeof v !== 'number') continue
+            totals[k] = (totals[k] || 0) + v
+          }
+        }
+        // Also check if API returned a single-row summary
+        const single = raw.totals || raw.summary || (rows.length === 1 ? rows[0] : null)
+        if (single) { for (const [k, v] of Object.entries(single)) { if (typeof v === 'number') totals[k] = v } }
+        m.rows = Object.entries(LABELS)
+          .filter(([k]) => totals[k] != null && Math.abs(totals[k]) > 0.001)
+          .map(([k, label]) => ({ key: k, label, color: COLORS[k] || '#94a3b8', value: totals[k] }))
+        if (!m.rows.length) m.error = 'No energy data returned for this date.'
+      } catch(e) {
+        m.error = e.message
+      } finally {
+        m.loading = false
+      }
     },
 
     // ── toggle mode ────────────────────────────────────────────────────────
@@ -359,7 +416,7 @@ function analyticsTab() {
       this.cloudError = ''
       _chartData = []
       try {
-        const url = `/api/cloud/stats?date_from=${this._cloudDateFrom()}&date_to=${this.cloudDate}&data_type=power&phase=${this.cloudPhase}`
+        const url = `/api/cloud/stats?date_from=${this._cloudDateFrom()}&date_to=${this.cloudDate}&data_type=${this.cloudDataType}&phase=${this.cloudPhase}`
         const r = await fetch(url)
         if (!r.ok) {
           const err = await r.json().catch(() => ({}))
