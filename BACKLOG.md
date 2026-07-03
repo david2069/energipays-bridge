@@ -57,55 +57,9 @@ poller init (fresh install pre-credentials, or the window between wizard
 
 ---
 
-## Package 2 — Solar forecast scaling + cloud-default charts + throttling leftovers
-
-**Status: approved, queued** (task chip exists)
-
-### 2a. [defect] Solar PV forecast is unscaled irradiance (confirmed too low)
-`api/solar.py` returns raw horizontal `shortwave_radiation` W/m²;
-`dashboard_tab.js` `_solarSummarize` (~167-176) shows W/m²÷1000 as "kW" — i.e.
-a 1 kWp horizontal array. No system size or orientation stored anywhere.
-- New config: `solar_kwp`, `solar_tilt_deg` (~22 default), `solar_azimuth_deg`
-  — app_config storage like weather_lat/lon; UI fields near weather settings.
-  Open-meteo azimuth convention: 0=south, −90=east, 90=west, ±180=north
-  (Sydney roofs typically north → 180)
-- `solar.py`: switch to `global_tilted_irradiance` with `&tilt=&azimuth=`
-  (consider api.open-meteo.com forecast API for today+7d);
-  estimated kW = GTI/1000 × kWp × ~0.85 performance ratio; keep temp_c for
-  future temperature derating
-- UI: display scaled kW/kWh; keep "Actual" overlay; if kWp unset show a
-  "Set system size in Settings" hint instead of silently-wrong numbers
-
-### 2b. [enh] History charts: default to cloud, toggle for local
-`dashboard_tab.js` ~296-301: Hot Water 24h modal reads ONLY local SQLite
-(`/api/metrics/history`) — empty on fresh installs, permanently empty on HA
-add-ons (metrics recording is opt-in/off there).
-- Cloud/Local toggle, default Cloud, via existing `/api/cloud/stats` proxy
-  (confirm which data_type/series carry water temps + heater power —
-  Analytics.csv + HAR files in repo root have reference payloads)
-- Apply in BOTH locations: Hot Water modal (main card top-right chart icon)
-  and the Heater sub-tab chart in the Power Flow card
-- Persist choice to localStorage; auto-fallback with a small note when the
-  chosen source errors or is empty
-
-### 2c. [enh] Throttling leftovers
-`weather_nem.py` is DONE (commit `1831f9f`: single-flight, negative cache,
-stale serving, shared client, 12 KB ELEC_NEM_SUMMARY endpoint) — do not redo;
-reuse its `_cached_fetch` pattern.
-- `api/solar.py`: adopt the same helper (consider extracting to a shared util)
-- `dashboard_tab.js init()` registers `setInterval(_fetchWeatherNem, 300000)`
-  (~504) and `setInterval(fetchSolar, 3600000)` (~506) PER dashboard mount →
-  move to the global Alpine app store, guarded single registration
-- `api/cloud_stats.py`: ~60s TTL cache keyed by (date_from, date_to,
-  data_type, phase)
-- `poller.py`: exponential backoff + cap + jitter on consecutive failures
-  (currently fixed 60s retry forever)
-
----
-
 ## Package 3 — HA-native MQTT setup: Supervisor auto-discovery + working wizard step
 
-**Status: proposed** (from HA add-on install feedback 2026-07-04)
+**Status: approved — PRIORITY: HIGH** (user, 2026-07-04; from HA add-on install feedback)
 
 ### 3a. [defect] Wizard MQTT step is decorative and its guidance is wrong for HA
 - The step 2 fields (MQTT_HOST/MQTT_PORT) are never persisted — `advance()`
@@ -148,6 +102,52 @@ the existing Settings ON/OFF toggle is only a runtime pause once enabled.
   ships, at least point to Settings → Add-ons → Configuration → mqtt_enabled)
 - (Hardcoded "Same broker as the FranklinWH Modbus Bridge." sentence already
   removed on main, 2026-07-04)
+
+---
+
+## Package 2 — Solar forecast scaling + cloud-default charts + throttling leftovers
+
+**Status: approved, queued — priority: normal, after Package 3** (task chip exists)
+
+### 2a. [defect] Solar PV forecast is unscaled irradiance (confirmed too low)
+`api/solar.py` returns raw horizontal `shortwave_radiation` W/m²;
+`dashboard_tab.js` `_solarSummarize` (~167-176) shows W/m²÷1000 as "kW" — i.e.
+a 1 kWp horizontal array. No system size or orientation stored anywhere.
+- New config: `solar_kwp`, `solar_tilt_deg` (~22 default), `solar_azimuth_deg`
+  — app_config storage like weather_lat/lon; UI fields near weather settings.
+  Open-meteo azimuth convention: 0=south, −90=east, 90=west, ±180=north
+  (Sydney roofs typically north → 180)
+- `solar.py`: switch to `global_tilted_irradiance` with `&tilt=&azimuth=`
+  (consider api.open-meteo.com forecast API for today+7d);
+  estimated kW = GTI/1000 × kWp × ~0.85 performance ratio; keep temp_c for
+  future temperature derating
+- UI: display scaled kW/kWh; keep "Actual" overlay; if kWp unset show a
+  "Set system size in Settings" hint instead of silently-wrong numbers
+
+### 2b. [enh] History charts: default to cloud, toggle for local
+`dashboard_tab.js` ~296-301: Hot Water 24h modal reads ONLY local SQLite
+(`/api/metrics/history`) — empty on fresh installs, permanently empty on HA
+add-ons (metrics recording is opt-in/off there).
+- Cloud/Local toggle, default Cloud, via existing `/api/cloud/stats` proxy
+  (confirm which data_type/series carry water temps + heater power —
+  Analytics.csv + HAR files in repo root have reference payloads)
+- Apply in BOTH locations: Hot Water modal (main card top-right chart icon)
+  and the Heater sub-tab chart in the Power Flow card
+- Persist choice to localStorage; auto-fallback with a small note when the
+  chosen source errors or is empty
+
+### 2c. [enh] Throttling leftovers
+`weather_nem.py` is DONE (commit `1831f9f`: single-flight, negative cache,
+stale serving, shared client, 12 KB ELEC_NEM_SUMMARY endpoint) — do not redo;
+reuse its `_cached_fetch` pattern.
+- `api/solar.py`: adopt the same helper (consider extracting to a shared util)
+- `dashboard_tab.js init()` registers `setInterval(_fetchWeatherNem, 300000)`
+  (~504) and `setInterval(fetchSolar, 3600000)` (~506) PER dashboard mount →
+  move to the global Alpine app store, guarded single registration
+- `api/cloud_stats.py`: ~60s TTL cache keyed by (date_from, date_to,
+  data_type, phase)
+- `poller.py`: exponential backoff + cap + jitter on consecutive failures
+  (currently fixed 60s retry forever)
 
 ---
 
