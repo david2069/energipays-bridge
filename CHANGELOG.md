@@ -1,3 +1,17 @@
+## Unreleased
+
+### Fixed
+- **NEM price fetch failing in Docker (TLS ConnectTimeout)** — the AEMO `5MIN`
+  report is ~700 KB per call; concurrent fetches (no single-flight) piled up TLS
+  handshakes inside the Docker NAT until they timed out. Switched to the
+  `ELEC_NEM_SUMMARY` report (~12 KB, has PRICE per region), added a shared
+  httpx client (connection reuse), per-key single-flight so concurrent cache
+  misses share one upstream request, failure negative-caching (120s), and
+  serve-stale-on-error. Verified: 12 concurrent `/api/weather-nem` requests →
+  exactly one upstream call per host.
+
+---
+
 ## 1.1.1 — AES key: real root cause fixed + in-wizard diagnostics + browser fallback
 
 ### Fixed

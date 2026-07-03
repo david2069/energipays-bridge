@@ -1,6 +1,8 @@
 """Weather (Open-Meteo) + Australian NEM spot-price overlay."""
 from __future__ import annotations
 
+import asyncio
+import logging
 import time
 from typing import Any
 
@@ -8,13 +10,57 @@ import httpx
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["weather-nem"])
 
 # ---------------------------------------------------------------------------
 # In-memory cache  {cache_key: (timestamp, data)}
+# Last good value is kept past its TTL so it can be served stale while the
+# upstream is failing (negative-cached for _FAIL_TTL between attempts).
 # ---------------------------------------------------------------------------
 _cache: dict[str, tuple[float, Any]] = {}
 _TTL = 300  # seconds
+_FAIL_TTL = 120  # seconds between retries after an upstream failure
+_fail: dict[str, float] = {}
+_locks: dict[str, asyncio.Lock] = {}
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Shared AsyncClient — reuses connections instead of a TLS handshake per call."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=10)
+    return _client
+
+
+async def _cached_fetch(key: str, fetch) -> Any | None:
+    """Single-flight cached fetch.
+
+    Concurrent callers on a cache miss share one upstream request (burst-safe);
+    failures are negative-cached and the last good value is served stale.
+    """
+    entry = _cache.get(key)
+    if entry and (time.time() - entry[0]) < _TTL:
+        return entry[1]
+    lock = _locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        entry = _cache.get(key)  # re-check: the lock holder may have refreshed
+        if entry and (time.time() - entry[0]) < _TTL:
+            return entry[1]
+        if (time.time() - _fail.get(key, 0)) < _FAIL_TTL:
+            return entry[1] if entry else None
+        try:
+            value = await fetch(_get_client())
+            _cache[key] = (time.time(), value)
+            _fail.pop(key, None)
+            return value
+        except Exception as exc:
+            _fail[key] = time.time()
+            log.warning("weather-nem: %s fetch failed — %s: %s (%s)", key,
+                        type(exc).__name__, exc,
+                        "serving stale" if entry else "no stale value")
+            return entry[1] if entry else None
 
 _WMO_DESCRIPTIONS: dict[int, str] = {
     0: "Clear sky",
@@ -64,70 +110,44 @@ def _wmo_description(code: int) -> str:
         return "Showers"
     return "Thunderstorm"
 
-def _cache_get(key: str) -> Any | None:
-    entry = _cache.get(key)
-    if entry and (time.time() - entry[0]) < _TTL:
-        return entry[1]
-    return None
-
-def _cache_set(key: str, value: Any) -> None:
-    _cache[key] = (time.time(), value)
-
-
 async def _fetch_weather(lat: float, lon: float) -> dict | None:
-    cache_key = f"weather:{lat:.4f}:{lon:.4f}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
-    try:
+    async def go(client: httpx.AsyncClient) -> dict:
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={lat}&longitude={lon}"
             f"&current=temperature_2m,weathercode&timezone=auto"
         )
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
-        current = data.get("current", {})
+        resp = await client.get(url)
+        resp.raise_for_status()
+        current = resp.json().get("current", {})
         code = int(current.get("weathercode", 0))
-        result = {
+        return {
             "temp_c": round(float(current.get("temperature_2m", 0)), 1),
             "code": code,
             "description": _wmo_description(code),
         }
-        _cache_set(cache_key, result)
-        return result
-    except Exception:
-        return None
+    return await _cached_fetch(f"weather:{lat:.4f}:{lon:.4f}", go)
 
 
 async def _fetch_nem(region: str) -> dict | None:
-    cache_key = f"nem:{region}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
-    try:
-        url = "https://visualisations.aemo.com.au/aemo/apps/api/report/5MIN"
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json={"timeScale": ["5MIN"]})
-            resp.raise_for_status()
-            data = resp.json()
-        rows = data.get("5MIN", [])
+    async def go(client: httpx.AsyncClient) -> dict:
+        # ELEC_NEM_SUMMARY is ~12 KB with a PRICE per region — the 5MIN report
+        # is ~700 KB per call, which made concurrent fetches time out their TLS
+        # handshakes inside the Docker NAT.
+        url = "https://visualisations.aemo.com.au/aemo/apps/api/report/ELEC_NEM_SUMMARY"
+        resp = await client.post(url, json={})
+        resp.raise_for_status()
+        rows = resp.json().get("ELEC_NEM_SUMMARY", [])
         matching = [r for r in rows if r.get("REGIONID") == region]
         if not matching:
-            return None
-        row = matching[-1]
-        rrp = float(row.get("RRP", 0))
-        result = {
+            raise RuntimeError(f"region {region} not present in NEM summary")
+        rrp = float(matching[-1].get("PRICE", 0))
+        return {
             "rrp_mwh": round(rrp, 2),
             "rrp_kwh": round(rrp / 1000, 6),
             "region": region,
         }
-        _cache_set(cache_key, result)
-        return result
-    except Exception:
-        return None
+    return await _cached_fetch(f"nem:{region}", go)
 
 
 @router.get("/api/weather-nem")
