@@ -11,3 +11,13 @@ data/
 *.db
 .token_cache.json
 .key_cache.json
+*.har
+*.csv
+*.DS_Store
+*.svg.bak
+*.png.bak
+*.html.bak
+Energipays.html
+LogoSmallPREV.*
+pdIcon.*
+green-house.*
