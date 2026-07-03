@@ -549,16 +549,11 @@
           <text text-anchor="middle" y="-5" font-size="10" font-weight="700"
                 :fill="($store.app.points['ext.battery_soc']||0)>50 ? '#4ade80' : ($store.app.points['ext.battery_soc']||0)>20 ? '#f59e0b' : '#ef4444'"
                 x-text="(+$store.app.points['ext.battery_soc']||0).toFixed(0)+'%'"></text>
-          <!-- kW inside ring (below SoC) -->
-          <text text-anchor="middle" y="6" font-size="6" font-weight="bold"
+          <!-- Battery power kW inside ring (below SoC) -->
+          <text text-anchor="middle" y="5" font-size="6" font-weight="bold"
                 :fill="$store.app.isDark ? '#94a3b8' : '#64748b'"
                 x-show="Math.abs($store.app.points['ext.battery_power_w']||0) > 50"
                 x-text="(Math.abs($store.app.points['ext.battery_power_w']||0)/1000).toFixed(1)+' kW '+(($store.app.points['ext.battery_power_w']||0)>0?'↓':'↑')"></text>
-          <!-- Home Load below battery kW -->
-          <text text-anchor="middle" y="16" font-size="5.5" font-weight="bold"
-                :fill="$store.app.isDark ? '#f1f5f9' : '#334155'"
-                x-show="$store.app.points['ext.home_load_w'] != null"
-                x-text="'⌂ '+(($store.app.points['ext.home_load_w']||0)/1000).toFixed(2)+' kW'"></text>
           <!-- Mode / grid status label below ring -->
           <text text-anchor="middle" y="32" font-size="6.5" font-weight="500"
                 :fill="$store.app.isDark ? '#7dd3fc' : '#0369a1'"
