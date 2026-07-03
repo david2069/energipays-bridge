@@ -6,13 +6,20 @@ Dev-test everything on the dev instance first
 (`docker compose -f docker-compose.dev.yml up -d --build` → port 8081;
 `down -v` resets to a fresh first-install), then promote to prod.
 
+Items are tagged `[defect]` (broken behaviour) or `[enh]` (new capability).
+Defects and enhancements share one queue on purpose — priority is the only
+decision that matters, and most items here are both. New, not-yet-scheduled
+problems go under **Defects (untriaged)** below until they're pulled into a
+package. (If external users ever start reporting bugs, intake moves to GitHub
+Issues; this file stays the release-packaging layer.)
+
 ---
 
 ## Package 1 — v1.1.2: remove Safe Mode, add READ_ONLY flag, fix unconfigured 500s
 
 **Status: approved, queued** (task chip exists; this file is the durable spec)
 
-### 1a. Delete legacy Safe Mode (approved 2026-07-04)
+### 1a. [defect] Delete legacy Safe Mode (approved 2026-07-04)
 It default-blocks ALL writes on fresh installs with no UI to disable (prod only
 works because an old DB row has `safe_mode=0`), and MQTT bypasses it anyway.
 - `main.py:63-65` — remove the safe_mode DB load from the lifespan
@@ -27,7 +34,7 @@ works because an old DB row has `safe_mode=0`), and MQTT bypasses it anyway.
 - Remove readers + writer in the SAME commit (admin.py/points.py read
   `app.state.safe_mode` directly → AttributeError if only main.py changes)
 
-### 1b. Add READ_ONLY env flag (approved design)
+### 1b. [enh] Add READ_ONLY env flag (approved design)
 - `settings.py`: `read_only: bool = False` — env-driven only, NEVER DB-persisted
 - Enforce at the single choke point where all device writes converge, covering
   REST + `mqtt_publisher._handle_command` + future scheduler
@@ -38,7 +45,7 @@ works because an old DB row has `safe_mode=0`), and MQTT bypasses it anyway.
   actuates the real hot-water system); prod/HA default false. Optional HA
   config.yaml field via ha_options.py.
 
-### 1c. Graceful "not connected yet" instead of 500s
+### 1c. [defect] Graceful "not connected yet" instead of 500s
 Routes using `app.state.client` crash with `AttributeError('NoneType')` before
 poller init (fresh install pre-credentials, or the window between wizard
 "Save & connect" and `_start_poller` completing). Observed live on v1.1.1.
@@ -54,7 +61,7 @@ poller init (fresh install pre-credentials, or the window between wizard
 
 **Status: approved, queued** (task chip exists)
 
-### 2a. Solar PV forecast is unscaled irradiance (confirmed too low)
+### 2a. [defect] Solar PV forecast is unscaled irradiance (confirmed too low)
 `api/solar.py` returns raw horizontal `shortwave_radiation` W/m²;
 `dashboard_tab.js` `_solarSummarize` (~167-176) shows W/m²÷1000 as "kW" — i.e.
 a 1 kWp horizontal array. No system size or orientation stored anywhere.
@@ -69,7 +76,7 @@ a 1 kWp horizontal array. No system size or orientation stored anywhere.
 - UI: display scaled kW/kWh; keep "Actual" overlay; if kWp unset show a
   "Set system size in Settings" hint instead of silently-wrong numbers
 
-### 2b. History charts: default to cloud, toggle for local
+### 2b. [enh] History charts: default to cloud, toggle for local
 `dashboard_tab.js` ~296-301: Hot Water 24h modal reads ONLY local SQLite
 (`/api/metrics/history`) — empty on fresh installs, permanently empty on HA
 add-ons (metrics recording is opt-in/off there).
@@ -81,7 +88,7 @@ add-ons (metrics recording is opt-in/off there).
 - Persist choice to localStorage; auto-fallback with a small note when the
   chosen source errors or is empty
 
-### 2c. Throttling leftovers
+### 2c. [enh] Throttling leftovers
 `weather_nem.py` is DONE (commit `1831f9f`: single-flight, negative cache,
 stale serving, shared client, 12 KB ELEC_NEM_SUMMARY endpoint) — do not redo;
 reuse its `_cached_fetch` pattern.
@@ -95,6 +102,10 @@ reuse its `_cached_fetch` pattern.
   (currently fixed 60s retry forever)
 
 ---
+
+## Defects (untriaged)
+
+_None currently — new problems land here until pulled into a package._
 
 ## Notes / smaller items (unscheduled)
 
