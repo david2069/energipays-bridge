@@ -1,10 +1,3 @@
-# Changelog — energipays-bridge
-
-All notable changes to this project are documented here.
-Format: `[YYYY-MM-DD] — description`.
-
----
-
 ## [1.0.1] [2026-07-03] — HA Ingress + startup fix
 
 ### Added
