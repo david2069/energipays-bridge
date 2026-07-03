@@ -251,6 +251,7 @@ function integrationsCard() {
     { key: 'battery_grid_status',   label: 'Battery Grid Status' },
     { key: 'battery_inverter_state',label: 'Battery Inverter State' },
     { key: 'battery_capacity_kwh',  label: 'Battery Capacity kWh' },
+    { key: 'energy_available_kwh',  label: 'Energy Available kWh' },
     { key: 'home_load_w',           label: 'Home Load W' },
     { key: 'operating_mode',        label: 'Operating Mode (1=Backup 2=Self-Consumption 3=TOU)' },
     { key: 'self_reserve_soc',      label: 'Self Reserve SOC %' },
