@@ -25,6 +25,10 @@ class CredentialsBody(BaseModel):
     password: str
 
 
+class AesKeyBody(BaseModel):
+    key: str
+
+
 async def _test_login(email: str, password: str) -> dict:
     """Try to log in; return {"ok": True, "user": {...}} or {"ok": False, "error": "..."}."""
     log.info("auth: attempting login for %s", email)
@@ -62,6 +66,33 @@ async def setup_status(request: Request) -> dict:
                                and request.app.state.poller.connected),
         "runtime": RUNTIME,  # "ha_addon" | "docker" | "dev"
     }
+
+
+@router.post("/api/setup/set-key")
+async def setup_set_key(body: AesKeyBody, request: Request) -> dict:
+    """Manually set the AES key when automatic extraction fails."""
+    import base64
+    import json
+    key = body.key.strip()
+    try:
+        raw = base64.b64decode(key)
+        if len(raw) != 32:
+            return JSONResponse(status_code=400, content={"ok": False, "error": f"Key must decode to 32 bytes, got {len(raw)}"})
+    except Exception:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Invalid base64 key"})
+    try:
+        import energipays as ep
+        ep.set_key(key)
+        # Persist to cache so it survives restarts
+        import os, pathlib
+        data_dir = pathlib.Path(os.environ.get("DATA_DIR", str(request.app.state.settings.data_path)))
+        cache = data_dir / ".key_cache.json"
+        cache.write_text(json.dumps({"key": key}))
+        log.info("setup: AES key set manually and cached to %s", cache)
+        return {"ok": True}
+    except Exception as exc:
+        log.error("setup: failed to set AES key — %s", exc)
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(exc)})
 
 
 @router.post("/api/setup/test")

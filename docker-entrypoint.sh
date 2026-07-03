@@ -23,7 +23,7 @@ export DATA_DIR="${DATA_DIR:-/data}"
 # available without needing a chicken-and-egg authenticated request.
 # Writes to $DATA_DIR/.key_cache.json; skips if already cached.
 python3 - <<'PYEOF'
-import json, os, pathlib, sys
+import json, os, pathlib, signal, sys
 
 data_dir = pathlib.Path(os.environ.get("DATA_DIR", "/data"))
 cache = data_dir / ".key_cache.json"
@@ -31,26 +31,60 @@ cache = data_dir / ".key_cache.json"
 if cache.exists():
     sys.exit(0)
 
+def _timeout(sig, frame):
+    raise TimeoutError("AES key pre-extraction timed out")
+
+signal.signal(signal.SIGALRM, _timeout)
+signal.alarm(60)  # hard 60s cap so a hung network call never blocks startup
+
 try:
     import requests
-    from extract_key import discover_chunk_urls, context_candidates_from_js
+    from extract_key import candidates_from_js, context_candidates_from_js, discover_chunk_urls
     session = requests.Session()
     session.headers["User-Agent"] = "Mozilla/5.0"
+
+    # Pass 1: look for a single unambiguous Base64.parse("...") match per chunk.
+    all_ctx: list = []
+    chunks: list = []
     for url in discover_chunk_urls("https://energipays.com", session):
         try:
-            r = session.get(url, timeout=30)
+            r = session.get(url, timeout=15)
             if not r.ok:
                 continue
+            chunks.append(r.text)
             ctx = context_candidates_from_js(r.text)
             if len(ctx) == 1:
                 cache.write_text(json.dumps({"key": ctx[0]}))
-                print(f"[entrypoint] AES key cached to {cache}")
+                print(f"[entrypoint] AES key cached (single Base64.parse candidate) to {cache}")
                 sys.exit(0)
+            all_ctx.extend(c for c in ctx if c not in all_ctx)
         except Exception:
             continue
-    print("[entrypoint] AES key pre-extraction: no single candidate found — will retry on first login", file=sys.stderr)
+
+    # Pass 2: if exactly one unique Base64.parse match across all chunks, use it.
+    if len(all_ctx) == 1:
+        cache.write_text(json.dumps({"key": all_ctx[0]}))
+        print(f"[entrypoint] AES key cached (unique cross-chunk context match) to {cache}")
+        sys.exit(0)
+
+    # Pass 3: broader scan — any 32-byte base64 string (noisier, first = highest signal).
+    all_cands: list = []
+    seen: set = set()
+    for js in chunks:
+        for c in candidates_from_js(js):
+            if c not in seen:
+                seen.add(c)
+                all_cands.append(c)
+    if all_cands:
+        cache.write_text(json.dumps({"key": all_cands[0]}))
+        print(f"[entrypoint] AES key cached (fallback broad scan, 1 of {len(all_cands)} candidates) to {cache}")
+        sys.exit(0)
+
+    print("[entrypoint] AES key pre-extraction: no candidates found — will retry on first login", file=sys.stderr)
 except Exception as e:
     print(f"[entrypoint] AES key pre-extraction failed: {e}", file=sys.stderr)
+finally:
+    signal.alarm(0)
 PYEOF
 
 exec "$@"

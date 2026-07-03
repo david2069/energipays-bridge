@@ -1,3 +1,24 @@
+## [1.0.4] [2026-07-03] — Fix all static assets under Ingress + manual AES key fallback
+
+### Fixed
+- **All icons and images broken under HA Ingress** — every `/static/...` absolute path
+  in templates and JS was resolved against HA's origin rather than the add-on container.
+  Changed all static asset paths to relative (`static/...`) so `<base href>` routes them
+  correctly through the Ingress proxy to the container.
+- **AES key extraction** — entrypoint now tries three progressively broader passes:
+  (1) single `Base64.parse()` match per chunk, (2) unique match across all chunks,
+  (3) broader 32-byte base64 scan as last resort. Covers sites where the key appears
+  in more than one chunk.
+- **add-on description** updated to correctly describe the Powerdiverter / Energipays scope.
+
+### Added
+- **Version shown in setup wizard** header (Step N of 5 · v1.0.4).
+- **Manual AES key entry** in setup wizard Step 1 — collapsible advanced section with
+  instructions and a `POST /api/setup/set-key` endpoint. Escape hatch for when automatic
+  extraction fails; user pastes the 44-char base64 key from browser DevTools.
+
+---
+
 ## [1.0.3] [2026-07-03] — Fix AES key extraction on first HA add-on run
 
 ### Fixed

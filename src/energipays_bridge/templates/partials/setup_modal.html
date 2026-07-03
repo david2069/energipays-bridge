@@ -10,10 +10,13 @@
 
     <!-- Header -->
     <div class="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-slate-800 shrink-0">
-      <img src="/static/icons/devices/logo-small-dark.svg" alt="" class="w-7 h-7 shrink-0"/>
+      <img src="static/icons/devices/logo-small-dark.svg" alt="" class="w-7 h-7 shrink-0"/>
       <div class="min-w-0">
         <div class="font-semibold text-slate-100" x-text="steps[step].title"></div>
-        <div class="text-xs text-slate-500" x-text="'Step ' + (step+1) + ' of ' + steps.length"></div>
+        <div class="text-xs text-slate-500">
+          <span x-text="'Step ' + (step+1) + ' of ' + steps.length"></span>
+          <span class="ml-2 text-slate-600">v{{ app_version }}</span>
+        </div>
       </div>
       <!-- Step dots -->
       <div class="ml-auto flex items-center gap-1.5">
@@ -67,6 +70,42 @@
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
             Stored AES-256 encrypted on this server only
           </p>
+
+          <!-- Manual AES key — shown only after an AES error or on demand -->
+          <div x-data="{open: false, aesKey: '', aesMsg: '', aesOk: false}">
+            <button type="button" @click="open=!open"
+                    class="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2">
+              <span x-text="open ? '▲ Hide advanced' : '▼ AES key extraction failed? Enter manually'"></span>
+            </button>
+            <template x-if="open">
+              <div class="mt-2 space-y-2">
+                <p class="text-xs text-slate-500">
+                  If login shows "AES key not set", open <strong class="text-slate-300">energipays.com</strong> in your browser,
+                  open DevTools → Sources → search for <code class="bg-slate-800 px-1 rounded">Base64.parse</code>
+                  and paste the 44-character base64 string below.
+                </p>
+                <div class="flex gap-2">
+                  <input type="text" x-model="aesKey" placeholder="44-char base64 AES key…"
+                         class="flex-1 bg-slate-800 text-slate-100 text-xs rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+                  <button type="button" @click="async () => {
+                    if (!aesKey.trim()) return
+                    try {
+                      const r = await fetch('/api/setup/set-key', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key: aesKey.trim()})})
+                      const d = await r.json()
+                      aesOk = d.ok
+                      aesMsg = d.ok ? 'Key saved — try login now' : (d.error || 'Failed')
+                    } catch(_) { aesMsg = 'Network error'; aesOk = false }
+                  }()"
+                  class="px-3 py-2 rounded-lg text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600">
+                    Set key
+                  </button>
+                </div>
+                <div x-show="aesMsg" class="text-xs px-2 py-1 rounded"
+                     :class="aesOk ? 'text-green-400' : 'text-red-400'" x-text="aesMsg"></div>
+              </div>
+            </template>
+          </div>
+
           <div class="flex gap-2">
             <button type="button" @click="testCreds()"
                     :disabled="credBusy || !credEmail || !credPassword"

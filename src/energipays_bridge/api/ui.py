@@ -10,11 +10,18 @@ _templates_dir = pathlib.Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
 
+_APP_VERSION = "1.0.4"
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     import time
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"cache_bust": int(time.time()), "root_path": request.headers.get("x-ingress-path", "")},
+        context={
+            "cache_bust": int(time.time()),
+            "root_path": request.headers.get("x-ingress-path", ""),
+            "app_version": _APP_VERSION,
+        },
     )

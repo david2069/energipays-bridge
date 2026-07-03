@@ -56,23 +56,23 @@
        x-data="{fmt(v,u,dp){ if(v==null||v===undefined||v==='') return '—'; const n=parseFloat(v); return isNaN(n)?'—':`${n.toFixed(dp)}${u}` }}">
     <!-- Avg Temp — water heater cylinder (matches power flow card) -->
     <span x-show="$store.app.navCfg?.temp" class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 cursor-default" title="Avg Water Temp">
-      <img src="/static/icons/devices/water-heater.svg" class="w-4 h-4 shrink-0" style="filter:invert(1) opacity(0.55)"/>
+      <img src="static/icons/devices/water-heater.svg" class="w-4 h-4 shrink-0" style="filter:invert(1) opacity(0.55)"/>
       <span x-text="fmt($store.app.points.waterTemperatureAvg,'°C',1)"></span>
     </span>
     <!-- Grid kW — electricity pylon (matches power flow card) -->
     <span x-show="$store.app.navCfg?.grid" class="flex items-center gap-1 text-xs cursor-default" title="Grid Power">
-      <img src="/static/icons/devices/electricity-icon.png" class="w-4 h-4 shrink-0" style="filter:saturate(1.2)"/>
+      <img src="static/icons/devices/electricity-icon.png" class="w-4 h-4 shrink-0" style="filter:saturate(1.2)"/>
       <span :class="($store.app.points.phasePower||0)<-0.05?'text-amber-500 dark:text-amber-400':($store.app.points.phasePower||0)>0.05?'text-green-600 dark:text-green-400':'text-slate-500 dark:text-slate-400'"
             x-text="fmt(Math.abs($store.app.points.phasePower),'kW',2)"></span>
     </span>
     <!-- Solar kW — solar panel (matches power flow card) -->
     <span x-show="$store.app.navCfg?.solar" class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 cursor-default" title="Solar Power">
-      <img src="/static/icons/devices/solar-icon.png" class="w-4 h-4 shrink-0"/>
+      <img src="static/icons/devices/solar-icon.png" class="w-4 h-4 shrink-0"/>
       <span x-text="fmt($store.app.points.solarStreamA,'kW',2)"></span>
     </span>
     <!-- Heater kW — heater element waves (matches power flow card) -->
     <span x-show="$store.app.navCfg?.heater" class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 cursor-default" title="Heater Power">
-      <img src="/static/icons/devices/heater2-icon.svg" class="w-4 h-4 shrink-0"/>
+      <img src="static/icons/devices/heater2-icon.svg" class="w-4 h-4 shrink-0"/>
       <span x-text="fmt(Math.abs($store.app.points.offPeakStreamHeaterPower),'kW',2)"></span>
     </span>
     <!-- WiFi signal bars — inactive uses light gray in light mode -->
@@ -145,10 +145,10 @@
            class="absolute right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 min-w-[160px] py-1.5">
         <div class="px-3 py-1 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Show in topbar</div>
         <template x-for="[key, label, icon] in [
-          ['temp','Avg Temp','/static/icons/devices/water-heater.svg'],
-          ['grid','Grid kW','/static/icons/devices/electricity-icon.png'],
-          ['solar','Solar kW','/static/icons/devices/solar-icon.png'],
-          ['heater','Heater kW','/static/icons/devices/heater2-icon.svg'],
+          ['temp','Avg Temp','static/icons/devices/water-heater.svg'],
+          ['grid','Grid kW','static/icons/devices/electricity-icon.png'],
+          ['solar','Solar kW','static/icons/devices/solar-icon.png'],
+          ['heater','Heater kW','static/icons/devices/heater2-icon.svg'],
           ['wifi','WiFi','__wifi__'],
           ['lora','LoRa','__lora__']
         ]" :key="key">

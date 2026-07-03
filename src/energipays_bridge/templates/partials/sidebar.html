@@ -2,9 +2,9 @@
 <nav class="w-16 flex flex-col items-center py-4 bg-slate-800 border-r border-slate-700 shrink-0">
   <!-- Energipays logo — dark variant on dark background, clean on light -->
   <div class="mb-5">
-    <img :src="$store.app.isDark ? '/static/icons/devices/logo-small-dark.svg' : '/static/icons/devices/logo-small-clean.svg'"
+    <img :src="$store.app.isDark ? 'static/icons/devices/logo-small-dark.svg' : 'static/icons/devices/logo-small-clean.svg'"
          alt="logo" class="w-8 h-8"
-         onerror="this.src='/static/icons/icon-192.png'" />
+         onerror="this.src='static/icons/icon-192.png'" />
   </div>
 
   <template x-for="tab in $store.app.tabs" :key="tab.id">
@@ -17,19 +17,19 @@
       :title="tab.label">
       <!-- Use energipays.com sidebar icons where available, else fallback to inline SVG -->
       <template x-if="tab.id === 'dashboard'">
-        <img src="/static/icons/devices/sidebar-devices.svg" class="w-5 h-5"
+        <img src="static/icons/devices/sidebar-devices.svg" class="w-5 h-5"
              :style="$store.app.activeTab === 'dashboard' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
       <template x-if="tab.id === 'analytics'">
-        <img src="/static/icons/devices/sidebar-analytics.svg" class="w-5 h-5"
+        <img src="static/icons/devices/sidebar-analytics.svg" class="w-5 h-5"
              :style="$store.app.activeTab === 'analytics' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
       <template x-if="tab.id === 'rules'">
-        <img src="/static/icons/devices/sidebar-rules.svg" class="w-5 h-5"
+        <img src="static/icons/devices/sidebar-rules.svg" class="w-5 h-5"
              :style="$store.app.activeTab === 'rules' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
       <template x-if="tab.id === 'mqtt'">
-        <img src="/static/icons/mqtt-logo.svg" class="w-5 h-5"
+        <img src="static/icons/mqtt-logo.svg" class="w-5 h-5"
              :style="$store.app.activeTab === 'mqtt' ? 'opacity:1' : 'opacity:0.5'" alt="MQTT"/>
       </template>
       <template x-if="tab.id !== 'dashboard' && tab.id !== 'analytics' && tab.id !== 'rules' && tab.id !== 'mqtt'">
