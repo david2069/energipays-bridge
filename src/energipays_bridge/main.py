@@ -264,4 +264,27 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+class _HAIngressMiddleware:
+    """Strip the HA Supervisor ingress path prefix injected via X-Ingress-Path."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            headers = {k: v for k, v in scope.get("headers", [])}
+            prefix = headers.get(b"x-ingress-path", b"").decode()
+            if prefix:
+                scope = dict(scope)
+                scope["root_path"] = prefix
+                path: str = scope.get("path", "")
+                if path.startswith(prefix):
+                    scope["path"] = path[len(prefix):] or "/"
+                prefix_b = prefix.encode()
+                raw: bytes = scope.get("raw_path", b"")
+                if raw.startswith(prefix_b):
+                    scope["raw_path"] = raw[len(prefix_b):] or b"/"
+        await self._inner(scope, receive, send)
+
+
+app = _HAIngressMiddleware(create_app())

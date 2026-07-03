@@ -1,3 +1,18 @@
+// HA Ingress: when served behind /api/hassio_ingress/<token>/ the browser
+// is at a sub-path. Patch fetch() so absolute-path URLs (/api/...) are
+// rewritten to include the base path — relative paths work without this.
+;(function () {
+  const base = document.querySelector('base')
+  const prefix = base ? base.getAttribute('href').replace(/\/$/, '') : ''
+  if (!prefix) return
+  const _fetch = window.fetch
+  window.fetch = function (url, opts) {
+    if (typeof url === 'string' && url.startsWith('/'))
+      url = prefix + url
+    return _fetch.call(this, url, opts)
+  }
+})()
+
 // Alpine global store — shared state + polling loop
 document.addEventListener('alpine:initialized', () => {
   // Sync URL hash whenever activeTab changes (Alpine.effect works on stores)

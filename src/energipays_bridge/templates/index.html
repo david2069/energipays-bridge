@@ -8,8 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0f172a" />
   <title>Energipays Bridge</title>
-  <link rel="manifest" href="/static/manifest.json" />
-  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
+  {% if root_path %}<base href="{{ root_path }}/">{% endif %}
+  <link rel="manifest" href="static/manifest.json" />
+  <link rel="apple-touch-icon" href="static/icons/icon-192.png" />
 
   <!-- Theme: default light; add dark class only when explicitly chosen -->
   <script>
@@ -17,7 +18,7 @@
   </script>
 
   <!-- Tailwind (local) -->
-  <script src="/static/js/tailwind.min.js?v={{ cache_bust }}"></script>
+  <script src="static/js/tailwind.min.js?v={{ cache_bust }}"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -32,23 +33,23 @@
   </script>
 
   <!-- Design tokens -->
-  <link rel="stylesheet" href="/static/css/app.css?v={{ cache_bust }}" />
+  <link rel="stylesheet" href="static/css/app.css?v={{ cache_bust }}" />
 
   <!-- Alpine.js (deferred) -->
-  <script defer src="/static/js/alpine.min.js?v={{ cache_bust }}"></script>
+  <script defer src="static/js/alpine.min.js?v={{ cache_bust }}"></script>
 
   <!-- Tab modules (loaded before Alpine initialises) -->
-  <script src="/static/js/app.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/dashboard_tab.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/analytics_tab.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/rules_tab.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/raw_tab.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/mqtt_tab.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/settings_tab.js?v={{ cache_bust }}"></script>
-  <script src="/static/js/logs_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/app.js?v={{ cache_bust }}"></script>
+  <script src="static/js/dashboard_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/analytics_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/rules_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/raw_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/mqtt_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/settings_tab.js?v={{ cache_bust }}"></script>
+  <script src="static/js/logs_tab.js?v={{ cache_bust }}"></script>
 
   <!-- Chart.js (lazy-loaded by analytics tab) -->
-  <script src="/static/js/chart.min.js?v={{ cache_bust }}"></script>
+  <script src="static/js/chart.min.js?v={{ cache_bust }}"></script>
 </head>
 
 <body class="h-full bg-slate-900 text-slate-100" x-data x-init="$store.app.init()">
