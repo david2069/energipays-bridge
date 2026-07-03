@@ -184,6 +184,27 @@ cause per hypothesis: likely block/warn on editing the running rule (align
 with vendor behaviour, or deactivate → edit → reactivate), and fix the
 everyday/single-day editor state.
 
+### [defect] Push Notifications: local integration control conflated with cloud API master
+Reported 2026-07-04. The Settings card's "Notifications OFF — Master switch —
+controls ALL push notifications" implies it governs everything, but it is
+purely LOCAL: `setMaster()` (`settings_tab.js:917`) → PUT
+`/api/notification-settings` → DB, checked only by
+`notifications/dispatcher.py:75` before the bridge→HA companion-app send.
+It has no relationship to the Energipays CLOUD notification parameter (the
+vendor side deciding whether any notifications are emitted/sent to the
+Powerdiverter app at all). User requirement: these must be two distinct,
+clearly-labelled controls — the local one is essential precisely because it
+is independent of the cloud master.
+**Fix shape:**
+- Relabel/restructure the card: "Bridge → Home Assistant notifications
+  (local)" section = existing master + per-event trigger rows + devices
+- Add a separate "Energipays cloud notifications" control showing/setting
+  the vendor API parameter — discovery needed: find the cloud notification
+  settings endpoint (check HAR captures in repo root, `client.messages()`,
+  and device-status switcher fields) and whether it is writable via API
+- If the cloud param turns out read-only, still DISPLAY it so users
+  understand why nothing arrives despite local being ON (and vice versa)
+
 ### [defect] Rule-timeline charts: inconsistent colours/legends across the three renderings
 Reported 2026-07-04 (screenshot: dashboard active-rule bar vs Solar Forecast
 "Rule schedule (today)" strip). Each timeline has its own hand-rolled palette:
