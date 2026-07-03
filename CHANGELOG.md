@@ -1,3 +1,20 @@
+## 1.0.6 — AES key via HA add-on configuration field
+
+### Added
+- **AES Key field in HA add-on config** — paste the base64 key from `energipays key` CLI
+  into Settings → Add-ons → Energipays Bridge → Configuration → AES Key. Flows through
+  `ha_options.py` → `ENERGIPAYS_KEY` env var → used at startup before any login attempt.
+  Blank field is ignored so it stays optional.
+
+### How to get the key
+On a Mac/Linux machine with energipays-client installed:
+```
+energipays -e your@email.com -p yourpassword key
+```
+Copy the 44-character base64 string and paste it into the HA config field.
+
+---
+
 ## 1.0.5 — Pre-extract AES key at startup
 
 ### Fixed

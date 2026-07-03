@@ -15,6 +15,7 @@ OUTPUT_PATH  = sys.argv[2] if len(sys.argv) > 2 else "/data/ha_options.env"
 KEY_MAP = {
     "energipays_email":    "ENERGIPAYS_EMAIL",
     "energipays_password": "ENERGIPAYS_PASSWORD",
+    "energipays_key":      "ENERGIPAYS_KEY",
     "poll_interval":       "ENERGIPAYS_POLL_INTERVAL",
     "mqtt_enabled":        "MQTT_ENABLED",
     "mqtt_host":           "MQTT_HOST",
@@ -33,7 +34,7 @@ except FileNotFoundError:
 lines: list[str] = []
 for opt_key, env_key in KEY_MAP.items():
     val = opts.get(opt_key)
-    if val is None:
+    if val is None or val == "":
         continue
     if isinstance(val, bool):
         val = str(val).lower()
