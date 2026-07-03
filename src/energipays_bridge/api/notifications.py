@@ -15,6 +15,8 @@ from ..store.db import (
     get_ha_instance,
     get_ha_instances,
     get_notification_devices,
+    get_notification_log,
+    get_notification_log_stats,
     get_notification_settings,
     update_notification_settings,
     upsert_ha_instance,
@@ -165,6 +167,20 @@ async def put_notif_settings(body: NotificationSettingsIn, request: Request) -> 
 
 
 # ── Test notification ─────────────────────────────────────────────────────────
+
+@router.get("/api/notifications/log")
+async def get_notif_log(
+    request: Request,
+    event_type: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict]:
+    return await get_notification_log(request.app.state.db, event_type, limit)
+
+
+@router.get("/api/notifications/stats")
+async def get_notif_stats(request: Request) -> dict:
+    return await get_notification_log_stats(request.app.state.db)
+
 
 @router.post("/api/notifications/test")
 async def test_notification(request: Request) -> dict:

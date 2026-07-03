@@ -18,7 +18,7 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     "boost_ended":      ("Boost Ended",              "Boost completed"),
     "offpeak_started":  ("Off-Peak Active",          "Off-peak heating rule started"),
     "offpeak_ended":    ("Off-Peak Ended",           "Off-peak heating rule stopped"),
-    "temp_threshold":   ("Temperature Alert",        "Water temp {temp}°C reached threshold {threshold}°C"),
+    "temp_threshold":   ("Temperature Alert",        "Water temp {temp}°C (T1:{t1} T2:{t2} T3:{t3}) reached threshold {threshold}°C"),
     "done_heating":     ("Heating Done",             "Water temperature reached setpoint ({temp}°C)"),
     "test":             ("Energipays Bridge Test",   "Notification routing is working ✓"),
 }
@@ -96,4 +96,17 @@ async def send_notification(
     ]
     sent = any(r.get("ok") for r in norm_results)
     log.info("Notification %s → sent=%s (%d devices)", event_type, sent, len(devices))
+
+    # Persist to notification_log for UI history
+    try:
+        import json, time
+        device_aliases = [d["alias"] for d in devices]
+        await db.execute(
+            "INSERT INTO notification_log (event_type, ts, context, devices, ok) VALUES (?,?,?,?,?)",
+            (event_type, time.time(), json.dumps(context), json.dumps(device_aliases), int(sent)),
+        )
+        await db.commit()
+    except Exception as exc:
+        log.warning("notification_log write failed: %s", exc)
+
     return {"sent": sent, "reason": "ok" if sent else "all_failed", "results": norm_results}

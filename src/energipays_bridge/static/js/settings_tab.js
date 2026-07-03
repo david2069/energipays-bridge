@@ -650,6 +650,9 @@ function notificationsCard() {
     testSending: false,
     testResult: '',
     testOk: false,
+    notifStats: {},       // {event_type: {count, last_ts}}
+    expandedLogKey: null, // which trigger row is expanded
+    logEntries: {},       // {event_type: [...log rows]}
 
     triggerDefs: [
       ['device_online',   'Device online status',   'Enable/disable device online push notifications'],
@@ -663,7 +666,7 @@ function notificationsCard() {
     ],
 
     async init() {
-      await Promise.all([this.loadInstances(), this.loadDevices(), this.loadSettings()])
+      await Promise.all([this.loadInstances(), this.loadDevices(), this.loadSettings(), this.loadStats()])
     },
 
     // ── Instances ─────────────────────────────────────────────────────────
@@ -832,6 +835,36 @@ function notificationsCard() {
       if (!val) { const i = triggers.indexOf(key); if (i >= 0) triggers.splice(i, 1) }
       this.notifSettings.triggers = triggers
       this.saveSettings()
+    },
+
+    async loadStats() {
+      try {
+        const r = await fetch('/api/notifications/stats')
+        if (r.ok) this.notifStats = await r.json()
+      } catch (_) {}
+    },
+
+    async toggleLogRow(key) {
+      if (this.expandedLogKey === key) {
+        this.expandedLogKey = null
+        return
+      }
+      this.expandedLogKey = key
+      if (!this.logEntries[key]) {
+        try {
+          const r = await fetch(`/api/notifications/log?event_type=${key}&limit=10`)
+          if (r.ok) this.logEntries[key] = await r.json()
+        } catch (_) { this.logEntries[key] = [] }
+      }
+    },
+
+    fmtTs(ts) {
+      if (!ts) return '—'
+      const d = new Date(ts * 1000)
+      const now = new Date()
+      const sameDay = d.toDateString() === now.toDateString()
+      if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     },
 
     // ── Test ──────────────────────────────────────────────────────────────

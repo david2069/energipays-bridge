@@ -94,6 +94,18 @@ _MIGRATIONS = [
     INSERT OR IGNORE INTO notification_settings (id, created_at, updated_at)
         VALUES (1, strftime('%s','now'), strftime('%s','now'));
     """,
+    # v5 — notification log: records each push notification sent
+    """
+    CREATE TABLE IF NOT EXISTS notification_log (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        ts         REAL NOT NULL,
+        context    TEXT NOT NULL DEFAULT '{}',
+        devices    TEXT NOT NULL DEFAULT '[]',
+        ok         INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_notif_log_event ON notification_log (event_type, ts DESC);
+    """,
 ]
 
 
@@ -242,3 +254,40 @@ async def update_notification_settings(db: aiosqlite.Connection, settings: dict)
         },
     )
     await db.commit()
+
+
+# ── Notification Log ──────────────────────────────────────────────────────────
+
+async def get_notification_log(
+    db,
+    event_type: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    import json
+    db.row_factory = aiosqlite.Row
+    if event_type:
+        rows = await (await db.execute(
+            "SELECT * FROM notification_log WHERE event_type=? ORDER BY ts DESC LIMIT ?",
+            (event_type, limit),
+        )).fetchall()
+    else:
+        rows = await (await db.execute(
+            "SELECT * FROM notification_log ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        )).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["context"] = json.loads(d["context"])
+        d["devices"] = json.loads(d["devices"])
+        result.append(d)
+    return result
+
+
+async def get_notification_log_stats(db) -> dict:
+    """Return {event_type: {count, last_ts}} for all event types."""
+    db.row_factory = aiosqlite.Row
+    rows = await (await db.execute(
+        "SELECT event_type, COUNT(*) AS cnt, MAX(ts) AS last_ts FROM notification_log GROUP BY event_type"
+    )).fetchall()
+    return {r["event_type"]: {"count": r["cnt"], "last_ts": r["last_ts"]} for r in rows}

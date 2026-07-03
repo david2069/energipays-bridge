@@ -28,13 +28,22 @@ class NotificationTrigger:
         p = sample.points
         prev = self._prev
 
+        db = self._db
+
         if not prev:
-            # First sample — record state but don't fire
+            # First sample — record state but don't fire.
+            # Pre-initialize _temp_triggered so a temp already above threshold
+            # on boot doesn't fire on the very next poll.
+            temp0 = p.get("waterTemperatureAvg")
+            if temp0 is not None:
+                from ..store.db import get_notification_settings
+                ns = await get_notification_settings(db)
+                threshold0 = float(ns.get("temp_threshold", 40.0))
+                self._temp_triggered = temp0 >= threshold0
             self._prev = dict(p)
             return
 
         now_str = datetime.now().strftime("%H:%M")
-        db = self._db
 
         # ── Device online / offline ───────────────────────────────────────────
         if p.get("is_online") != prev.get("is_online") and p.get("is_online") is not None:
@@ -65,8 +74,15 @@ class NotificationTrigger:
             threshold = float(ns.get("temp_threshold", 40.0))
             if not self._temp_triggered and temp >= threshold:
                 self._temp_triggered = True
+                t1 = p.get("waterTemperature1")
+                t2 = p.get("waterTemperature2")
+                t3 = p.get("waterTemperature3")
                 await send_notification(db, "temp_threshold", {
-                    "temp": f"{temp:.1f}", "threshold": f"{threshold:.0f}"
+                    "temp": f"{temp:.1f}",
+                    "threshold": f"{threshold:.0f}",
+                    "t1": f"{t1:.1f}" if t1 is not None else "—",
+                    "t2": f"{t2:.1f}" if t2 is not None else "—",
+                    "t3": f"{t3:.1f}" if t3 is not None else "—",
                 })
             elif self._temp_triggered and temp < threshold - _HYSTERESIS_C:
                 self._temp_triggered = False   # reset; will re-fire next crossing

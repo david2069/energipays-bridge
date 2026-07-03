@@ -28,6 +28,10 @@ function dashboardTab() {
     cancelling: false,
     settingPower: false,
     boostPeriod: 2,     // 2=1h, 3=2h, 4=3h — default 1h (period=1 is cancel)
+    boostConflictOpen: false,
+    boostConflictRule: null,
+    boostConflictSlots: [],
+    _boostConflictPeriod: 2,
     _boostSvgEl: null,
     _boostDragging: false,
     toggling: null,
@@ -89,6 +93,39 @@ function dashboardTab() {
     closeHotWaterChart() {
       this.hotWaterModal = false
       if (this._hwChart) { this._hwChart.destroy(); this._hwChart = null }
+    },
+
+    checkBoostConflict(period) {
+      this._boostConflictPeriod = period
+      const pts = Alpine.store('app').points
+      const activeId = pts.active_rule_id
+      if (!activeId) { this.sendBoost(period); return }
+
+      const rule = (this._rulePickerRules || []).find(r => r.id === activeId)
+      if (!rule) { this.sendBoost(period); return }
+
+      // Find slots today that are Boost (cmd=2) or Disable (cmd=1)
+      const todayDay = new Date().getDay()  // 0=Sun … 6=Sat
+      const dayKey = ['d7','d1','d2','d3','d4','d5','d6'][todayDay]  // rule uses d1=Mon…d7=Sun
+      const slots = (rule.schedule || []).filter(s => {
+        if (!s[dayKey]) return false
+        const cmd = parseInt(s.command ?? s.cmd ?? 0)
+        return cmd === 1 || cmd === 2  // Disable=1, Boost=2
+      })
+
+      const CMD_LABELS = { 1: 'Disable', 2: 'Boost' }
+      this.boostConflictRule = rule
+      this.boostConflictSlots = slots.map(s => ({
+        time: (s.start_time || s.startTime || '?') + ' – ' + (s.end_time || s.endTime || '?'),
+        label: CMD_LABELS[parseInt(s.command ?? s.cmd ?? 0)] || 'Command',
+      }))
+
+      if (this.boostConflictSlots.length > 0) {
+        this.boostConflictOpen = true
+      } else {
+        // Rule active but no conflicting slots today — boost freely
+        this.sendBoost(period)
+      }
     },
 
     async sendBoost(period) {
