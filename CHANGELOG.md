@@ -1,3 +1,12 @@
+## 1.0.9 — Fix terminal CLI path resolution
+
+### Fixed
+- **Terminal: 'energipays' not found** — executable was not in PATH in the HA container.
+  Now resolves via `shutil.which` then falls back to the `bin/` directory next to
+  the Python interpreter so it works in any venv/container layout.
+
+---
+
 ## 1.0.8 — Terminal in setup wizard
 
 ### Added

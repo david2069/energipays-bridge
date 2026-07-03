@@ -117,7 +117,7 @@ class CliBody(BaseModel):
 @router.post("/api/setup/run-cli")
 async def setup_run_cli(body: CliBody) -> dict:
     """Run an energipays or energipays-bridge CLI command and return stdout+stderr."""
-    import shlex, subprocess
+    import shlex, subprocess, sys, pathlib, shutil
     cmd = body.cmd.strip()
     if not cmd:
         return {"output": ""}
@@ -128,9 +128,22 @@ async def setup_run_cli(body: CliBody) -> dict:
     allowed = {"energipays", "energipays-bridge"}
     if not args or args[0] not in allowed:
         return {"output": f"Only 'energipays' and 'energipays-bridge' commands are allowed."}
+
+    # Resolve executable: check PATH first, then Scripts/ dir next to sys.executable
+    exe_name = args[0]
+    exe = shutil.which(exe_name)
+    if not exe:
+        # venv Scripts or bin directory
+        scripts = pathlib.Path(sys.executable).parent
+        candidate = scripts / exe_name
+        if candidate.exists():
+            exe = str(candidate)
+    if not exe:
+        return {"output": f"'{exe_name}' not found. Try: python -m energipays"}
+
     try:
         result = await asyncio.to_thread(
-            lambda: subprocess.run(args, capture_output=True, text=True, timeout=30)
+            lambda: subprocess.run([exe] + args[1:], capture_output=True, text=True, timeout=30)
         )
         out = (result.stdout or "") + (result.stderr or "")
         return {"output": out.strip() or "(no output)"}
