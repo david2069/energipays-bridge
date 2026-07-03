@@ -137,6 +137,18 @@ the Mosquitto add-on is installed:
 - Wizard copy: branch on `runtime` from `/api/setup/status` (ha_addon vs
   docker) — never mention env vars in the HA path.
 
+### 3c. [defect] Settings → MQTT Discovery card has no way to enable/configure
+Reported 2026-07-04 (HA add-on): card shows "Disabled" + "Set
+MQTT_ENABLED=true in env to activate" (`templates/tabs/settings.html` ~626)
+with read-only broker fields and no enable control. Enable is env-gated;
+the existing Settings ON/OFF toggle is only a runtime pause once enabled.
+- With 3b's DB-override persistence, make the card fully self-service:
+  enable toggle + editable host/port/credentials + Test + Save, live-applied
+- Runtime-aware copy: in ha_addon mode never mention env vars (until 3b
+  ships, at least point to Settings → Add-ons → Configuration → mqtt_enabled)
+- (Hardcoded "Same broker as the FranklinWH Modbus Bridge." sentence already
+  removed on main, 2026-07-04)
+
 ---
 
 ## Defects (untriaged)

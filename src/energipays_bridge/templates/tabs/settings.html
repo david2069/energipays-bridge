@@ -623,7 +623,7 @@
 
   <div class="card mb-6" x-data="mqttSettings()">
     <div class="flex items-center justify-between mb-3">
-      <p class="text-xs text-slate-500">Publishes all sensor values as HA MQTT Discovery entities. Same broker as the FranklinWH Modbus Bridge.</p>
+      <p class="text-xs text-slate-500">Publishes all sensor values as HA MQTT Discovery entities.</p>
       <span class="flex items-center gap-1.5 text-xs shrink-0 ml-3"
             :class="mqttConnected && !mqttPaused ? 'text-green-400' : 'text-slate-500'">
         <span class="w-2 h-2 rounded-full shrink-0" :class="mqttConnected && !mqttPaused ? 'bg-green-400' : 'bg-slate-600'"></span>
