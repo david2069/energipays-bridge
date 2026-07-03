@@ -105,6 +105,37 @@ reuse its `_cached_fetch` pattern.
 
 ## Defects (untriaged)
 
+### [defect] Rule edit silently not written — no failure surfaced (P1)
+Reported 2026-07-04. Repro: edit the RUNNING rule "Daily boost & disable",
+add a third slot (Disable 14:33–23:59), Save (twice, past the gap warning) →
+rule card still shows the original 2 slots. No error toast — the save path
+(`rules_tab.js saveRule()` ~743) trusts `r.ok`, and the PUT returns 200 even
+when the server discards the change.
+Hypotheses, in likelihood order:
+1. **Server silently ignores edits to the ACTIVE rule.** energipays.com's own
+   UI blocks editing/deleting the active rule; our bridge deliberately allows
+   it (see memory/README notes) — the vendor API may accept the PUT and drop
+   the data. Test: same edit against an INACTIVE rule; if that persists,
+   this is confirmed.
+2. **update_rule body quirk** — server ignores `data` unless the body is
+   exactly `{"data": {dN: [...]}}`. Fixed in energipays-client v0.2.0
+   (`27dcc23`, dev container has it via the Dockerfile pin) — but PROD (8080)
+   gets the library from the `../energipays-client` mount + entrypoint copy,
+   so it depends on when prod was last rebuilt. Check which instance the
+   repro used.
+3. **Everyday-rule day-key mismatch**: the card shows "Every day" but the
+   editor opened with only Friday active (see screenshot) — refresh()
+   expands d1–d7 when `active_day == 'd1'`, and saveRule() collapses back
+   via `_serverKey` only when `isEverydayActive()`; a single-day editor view
+   of an everyday rule may PUT the wrong day key (server stores this rule as
+   `d5` with `active_day: 'd1'`).
+**Fix shape:** after PUT, re-GET the rule and diff the day-keys actually
+persisted — surface a clear error toast when the server ignored the write
+(this also catches every future silent-discard case). Then address the root
+cause per hypothesis: likely block/warn on editing the running rule (align
+with vendor behaviour, or deactivate → edit → reactivate), and fix the
+everyday/single-day editor state.
+
 ### [defect] Rule-timeline charts: inconsistent colours/legends across the three renderings
 Reported 2026-07-04 (screenshot: dashboard active-rule bar vs Solar Forecast
 "Rule schedule (today)" strip). Each timeline has its own hand-rolled palette:
