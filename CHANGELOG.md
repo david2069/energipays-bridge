@@ -1,3 +1,17 @@
+## [1.0.3] [2026-07-03] — Fix AES key extraction on first HA add-on run
+
+### Fixed
+- **"AES key not set" on first login** — `DATA_DIR` was written to the
+  pydantic-settings .env file but never exported to the OS environment.
+  `energipays.py` therefore cached the extracted key to site-packages (wiped
+  on every container rebuild) instead of the persistent `/data/` volume.
+  `docker-entrypoint.sh` now exports `DATA_DIR` and runs a pre-extraction
+  step that caches the key to `$DATA_DIR/.key_cache.json` before the app
+  starts, avoiding the chicken-and-egg where the validated path needs a
+  login token to validate the key.
+
+---
+
 ## [1.0.2] [2026-07-03] — Fix Ingress static file 404s
 
 ### Fixed
