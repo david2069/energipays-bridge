@@ -105,7 +105,28 @@ reuse its `_cached_fetch` pattern.
 
 ## Defects (untriaged)
 
-_None currently — new problems land here until pulled into a package._
+### [defect] Rule-timeline charts: inconsistent colours/legends across the three renderings
+Reported 2026-07-04 (screenshot: dashboard active-rule bar vs Solar Forecast
+"Rule schedule (today)" strip). Each timeline has its own hand-rolled palette:
+- **Dashboard active-rule timeline** (`templates/tabs/dashboard.html` ~270-310):
+  inline hex — Disable `#3b82f6` (blue-500), Boost `#ef4444`, Solar-PV-off
+  `#fbbf24` overlay, Not-set `bg-slate-600/40`; legend includes "Not set",
+  "Solar PV off", "Now"
+- **Solar Forecast rule strip** (`dashboard.html` ~1442-1470): Tailwind classes —
+  Disable `bg-sky-400` (different blue!), Boost `bg-red-500`, not-set
+  `bg-slate-200`/`bg-slate-700/60`; its legend row also mixes chart-series
+  colours (Today amber / Tomorrow sky) with slot colours, so sky-blue means
+  BOTH "Tomorrow" and "Disable" in the same card
+- **Rules tab cards/editor** (`static/js/rules_tab.js:3` CMD_COLOR +
+  `templates/tabs/rules.html` ~331-336): muted darks — `bg-blue-900/40`,
+  `bg-red-900/40`
+Also visible in the screenshot: the active-rule bar rendered UNFILLED (all
+"not set") for the running "Daily boost & disable" rule while the solar strip
+below coloured the same rule correctly — investigate the slot-fill lookup
+(day-key/active_day expansion?) as part of the fix.
+**Fix shape:** one shared colour token set (single JS const or CSS variables)
+consumed by all three renderings + a shared legend partial; separate the
+chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
 
 ## Notes / smaller items (unscheduled)
 
