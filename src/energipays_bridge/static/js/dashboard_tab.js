@@ -104,26 +104,35 @@ function dashboardTab() {
       const rule = (this._rulePickerRules || []).find(r => r.id === activeId)
       if (!rule) { this.sendBoost(period); return }
 
-      // Find slots today that are Boost (cmd=2) or Disable (cmd=1)
-      const todayDay = new Date().getDay()  // 0=Sun … 6=Sat
-      const dayKey = ['d7','d1','d2','d3','d4','d5','d6'][todayDay]  // rule uses d1=Mon…d7=Sun
-      const slots = (rule.schedule || []).filter(s => {
-        if (!s[dayKey]) return false
-        const cmd = parseInt(s.command ?? s.cmd ?? 0)
-        return cmd === 1 || cmd === 2  // Disable=1, Boost=2
-      })
+      const data = rule.data || {}
+      const now = new Date()
+      const hhmm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0')
+      const jsDay = now.getDay()
+      const todayKey = `d${jsDay === 0 ? 7 : jsDay}`
+      const everyday = rule.everyday || Object.keys(data).filter(k => /^d\d$/.test(k)).length === 7
+      const keys = everyday ? [todayKey] : Object.keys(data).filter(k => /^d\d$/.test(k))
 
       const CMD_LABELS = { 1: 'Disable', 2: 'Boost' }
-      this.boostConflictRule = rule
-      this.boostConflictSlots = slots.map(s => ({
-        time: (s.start_time || s.startTime || '?') + ' – ' + (s.end_time || s.endTime || '?'),
-        label: CMD_LABELS[parseInt(s.command ?? s.cmd ?? 0)] || 'Command',
-      }))
+      const conflicting = []
+      for (const key of keys) {
+        for (const slot of (data[key] || [])) {
+          const cmd = parseInt(slot.command ?? 0)
+          if (cmd !== 1 && cmd !== 2) continue
+          // Slot overlaps with now or is upcoming today
+          if (slot.timeTo > hhmm) {
+            conflicting.push({
+              time: slot.timeFrom + ' – ' + slot.timeTo,
+              label: CMD_LABELS[cmd] || 'Command',
+            })
+          }
+        }
+      }
 
-      if (this.boostConflictSlots.length > 0) {
+      this.boostConflictRule = rule
+      this.boostConflictSlots = conflicting
+      if (conflicting.length > 0) {
         this.boostConflictOpen = true
       } else {
-        // Rule active but no conflicting slots today — boost freely
         this.sendBoost(period)
       }
     },

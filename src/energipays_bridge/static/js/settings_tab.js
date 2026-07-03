@@ -641,6 +641,9 @@ function notificationsCard() {
     devFormOpen: false,
     devSaving: false,
     devDiscovering: false,
+    devTesting: false,
+    devTestResult: '',
+    devTestOk: false,
     devFormError: '',
     devTargets: [],
     devForm: { id: null, ha_instance_id: '', alias: '', service_target: '', enabled: true },
@@ -682,6 +685,7 @@ function notificationsCard() {
     openInstForm(inst) {
       this.instFormError = ''
       this.instTestResult = ''
+      this.instTestOk = inst != null  // existing instances are assumed already tested
       if (inst) {
         this.instForm = { ...inst, token: '••••' }
       } else {
@@ -712,6 +716,12 @@ function notificationsCard() {
         this.instTestResult = '✗ ' + String(e)
       }
       this.instTesting = false
+    },
+
+    saveInstanceWithWarning() {
+      if (confirm('You have not tested this connection. Save anyway?')) {
+        this.saveInstance()
+      }
     },
 
     async saveInstance() {
@@ -755,12 +765,44 @@ function notificationsCard() {
     openDevForm(dev) {
       this.devFormError = ''
       this.devTargets = []
+      this.devTestResult = ''
+      this.devTestOk = false
       if (dev) {
         this.devForm = { id: dev.id, ha_instance_id: dev.ha_instance_id, alias: dev.alias, service_target: dev.service_target, enabled: !!dev.enabled }
       } else {
         this.devForm = { id: null, ha_instance_id: this.instances[0]?.id || '', alias: '', service_target: '', enabled: true }
       }
       this.devFormOpen = true
+    },
+
+    async testDeviceNotification() {
+      if (!this.devForm.service_target || !this.devForm.ha_instance_id) return
+      this.devTesting = true
+      this.devTestResult = ''
+      this.devFormError = ''
+      try {
+        // Save temporarily if new (needed for test via /api/notifications/test which sends to all enabled)
+        // Instead, test directly via HA service using the instance token
+        const inst = this.instances.find(i => i.id === this.devForm.ha_instance_id)
+        if (!inst) { this.devTestResult = '✗ HA instance not found'; this.devTestOk = false; this.devTesting = false; return }
+        // Save device temporarily then trigger test, then we can reload
+        const tempId = this.devForm.id || ('tmp-' + crypto.randomUUID())
+        const body = { ...this.devForm, id: tempId, enabled: true }
+        const saveR = await fetch('/api/ha/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        if (!saveR.ok) { this.devTestResult = '✗ Could not register device for test'; this.devTestOk = false; this.devTesting = false; return }
+        if (!this.devForm.id) this.devForm.id = tempId
+        const r = await fetch('/api/notifications/test', { method: 'POST' })
+        const d = await r.json()
+        this.devTestOk = d.sent
+        this.devTestResult = d.sent
+          ? `✓ Notification sent to ${this.devForm.alias || this.devForm.service_target}`
+          : ('✗ ' + (d.reason === 'disabled' ? 'Enable notifications first' : d.reason === 'no_devices' ? 'No devices found' : (d.reason || 'Send failed')))
+        await this.loadDevices()
+      } catch (e) {
+        this.devTestOk = false
+        this.devTestResult = '✗ ' + String(e)
+      }
+      this.devTesting = false
     },
 
     async discoverTargets() {
