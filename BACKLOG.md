@@ -91,6 +91,18 @@ the Mosquitto add-on is installed:
 - Wizard copy: branch on `runtime` from `/api/setup/status` (ha_addon vs
   docker) — never mention env vars in the HA path.
 
+### 3d. [enh] "Re-run setup wizard" affordance
+The wizard opens ONLY on first run — `app.js:238` sets `setupModal = true`
+solely when `needsSetup` (no credentials). There is no way to reopen it, so
+anything skipped during setup (MQTT, integrations, notifications) is
+unreachable-by-wizard forever.
+- Add a "Run setup wizard" button in Settings (and/or the user menu) that
+  sets `$store.app.setupModal = true` — the wizard's `init()` already
+  pre-fills from existing config, so re-entry is safe
+- With 3a/3b, the re-run wizard's MQTT step becomes a working
+  discover → pre-fill → Test → Save path, giving users a second chance at
+  everything they skipped
+
 ### 3c. [defect] Settings → MQTT Discovery card has no way to enable/configure
 Reported 2026-07-04 (HA add-on): card shows "Disabled" + "Set
 MQTT_ENABLED=true in env to activate" (`templates/tabs/settings.html` ~626)
