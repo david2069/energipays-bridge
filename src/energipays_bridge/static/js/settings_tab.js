@@ -603,11 +603,27 @@ function mqttSettings() {
     mqttHost: '—',
     mqttPort: '—',
     mqttUsername: '',
+    mqttTls: false,
     mqttPrefix: 'homeassistant',
     republishing: false,
     unpublishing: false,
     actionMsg: '',
     actionOk: true,
+
+    // ── Edit form ────────────────────────────────────────────────────────────
+    editing: false,
+    editHost: '',
+    editPort: '1883',
+    editUsername: '',
+    editPassword: '',
+    editTls: false,
+    discovering: false,
+    discoverMsg: '',
+    discoverOk: false,
+    testing: false,
+    testMsg: '',
+    testOk: false,
+    saving: false,
 
     async init() {
       try {
@@ -620,8 +636,89 @@ function mqttSettings() {
         this.mqttHost = d.host
         this.mqttPort = d.port
         this.mqttUsername = d.username
+        this.mqttTls = !!d.tls
         this.mqttPrefix = d.discovery_prefix
       } catch (_) {}
+    },
+
+    openEdit() {
+      this.editHost = this.mqttEnabled ? this.mqttHost : ''
+      this.editPort = String(this.mqttEnabled ? this.mqttPort : 1883)
+      this.editUsername = this.mqttEnabled ? this.mqttUsername : ''
+      this.editPassword = ''
+      this.editTls = this.mqttTls
+      this.discoverMsg = ''; this.testMsg = ''
+      this.editing = true
+      if (!this.editHost) this.runDiscover()
+    },
+
+    async runDiscover() {
+      this.discovering = true; this.discoverMsg = ''
+      try {
+        const r = await fetch('api/mqtt/discover')
+        const d = await r.json()
+        if (d.found) {
+          this.editHost = d.host
+          this.editPort = String(d.port)
+          if (d.username) this.editUsername = d.username
+          if (d.password) this.editPassword = d.password
+          this.editTls = !!d.tls
+          this.discoverOk = true
+          this.discoverMsg = d.source === 'supervisor'
+            ? 'Found HA broker via Supervisor (credentials included)'
+            : `Found broker at ${d.host}:${d.port}`
+        } else {
+          this.discoverOk = false
+          this.discoverMsg = d.error || 'No broker found — enter details manually'
+        }
+      } catch (e) {
+        this.discoverOk = false
+        this.discoverMsg = 'Discovery request failed'
+      } finally { this.discovering = false }
+    },
+
+    async testMqtt() {
+      this.testing = true; this.testMsg = ''
+      try {
+        const r = await fetch('api/mqtt/test', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            host: this.editHost, port: parseInt(this.editPort) || 1883,
+            username: this.editUsername, password: this.editPassword, tls: this.editTls,
+          }),
+        })
+        const d = await r.json()
+        this.testOk = !!d.ok
+        this.testMsg = d.ok ? 'Connected successfully' : (d.error || 'Connection failed')
+      } catch (e) {
+        this.testOk = false
+        this.testMsg = 'Network error'
+      } finally { this.testing = false }
+    },
+
+    async saveEdit() {
+      this.saving = true
+      try {
+        const r = await fetch('api/mqtt/config', {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            enabled: true, host: this.editHost, port: parseInt(this.editPort) || 1883,
+            username: this.editUsername, password: this.editPassword || null, tls: this.editTls,
+          }),
+        })
+        const d = await r.json()
+        if (d.ok) {
+          this.editing = false
+          Alpine.store('app').addToast('MQTT settings saved', 'success')
+          await this.init()
+        } else {
+          Alpine.store('app').addToast('Failed to save MQTT settings', 'error')
+        }
+      } catch (e) {
+        Alpine.store('app').addToast('Network error saving MQTT settings', 'error')
+      } finally { this.saving = false }
     },
 
     async toggleMqttPause() {

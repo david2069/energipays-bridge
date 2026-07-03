@@ -15,11 +15,18 @@
   <div class="card mb-6">
     <div class="flex items-center justify-between mb-3">
       <div class="font-medium text-slate-200">Energipays Account</div>
-      <button x-show="!changingCredentials"
-              @click="changingCredentials = true"
-              class="text-xs text-brand hover:text-brand/80 transition-colors">
-        Change account
-      </button>
+      <div class="flex items-center gap-3">
+        <button @click="window.dispatchEvent(new CustomEvent('open-setup-wizard'))"
+                title="Re-open the setup wizard to configure MQTT, integrations, or notifications you skipped"
+                class="text-xs text-slate-400 hover:text-slate-200 transition-colors">
+          Run setup wizard
+        </button>
+        <button x-show="!changingCredentials"
+                @click="changingCredentials = true"
+                class="text-xs text-brand hover:text-brand/80 transition-colors">
+          Change account
+        </button>
+      </div>
     </div>
 
     <!-- Connected account summary -->
@@ -633,21 +640,69 @@
 
     <!-- Enable / Pause row -->
     <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-700">
-      <div>
-        <span class="text-sm text-slate-300">Publishing</span>
-        <span x-show="!mqttEnabled" class="ml-2 text-xs text-slate-500 italic">Set <code class="text-slate-400">MQTT_ENABLED=true</code> in env to activate</span>
-      </div>
-      <div class="flex items-center gap-2" x-show="mqttEnabled">
-        <button @click="mqttPaused ? toggleMqttPause() : (mqttConfirmOff = true)"
+      <span class="text-sm text-slate-300">Publishing</span>
+      <div class="flex items-center gap-2">
+        <button x-show="mqttEnabled" @click="mqttPaused ? toggleMqttPause() : (mqttConfirmOff = true)"
                 :class="mqttPaused ? 'bg-slate-600 text-slate-400 hover:bg-slate-500' : 'bg-green-600 text-white hover:bg-green-700'"
                 class="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
                 x-text="mqttPaused ? 'OFF' : 'ON'">
         </button>
+        <button @click="openEdit()"
+                class="text-xs px-3 py-1.5 rounded-lg font-medium border border-slate-600 text-slate-300 hover:border-slate-400 transition-colors"
+                x-text="mqttEnabled ? 'Edit' : 'Enable MQTT…'">
+        </button>
       </div>
-      <div x-show="!mqttEnabled" class="text-xs text-slate-600">—</div>
     </div>
 
-    <div class="space-y-1.5 mb-4">
+    <!-- Edit form -->
+    <template x-if="editing">
+      <div class="mb-4 pb-4 border-b border-slate-700 space-y-2">
+        <div class="flex items-center gap-2">
+          <button @click="runDiscover()" :disabled="discovering"
+                  class="px-2.5 py-1 rounded text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 disabled:opacity-40 shrink-0">
+            <span x-show="discovering">Searching…</span><span x-show="!discovering">🔍 Find broker</span>
+          </button>
+          <span x-show="discoverMsg" class="text-[10px]" :class="discoverOk ? 'text-green-400' : 'text-amber-400'" x-text="discoverMsg"></span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Host</div>
+            <input type="text" x-model="editHost" class="w-full bg-slate-700 text-slate-100 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Port</div>
+            <input type="number" x-model="editPort" class="w-full bg-slate-700 text-slate-100 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Username <span class="text-slate-600">(optional)</span></div>
+            <input type="text" x-model="editUsername" class="w-full bg-slate-700 text-slate-100 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Password <span class="text-slate-600">(optional)</span></div>
+            <input type="password" x-model="editPassword" placeholder="unchanged" class="w-full bg-slate-700 text-slate-100 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand font-mono"/>
+          </div>
+        </div>
+        <label class="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <input type="checkbox" x-model="editTls" class="w-3 h-3 accent-brand"/> Use TLS
+        </label>
+        <div class="flex items-center gap-2">
+          <button @click="testMqtt()" :disabled="testing || !editHost"
+                  class="px-2.5 py-1 rounded text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 disabled:opacity-40">
+            <span x-show="testing">Testing…</span><span x-show="!testing">Test connection</span>
+          </button>
+          <span x-show="testMsg" class="text-[10px]" :class="testOk ? 'text-green-400' : 'text-red-400'" x-text="testMsg"></span>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button @click="editing = false" class="flex-1 py-1.5 rounded-lg text-xs border border-slate-600 text-slate-300 hover:border-slate-400 transition-colors">Cancel</button>
+          <button @click="saveEdit()" :disabled="saving || !editHost"
+                  class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-brand hover:bg-brand/90 text-white disabled:opacity-40 transition-colors">
+            <span x-show="saving">Saving…</span><span x-show="!saving">Save</span>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <div class="space-y-1.5 mb-4" x-show="mqttEnabled && !editing">
       <template x-for="[label, val] in [['Broker host', mqttHost],['Port', mqttPort],['Username', mqttUsername || '(none)'],['Discovery prefix', mqttPrefix]]" :key="label">
         <div class="flex items-center justify-between text-xs">
           <span class="text-slate-500" x-text="label"></span>
@@ -656,7 +711,7 @@
       </template>
     </div>
 
-    <div class="flex gap-2">
+    <div class="flex gap-2" x-show="!editing">
       <button @click="republish()" :disabled="!mqttEnabled || mqttPaused || republishing"
               class="flex-1 py-2 rounded-lg text-xs font-medium bg-brand/20 text-brand border border-brand/30 hover:bg-brand/30 disabled:opacity-40 transition-colors">
         <span x-show="!republishing">↺ Republish discovery</span>

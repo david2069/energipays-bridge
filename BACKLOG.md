@@ -15,105 +15,11 @@ Issues; this file stays the release-packaging layer.)
 
 ---
 
-## Package 3 — HA-native MQTT setup: Supervisor auto-discovery + working wizard step
-
-**Status: approved — HIGH priority, ships next.** Package 1 (Safe Mode
-removal, READ_ONLY flag, rules-race 500 fix) shipped as v1.1.2 on 2026-07-04
-— see Shipped below. This is now the next package to build. Bundled as ONE
-release covering wizard + Settings + re-run affordance — not split further.
-Phases are dependency-ordered, not independently shippable except Phase 4.
-
-**Root cause underlying 3a/3c looking "decorative":** MQTT config today is
-boot-time-only and env-only — `main.py:177-192` builds `MqttSettings()` from
-env vars ONCE during the FastAPI lifespan and only starts `MqttPublisher` if
-already enabled at that instant. There is currently NO code path that can
-enable/reconfigure MQTT after the app has started, from anywhere. Phase 0
-below is what makes 3a/3b/3c real instead of cosmetic.
-
-**Dependency graph:**
-```
-Phase 0 (runtime-reconfigurable backend) ──┬──> Phase 1 (discovery/test API) ──┬──> Phase 2 (wizard step)
-                                            │                                    └──> Phase 3 (settings card)
-                                            └──> Phase 3 also needs Phase 0 directly
-
-Phase 4 (re-run wizard button) — independent, no dependency on the others
-```
-
-### Phase 0. [enh] Runtime-reconfigurable MQTT backend (foundation — build first)
-- Config resolution: DB `app_config` override → env → default, for
-  `mqtt_host/port/username/password/tls/enabled`. New `get_mqtt_settings(db)`
-  helper in `store/db.py` overlaying `MqttSettings()` (env baseline) with any
-  `mqtt_`-prefixed `app_config` rows.
-- Extract `main.py:177-192` into an async `reconfigure_mqtt(app)`: stops the
-  existing publisher if running, builds a fresh `MqttPublisher` from resolved
-  settings, starts it, re-subscribes to the bus, restores `mqtt_paused`.
-  Lifespan startup just calls this once; it becomes callable at any time.
-- New `PUT /api/mqtt/config` — writes DB overrides via `set_config`, then
-  calls `reconfigure_mqtt(app)`. Single choke point for every UI surface.
-
-### Phase 1. [enh] Supervisor auto-discovery + test endpoint
-HA exposes broker discovery incl. credentials via the Supervisor — no user
-input needed when the Mosquitto add-on is installed:
-- `config.yaml`: add `hassio_api: true` and `services: ["mqtt:want"]`
-- `GET /api/mqtt/discover`: in `ha_addon` runtime
-  (`environment.py` `IS_HA_ADDON`), call `GET http://supervisor/services/mqtt`
-  with `Authorization: Bearer $SUPERVISOR_TOKEN` → `{host, port, username,
-  password, ssl}`; in docker/dev runtime, probe candidates (`core-mosquitto`,
-  `host.docker.internal:1883/1886`, `localhost:1883`) via short TCP connect,
-  no credential guessing. Response: `{"found", "host", "port", "username",
-  "password", "source": "supervisor"|"probe"}`.
-- `POST /api/mqtt/test`: real broker connect attempt (paho, short timeout)
-  with caller-supplied candidate settings → `{ok, error}`. Test-only, does
-  not persist.
-- **Known test gap**: the Supervisor discovery path cannot be exercised in
-  the dev container (no fake Supervisor to simulate) — real verification of
-  this path only happens on an actual HA install. Flag this explicitly when
-  reporting dev-container test results; don't claim it's covered.
-
-### Phase 2. [defect] Wizard MQTT step is decorative and its guidance is wrong for HA
-- Step 2 fields (MQTT_HOST/MQTT_PORT) are never persisted today — `advance()`
-  in `setup_modal.html` just steps through; `wantMqtt/mqttHost/mqttPort` go
-  nowhere, yet "Setup complete" claims MQTT is configured.
-- On step entry: call discover (Phase 1) → pre-fill + "Found HA broker (via
-  Supervisor)" / "Found broker at host:port" banner, or blank fields if not
-  found (no more fake `core-mosquitto` default).
-- Add **Test** button (mirrors the AES-key-tools pattern already shipped in
-  v1.1.1's wizard) using Phase 1's test endpoint.
-- `advance()` calls `PUT /api/mqtt/config` (Phase 0) before moving to step 3.
-- Copy branches on `runtime` from `/api/setup/status` — HA path never says
-  "set MQTT_ENABLED=true in your environment".
-
-### Phase 3. [defect] Settings → MQTT Discovery card has no way to enable/configure
-Reported 2026-07-04 (HA add-on): card shows "Disabled" + "Set
-MQTT_ENABLED=true in env to activate" (`templates/tabs/settings.html` ~626)
-with read-only broker fields and no enable control; the existing ON/OFF
-toggle is only a runtime pause once already enabled.
-- Replace with the same controls as the wizard step: enable toggle, editable
-  host/port/user/pass, Test, Save → `PUT /api/mqtt/config` (Phase 0). Mostly
-  UI reuse of Phase 0/1 endpoints, minimal new backend work.
-- Same runtime-aware copy rule as Phase 2.
-- (Hardcoded "Same broker as the FranklinWH Modbus Bridge." sentence already
-  removed on main, 2026-07-04.)
-
-### Phase 4. [defect] No way to re-run the setup wizard — skipped steps unreachable forever
-Independent of Phases 0-3; trivial standalone fix if ever needed ahead of the
-rest, but bundled into this release per 2026-07-04 decision.
-The wizard opens ONLY on first run — `app.js:238` sets `setupModal = true`
-solely when `needsSetup` (no credentials). No way to reopen it, so anything
-skipped during setup (MQTT, integrations, notifications) is unreachable by
-wizard forever.
-- Add a "Run setup wizard" button in Settings (and/or user menu) that sets
-  `$store.app.setupModal = true` — wizard `init()` already pre-fills from
-  existing config, so re-entry is safe.
-- With Phases 1-2 done, the re-run wizard's MQTT step becomes a working
-  discover → pre-fill → Test → Save path — a second chance at everything
-  skipped the first time.
-
----
-
 ## Package 2 — Solar forecast scaling + cloud-default charts + throttling leftovers
 
-**Status: approved, queued — priority: normal, after Package 3**
+**Status: approved, queued — priority: normal.** Package 3 (MQTT setup)
+shipped as v1.1.3 on 2026-07-04 — see Shipped below. This is now the next
+package to build.
 
 ### 2a. [defect] Solar PV forecast is unscaled irradiance (confirmed too low)
 `api/solar.py` returns raw horizontal `shortwave_radiation` W/m²;
@@ -265,3 +171,20 @@ chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
   ever calling the underlying client; `safe_mode` config key rejected as
   unknown; zero remaining `safe_mode`/`safeMode` references anywhere in the
   codebase (`grep` swept clean).
+- **v1.1.3 (2026-07-04) — Package 3 complete**: MQTT is now actually
+  configurable from the UI. Phase 0 extracted the publisher lifecycle into
+  `mqtt_lifecycle.reconfigure_mqtt()` (callable any time, not just at boot)
+  with DB-override > env > default resolution (`store/db.get_mqtt_settings`/
+  `set_mqtt_override`); Phase 1 added Supervisor auto-discovery
+  (`GET /api/mqtt/discover`) and a real connect test (`POST /api/mqtt/test`);
+  Phase 2 made the wizard's MQTT step persist and test for real; Phase 3 made
+  the Settings → MQTT Discovery card fully self-service (enable/edit/test/
+  save); Phase 4 added a "Run setup wizard" re-entry button with correct
+  step-reset (the wizard's x-data instance persists across x-show, so a
+  naive reopen would have shown stale "Setup complete" state). Verified
+  end-to-end in the dev container against a real local Mosquitto broker:
+  discovery found it via TCP probe, test performed a genuine CONNECT/CONNACK,
+  enabling via the API started a publisher that actually connected, and
+  toggling off/on twice showed zero subscriber leak. Known gap: the
+  Supervisor discovery branch itself needs a live HA check — no fake
+  Supervisor exists to simulate it in the dev container.

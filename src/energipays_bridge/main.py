@@ -26,9 +26,9 @@ from .api import setup as setup_api
 from .api.admin import install_log_handler, set_log_db
 from .api.http_metrics import HttpMetrics, attach_metrics_hook
 from .api import http_metrics as http_metrics_api
-from .config.settings import BridgeSettings, MqttSettings
+from .config.settings import BridgeSettings
+from .mqtt_lifecycle import reconfigure_mqtt
 from .poller import EnergipaysPoller
-from .publish.mqtt_publisher import MqttPublisher
 from .sample import SampleBus
 from .integrations.registry import IntegrationRegistry
 from .store.credentials import load_credentials
@@ -171,44 +171,10 @@ async def lifespan(app: FastAPI):
     app.state.poller = poller
 
     # ── 6. MQTT publisher ─────────────────────────────────────────────────────
-    mqtt_settings = MqttSettings()
-    mqtt_publisher: MqttPublisher | None = None
-    if mqtt_settings.enabled:
-        mqtt_publisher = MqttPublisher(
-            host=mqtt_settings.host,
-            port=mqtt_settings.port,
-            username=mqtt_settings.username or None,
-            password=mqtt_settings.password or None,
-            tls=mqtt_settings.tls,
-            discovery_prefix=mqtt_settings.discovery_prefix,
-            read_only=settings.read_only,
-        )
-        await mqtt_publisher.start()
-        if await get_config(db, "mqtt_paused", "0") == "1":
-            mqtt_publisher.paused = True
-            log.info("MQTT publisher paused (runtime toggle)")
-        bus.subscribe(mqtt_publisher.queue_sample)
-        log.info("MQTT publisher enabled → %s:%s", mqtt_settings.host, mqtt_settings.port)
-
-        # Wire command dispatch if client is available
-        ep_client = getattr(app.state, "_mqtt_client", None)
-        ep_device_id = getattr(app.state, "_mqtt_device_id", None)
-        ep_data_server = getattr(app.state, "_mqtt_data_server", "")
-        if ep_client and ep_device_id:
-            mqtt_publisher.set_client(ep_client, ep_device_id, ep_data_server)
-
-        # Fetch rules for active_rule select options
-        if ep_client:
-            try:
-                rules_resp = await asyncio.to_thread(ep_client.rules)
-                rules = rules_resp if isinstance(rules_resp, list) else rules_resp.get("data", [])
-                await mqtt_publisher.set_rules(rules)
-                log.info("MQTT: loaded %d rules for active_rule select", len(rules))
-            except Exception as exc:
-                log.warning("MQTT: failed to load rules: %s", exc)
-    else:
-        log.info("MQTT disabled — set MQTT_ENABLED=true to enable")
-    app.state.mqtt_publisher = mqtt_publisher
+    # Delegated to mqtt_lifecycle.reconfigure_mqtt() so the same logic can be
+    # re-run later (setup wizard, Settings card) without an app restart.
+    app.state.mqtt_publisher = None
+    await reconfigure_mqtt(app)
 
     # ── 7. Integration registry ───────────────────────────────────────────────
     integration_registry = IntegrationRegistry(db, bus)
@@ -253,8 +219,8 @@ async def lifespan(app: FastAPI):
     await integration_registry.stop_all()
     if poller:
         await poller.stop()
-    if mqtt_publisher:
-        await mqtt_publisher.stop()
+    if app.state.mqtt_publisher:
+        await app.state.mqtt_publisher.stop()
     await db.close()
     log.info("energipays-bridge stopped")
 

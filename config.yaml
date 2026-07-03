@@ -1,6 +1,6 @@
 name: "Energipays Bridge"
 description: "Unofficial self-hosted integration and dashboard for Powerdiverter solar PV diverters using the Energipays Cloud."
-version: "1.1.2"
+version: "1.1.3"
 slug: "energipays_bridge"
 url: "https://github.com/david2069/energipays-bridge"
 init: false
@@ -15,6 +15,13 @@ arch:
 
 ingress: true
 ingress_port: 8080
+
+# Grants access to http://supervisor/services/mqtt so the setup wizard and
+# Settings can auto-discover the Mosquitto add-on's broker + credentials
+# instead of asking the user to type them in.
+hassio_api: true
+services:
+  - "mqtt:want"
 
 ports:
   8080/tcp: 8080

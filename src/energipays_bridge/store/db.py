@@ -146,6 +146,50 @@ async def set_config(db: aiosqlite.Connection, key: str, value: str) -> None:
     await db.commit()
 
 
+# ── MQTT settings (DB override > env > default) ────────────────────────────────
+# MQTT can be turned on/reconfigured after boot (setup wizard, Settings card),
+# but /data/ha_options.env is regenerated from options.json on every container
+# restart — not a writable target. DB app_config rows are the only place a
+# runtime change can persist.
+_MQTT_OVERRIDE_KEYS: list[tuple[str, str]] = [
+    ("mqtt_host", "host"),
+    ("mqtt_port", "port"),
+    ("mqtt_username", "username"),
+    ("mqtt_password", "password"),
+    ("mqtt_tls", "tls"),
+    ("mqtt_enabled", "enabled"),
+]
+
+
+async def get_mqtt_settings(db: aiosqlite.Connection):
+    """Resolve MqttSettings with any DB app_config overrides applied on top of env."""
+    from ..config.settings import MqttSettings  # noqa: PLC0415 (avoid import cycle)
+
+    base = MqttSettings()
+    overrides: dict = {}
+    for db_key, field in _MQTT_OVERRIDE_KEYS:
+        val = await get_config(db, db_key, "")
+        if val == "":
+            continue
+        if field == "port":
+            overrides[field] = int(val)
+        elif field in ("tls", "enabled"):
+            overrides[field] = val == "1"
+        else:
+            overrides[field] = val
+    return base.model_copy(update=overrides) if overrides else base
+
+
+async def set_mqtt_override(db: aiosqlite.Connection, field: str, value) -> None:
+    """Persist one MQTT field override. field must be a key in _MQTT_OVERRIDE_KEYS."""
+    db_key = next((k for k, f in _MQTT_OVERRIDE_KEYS if f == field), None)
+    if db_key is None:
+        raise ValueError(f"Unknown MQTT override field '{field}'")
+    if isinstance(value, bool):
+        value = "1" if value else "0"
+    await set_config(db, db_key, str(value))
+
+
 # ── HA Instances ──────────────────────────────────────────────────────────────
 
 async def get_ha_instances(db: aiosqlite.Connection) -> list[dict]:

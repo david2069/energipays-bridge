@@ -1,3 +1,59 @@
+## 1.1.3 — MQTT actually configurable: Supervisor auto-discovery + working wizard/Settings
+
+### Fixed
+- **MQTT could not be enabled or reconfigured from the UI** — `MqttSettings()`
+  was read from env exactly once during FastAPI startup with no code path to
+  change it afterwards, so the wizard's MQTT step never persisted anything
+  (`advance()` just stepped through) and the Settings → MQTT Discovery card
+  was read-only with no enable control. Extracted the publisher lifecycle
+  into `mqtt_lifecycle.reconfigure_mqtt()`, callable at any time — MQTT
+  settings now resolve DB-override → env → default
+  (`store/db.get_mqtt_settings()` / `set_mqtt_override()`), so the wizard and
+  Settings can both turn MQTT on, point it at a different broker, or turn it
+  off, live, with no container restart.
+- **Wizard/Settings MQTT copy told HA users to set environment variables** —
+  HA add-on users have no env vars to set. Copy no longer mentions them.
+
+### Added
+- **Supervisor MQTT auto-discovery** (`GET /api/mqtt/discover`) — on the HA
+  add-on, queries `http://supervisor/services/mqtt` (needs `hassio_api: true`
+  + `services: ["mqtt:want"]`, added to `config.yaml`) and returns the
+  Mosquitto add-on's host, port, and credentials with zero user input. On
+  docker/dev, probes common local addresses
+  (`core-mosquitto`, `host.docker.internal:1883/1886`, `localhost:1883`).
+- **Real connection test** (`POST /api/mqtt/test`) — an actual broker
+  connect/disconnect with the candidate settings, used by both the wizard's
+  MQTT step and the Settings card before saving.
+- **Settings → MQTT Discovery is now self-service**: enable toggle, editable
+  host/port/username/password/TLS, Test, Save — all live-applied via
+  `PUT /api/mqtt/config`. Leaving the password field blank on an edit keeps
+  the existing stored password (does not wipe it).
+- **"Run setup wizard" button** in Settings — the wizard previously only
+  ever appeared on first run with no way to revisit skipped steps
+  (MQTT, integrations, notifications). Re-opening now correctly resets the
+  wizard back to a fresh pass and re-fetches live config, instead of showing
+  whatever step ("Setup complete") was left over from the first run.
+- Optional HA add-on config field `read_only` was already present (v1.1.2);
+  this release adds no new HA config.yaml options beyond the Supervisor
+  service grant above.
+
+### Verified (dev container, real local Mosquitto broker on the LAN)
+- `GET /api/mqtt/discover` (docker/dev path) found a real broker via the
+  `host.docker.internal` probe
+- `POST /api/mqtt/test` performed a genuine MQTT CONNECT/CONNACK round trip
+- `PUT /api/mqtt/config {"enabled": true, ...}` started a real `MqttPublisher`
+  that connected to that broker; `GET /api/mqtt/config` reflected
+  `connected: true`
+- Toggling MQTT off/on twice showed exactly one bus subscription removed per
+  cycle — no subscriber-leak across repeated reconfiguration
+- Package 1 regressions checked: rules-race still 503s, `safe_mode` config
+  key still rejected, `read_only` still reported correctly
+- **Known gap**: the Supervisor discovery path itself (the `ha_addon`
+  branch) cannot be exercised in the dev container — there is no fake
+  Supervisor to simulate. Needs a live check on the HA add-on.
+
+---
+
 ## 1.1.2 — Remove Safe Mode, add READ_ONLY, fix rules-tab 500s + NEM fetch hardening
 
 ### Fixed
