@@ -5,7 +5,22 @@ Format: `[YYYY-MM-DD] — description`.
 
 ---
 
-## [2026-07-03] — External integrations, setup wizard, MQTT toggle, dashboard UX
+## [1.0.1] [2026-07-03] — HA Ingress + startup fix
+
+### Added
+- **HA Ingress support** — add-on UI now opens inside the HA sidebar via the Ingress
+  button; no need to open port 8080 directly. `_HAIngressMiddleware` strips the
+  `X-Ingress-Path` prefix; `<base href>` tag injected in the SPA shell; fetch()
+  interceptor in app.js rewrites `/api/...` calls to the ingress-prefixed path
+
+### Fixed
+- **Startup crash without credentials** — `device_id` and `data_server` are now
+  initialised before the credentials block so the app starts cleanly on first run
+  (e.g. HA add-on install before entering credentials)
+
+---
+
+## [1.0.0] [2026-07-03] — External integrations, setup wizard, MQTT toggle, dashboard UX
 
 ### Added
 - **External integrations framework** — REST, Modbus TCP, HA WebSocket, MQTT pollers;
