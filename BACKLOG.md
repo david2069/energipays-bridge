@@ -91,7 +91,7 @@ the Mosquitto add-on is installed:
 - Wizard copy: branch on `runtime` from `/api/setup/status` (ha_addon vs
   docker) — never mention env vars in the HA path.
 
-### 3d. [enh] "Re-run setup wizard" affordance
+### 3d. [defect] No way to re-run the setup wizard — skipped steps unreachable forever
 The wizard opens ONLY on first run — `app.js:238` sets `setupModal = true`
 solely when `needsSetup` (no credentials). There is no way to reopen it, so
 anything skipped during setup (MQTT, integrations, notifications) is
