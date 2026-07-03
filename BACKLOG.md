@@ -103,6 +103,42 @@ reuse its `_cached_fetch` pattern.
 
 ---
 
+## Package 3 — HA-native MQTT setup: Supervisor auto-discovery + working wizard step
+
+**Status: proposed** (from HA add-on install feedback 2026-07-04)
+
+### 3a. [defect] Wizard MQTT step is decorative and its guidance is wrong for HA
+- The step 2 fields (MQTT_HOST/MQTT_PORT) are never persisted — `advance()`
+  in `setup_modal.html` just steps through; `wantMqtt/mqttHost/mqttPort` go
+  nowhere. The "Setup complete" screen then claims MQTT is configured.
+- The copy says "set MQTT_ENABLED=true in your environment" — HA add-on users
+  have no env vars. (MQTT is actually configurable today via the add-on
+  Configuration page: config.yaml options → ha_options.py → env. The wizard
+  should say/do that, or better, do 3b.)
+
+### 3b. [enh] Auto-discover the HA Mosquitto broker via the Supervisor services API
+HA provides broker discovery incl. credentials — no user input needed when
+the Mosquitto add-on is installed:
+- `config.yaml`: add `hassio_api: true` and `services: ["mqtt:want"]`
+- Backend `GET /api/mqtt/discover`: in `ha_addon` runtime, call
+  `GET http://supervisor/services/mqtt` with header
+  `Authorization: Bearer $SUPERVISOR_TOKEN` → `{host, port, username,
+  password, ssl}`; in docker/dev runtime, probe candidates
+  (`core-mosquitto`, `host.docker.internal:1883/1886`, `localhost:1883`)
+- Backend `POST /api/mqtt/test`: real broker connect attempt (paho) with the
+  candidate settings → `{ok, error}`
+- Wizard step 2: on load, call discover → pre-fill + "Found HA broker
+  (credentials supplied by Supervisor)" banner; **Test** button; on save,
+  PERSIST the settings and apply live (restart publisher)
+- Persistence design decision: MQTT settings currently come only from env at
+  boot (`MqttSettings`). Store wizard-entered values in DB `app_config` with
+  resolution order DB-override > env > default — `/data/ha_options.env` is
+  regenerated from options.json every boot, so it is NOT a writable target.
+- Wizard copy: branch on `runtime` from `/api/setup/status` (ha_addon vs
+  docker) — never mention env vars in the HA path.
+
+---
+
 ## Defects (untriaged)
 
 ### [defect] Rule edit silently not written — no failure surfaced (P1)
