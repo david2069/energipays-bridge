@@ -1,3 +1,14 @@
+## 1.1.0 — Fix AES key extraction using login credentials
+
+### Fixed
+- **AES key not set on login** — `_ensure_key()` is now called with the fully
+  initialised client (email + password) before the login attempt. This enables
+  the validated extraction path: one authenticated API call retrieves an encrypted
+  response, which is used to identify the correct key from the JS bundle.
+  No manual key entry, no CLI, no config fields required.
+
+---
+
 ## 1.0.9 — Fix terminal CLI path resolution
 
 ### Fixed
