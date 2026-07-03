@@ -1,3 +1,38 @@
+## 1.1.1 — AES key: real root cause fixed + in-wizard diagnostics + browser fallback
+
+### Fixed
+- **ROOT CAUSE of "AES key not set"** — every library-side key fix since v1.0.3
+  (DATA_DIR cache, fast-path JS-bundle extraction) existed only in the local
+  working tree of `energipays-client` and was **never pushed to GitHub**. The
+  HA add-on installs the library from GitHub, so the container always ran the
+  old library: key cache read from site-packages (never `/data/`), no fast
+  path, and a circular validated path that is guaranteed to fail on a fresh
+  install. Those fixes are now committed/pushed, and the Dockerfile pins the
+  library to a commit SHA so a stale Docker layer cache can never silently
+  ship an old library again.
+- **Library (energipays-client v0.2.0)** — fast-path extraction failures are
+  logged at WARNING (were swallowed at DEBUG); when the fast path fails with
+  no valid token, `_ensure_key()` raises an actionable error naming the cause
+  and the manual overrides instead of recursing into login and dying with the
+  generic message; 20s timeout on the key-validation fetch.
+- **Entrypoint cache poisoning** — removed the pass-3 "broad scan" fallback
+  that cached the first coincidental 32-byte base64 string (the main JS chunk
+  contains ~64 such strings — inline PNGs, config) as the key.
+
+### Added
+- **In-wizard AES key diagnostics** — Step 1 → "AES key tools" → *Run key
+  diagnostics* probes each extraction stage from inside the container (DNS ×2,
+  frontend fetch, chunk discovery, candidate scan) and reports every step with
+  the exact error. If extraction succeeds, the key is installed and cached on
+  the spot — the diagnosis doubles as the repair. Auto-runs whenever a login
+  attempt fails with a key-related error.
+- **Browser-console key extraction fallback** — copy-paste snippet that runs
+  same-origin on energipays.com in the user's own browser (no CLI, no second
+  machine, no CORS issue), prints the key, and a field to apply it via the
+  existing `/api/setup/set-key` endpoint.
+
+---
+
 ## 1.1.0 — Fix AES key extraction using login credentials
 
 ### Fixed

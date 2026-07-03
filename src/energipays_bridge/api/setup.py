@@ -98,6 +98,115 @@ async def setup_set_key(body: AesKeyBody, request: Request) -> dict:
         return JSONResponse(status_code=500, content={"ok": False, "error": str(exc)})
 
 
+def _run_key_diagnostics(data_dir: str) -> dict:
+    """Step-by-step AES key extraction probe, run from inside the container.
+
+    Each step records ok/detail/elapsed; if extraction yields exactly one
+    unique Base64.parse candidate, the key is installed + cached on the spot,
+    so a successful diagnostics run doubles as the repair.
+    """
+    import base64
+    import json as _json
+    import pathlib
+    import socket
+    import time
+
+    import requests
+
+    steps: list[dict] = []
+
+    def step(name: str, fn) -> tuple[bool, object]:
+        t0 = time.monotonic()
+        try:
+            detail = fn()
+            steps.append({"name": name, "ok": True, "detail": str(detail),
+                          "ms": int((time.monotonic() - t0) * 1000)})
+            return True, detail
+        except Exception as exc:
+            steps.append({"name": name, "ok": False,
+                          "detail": f"{type(exc).__name__}: {exc}",
+                          "ms": int((time.monotonic() - t0) * 1000)})
+            return False, None
+
+    def _dns(host: str) -> str:
+        addrs = sorted({ai[4][0] for ai in socket.getaddrinfo(host, 443)})
+        return ", ".join(addrs)
+
+    session = requests.Session()
+    session.headers["User-Agent"] = "Mozilla/5.0 (energipays-bridge key diagnostics)"
+
+    step("DNS resolve energipays.com", lambda: _dns("energipays.com"))
+    step("DNS resolve data-au-1.energipays.com", lambda: _dns("data-au-1.energipays.com"))
+
+    def _front() -> str:
+        r = session.get("https://energipays.com/", timeout=20)
+        return f"HTTP {r.status_code}, {len(r.content)} bytes"
+    step("Fetch https://energipays.com/", _front)
+
+    def _chunks() -> list[str]:
+        from extract_key import discover_chunk_urls
+        urls = discover_chunk_urls("https://energipays.com", session)
+        if not urls:
+            raise RuntimeError("no JS chunk URLs found (asset-manifest.json + index.html scrape both empty)")
+        return urls
+    ok, chunk_urls = step("Discover JS chunk URLs", _chunks)
+    if ok:
+        steps[-1]["detail"] = f"{len(chunk_urls)} chunks"
+
+    key_installed = False
+    if ok:
+        def _scan() -> str:
+            from extract_key import context_candidates_from_js
+            candidates: list[str] = []
+            per_chunk: list[str] = []
+            for url in chunk_urls:
+                r = session.get(url, timeout=20)
+                n = 0
+                if r.ok:
+                    for c in context_candidates_from_js(r.text):
+                        n += 1
+                        if c not in candidates:
+                            candidates.append(c)
+                per_chunk.append(f"{url.rsplit('/', 1)[-1]}: HTTP {r.status_code}, {n} candidate(s)")
+            if len(candidates) != 1:
+                raise RuntimeError(f"need exactly 1 unique Base64.parse candidate, got {len(candidates)} — " + "; ".join(per_chunk))
+            return candidates[0]
+        ok, key = step("Scan chunks for Base64.parse key candidates", _scan)
+        if ok:
+            steps[-1]["detail"] = f"exactly 1 candidate: {key[:4]}…{key[-4:]}"
+
+            def _install() -> str:
+                raw = base64.b64decode(key)
+                if len(raw) != 32:
+                    raise RuntimeError(f"candidate decodes to {len(raw)} bytes, expected 32")
+                import energipays as ep
+                ep.set_key(key)
+                cache = pathlib.Path(data_dir) / ".key_cache.json"
+                cache.write_text(_json.dumps({"key": key}))
+                return f"key set + cached to {cache}"
+            key_installed, _ = step("Install + cache key", _install)
+
+    return {"ok": key_installed, "key_installed": key_installed, "steps": steps}
+
+
+@router.post("/api/setup/key-diagnostics")
+async def setup_key_diagnostics(request: Request) -> dict:
+    """Probe every stage of AES key auto-extraction and report each step.
+
+    On full success the extracted key is installed and cached, so this
+    endpoint is both the diagnosis and (when the network allows) the fix.
+    """
+    import os
+    data_dir = os.environ.get("DATA_DIR", str(request.app.state.settings.data_path))
+    log.info("setup: running AES key diagnostics (data_dir=%s)", data_dir)
+    result = await asyncio.to_thread(_run_key_diagnostics, data_dir)
+    for s in result["steps"]:
+        log.log(logging.INFO if s["ok"] else logging.WARNING,
+                "setup: key-diag %s — %s (%sms)",
+                "OK " if s["ok"] else "FAIL", s["name"] + ": " + s["detail"], s["ms"])
+    return result
+
+
 class CliBody(BaseModel):
     cmd: str
 

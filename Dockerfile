@@ -17,10 +17,13 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY src/ src/
 
-# Install bridge deps + energipays-client from GitHub
+# Install bridge deps + energipays-client from GitHub.
+# Pinned to a commit SHA: an unpinned URL hits Docker layer cache on rebuild,
+# silently shipping a stale library (this hid every library fix v1.0.3-v1.1.0).
+# Bump the SHA whenever energipays-client main moves.
 RUN pip install --no-cache-dir -e . \
  && pip install --no-cache-dir requests pycryptodome \
- && pip install --no-cache-dir git+https://github.com/david2069/energipays-client.git
+ && pip install --no-cache-dir git+https://github.com/david2069/energipays-client.git@27dcc2322543c4067607fcb98107ccfd85557a8b
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

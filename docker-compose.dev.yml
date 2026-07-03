@@ -1,0 +1,33 @@
+# Dev / staging instance — simulates a brand-new first install.
+#
+#   docker compose -f docker-compose.dev.yml build --no-cache
+#   docker compose -f docker-compose.dev.yml up -d
+#   open http://localhost:8081
+#
+# Differences from production docker-compose.yml (deliberate):
+#   - NO ../energipays-client source mount: the container gets exactly the
+#     pip-installed library from GitHub (pinned SHA in Dockerfile), the same
+#     thing an HA add-on install gets. The prod mount masks GitHub-vs-local
+#     library drift — the root cause of the v1.0.3–v1.1.0 AES key failures.
+#   - Fresh named volume (no credentials, no key cache, no token cache).
+#     Reset for a repeat first-run test:  docker compose -f docker-compose.dev.yml down -v
+#   - No credential env vars: the setup wizard must appear and work.
+#   - MQTT disabled so the dev instance never publishes to the live broker.
+#
+# Promote to production only after first-install startup + wizard login pass here.
+services:
+  app-dev:
+    build: .
+    container_name: energipays-bridge-dev
+    ports:
+      - "8081:8080"
+    volumes:
+      - ep-dev-data:/app/data
+    environment:
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=DEBUG
+      - MQTT_ENABLED=false
+    restart: "no"
+
+volumes:
+  ep-dev-data:

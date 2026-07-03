@@ -67,20 +67,12 @@ try:
         print(f"[entrypoint] AES key cached (unique cross-chunk context match) to {cache}")
         sys.exit(0)
 
-    # Pass 3: broader scan — any 32-byte base64 string (noisier, first = highest signal).
-    all_cands: list = []
-    seen: set = set()
-    for js in chunks:
-        for c in candidates_from_js(js):
-            if c not in seen:
-                seen.add(c)
-                all_cands.append(c)
-    if all_cands:
-        cache.write_text(json.dumps({"key": all_cands[0]}))
-        print(f"[entrypoint] AES key cached (fallback broad scan, 1 of {len(all_cands)} candidates) to {cache}")
-        sys.exit(0)
-
-    print("[entrypoint] AES key pre-extraction: no candidates found — will retry on first login", file=sys.stderr)
+    # NOTE: no broad-scan fallback. The main chunk contains dozens of coincidental
+    # 32-byte base64 strings (inline PNGs, config), so caching an unvalidated
+    # candidate poisons the cache and breaks login worse than having no key.
+    print(f"[entrypoint] AES key pre-extraction: {len(all_ctx)} Base64.parse candidates "
+          f"across {len(chunks)} chunks (need exactly 1) — will retry on first login",
+          file=sys.stderr)
 except Exception as e:
     print(f"[entrypoint] AES key pre-extraction failed: {e}", file=sys.stderr)
 finally:

@@ -1,5 +1,28 @@
 # AES Key Login Failure — Investigation Report
 
+> **RESOLVED 2026-07-03 (v1.1.1) — actual root cause found.**
+> Every library-side fix below (v1.0.3 DATA_DIR cache, fast-path extraction)
+> was made in the local `energipays-client` working tree but **never committed
+> or pushed to GitHub** — and the HA add-on installs the library from GitHub
+> (`Dockerfile: pip install git+https://github.com/david2069/energipays-client.git`).
+> The container therefore ran the OLD library for all six releases: key cache
+> read from site-packages (so the entrypoint's `/data/.key_cache.json` was
+> never picked up), no fast path, and `_ensure_key()`'s validated path is
+> circular on a fresh install (sample fetch → 401 → login → `_ensure_key` →
+> re-entry guard → `encrypt()` raises the generic "AES key not set").
+> The "container can't reach energipays.com" theory was never verified and is
+> likely wrong: no AAAA records (IPv6 not a factor), frontend serves 200 to a
+> python-requests UA, and live extraction from the same LAN yields exactly one
+> candidate. The real fast-path error (if any remains) was invisible because
+> the library logged it at DEBUG.
+>
+> Shipped in v1.1.1 + energipays-client v0.2.0 (`27dcc23`): pushed all library
+> fixes, pinned the Dockerfile to the commit SHA (layer-cache bust), WARNING-level
+> extraction errors, non-circular `_ensure_key()` with an actionable message,
+> in-wizard key diagnostics that also install the key on success, a browser-console
+> extraction fallback, and removal of the entrypoint's unvalidated broad-scan
+> cache write (cache-poisoning risk). No key is hardcoded anywhere.
+
 ## Problem
 
 Every login attempt in the HA add-on setup wizard fails with:
