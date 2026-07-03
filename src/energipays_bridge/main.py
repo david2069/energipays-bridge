@@ -74,6 +74,22 @@ async def lifespan(app: FastAPI):
     if settings.energipays_key:
         import energipays as ep
         ep.set_key(settings.energipays_key)
+    else:
+        # Pre-extract the AES key at startup so login works on first attempt.
+        # _ensure_key() scrapes the energipays.com JS bundle — same mechanism
+        # the client uses internally, but called here so failures appear in logs.
+        try:
+            import energipays as ep
+            client_tmp = EnergipaysClient.__new__(EnergipaysClient)
+            import requests as _req
+            client_tmp.session = _req.Session()
+            client_tmp.session.headers["User-Agent"] = "Mozilla/5.0"
+            client_tmp.base_url = "https://energipays.com"
+            client_tmp._resolving_key = False
+            await asyncio.to_thread(client_tmp._ensure_key)
+            log.info("AES key pre-loaded successfully")
+        except Exception as exc:
+            log.warning("AES key pre-load failed (login will retry): %s", exc)
 
     email, password = await load_credentials(db, settings.data_path)
     app.state.client = None
