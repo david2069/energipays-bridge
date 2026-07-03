@@ -1,236 +1,301 @@
 # Energipays Bridge
 
-Self-hosted web dashboard for [Energipays](https://energipays.com) hot water and grid telemetry. Polls the Energipays cloud API on a configurable interval, stores metrics locally in SQLite, and serves a responsive web UI with live data, historical charts, and device controls.
+Self-hosted dashboard for [Energipays](https://energipays.com) Sunamp hot water devices.
 
-Installable as a **PWA** on iOS and Android. Runs as a Docker container or bare Python.
+Connects to the Energipays cloud API, stores metrics locally in SQLite, and serves a responsive web UI with live data, historical analytics, automation rule management, device controls, and push notifications via Home Assistant.
+
+Runs as a **Home Assistant Add-on**, a **Docker container**, or a bare **Python venv**.
 
 ---
 
 ## Features
 
-- **Dashboard** — live water temperatures (T1/T2/T3), grid import/export, heating status, boost controls
-- **Analytics** — Chart.js historical charts: grid power, import/export, diverted energy
-- **Rules** — view automation rules (write support coming once endpoints confirmed)
-- **Raw metrics** — tree view and terminal view of the full live API payload
-- **Settings** — safe mode toggle, poll interval, data retention
-- **Logs** — live server log viewer
-- **PWA** — installable on iOS Safari / Android Chrome, works offline for cached assets
-- **Safe Mode** — all device commands blocked by default; must be explicitly enabled in Settings
+- **Dashboard** — live water temperatures, power flow, grid import/export, heating and boost status
+- **Analytics** — historical charts for grid power, solar PV, water temperature, import/export
+- **Rules** — view and manage automation schedules with a 24-hour timeline visualiser
+- **Battery** — SoC, inverter state, grid mode, ambient and cabinet temperature (via FranklinWH Modbus integration)
+- **External integrations** — pull battery/solar data from REST, Modbus TCP, HA WebSocket, or MQTT
+- **MQTT Discovery** — auto-publish all sensors to Home Assistant as entities
+- **Push notifications** — receive alerts (boost started, device offline, temperature threshold) via HA mobile app
+- **Solar forecast** — chart solar production against actual generation
+- **PWA** — installable on iOS Safari and Android Chrome, works like a native app
+- **Setup wizard** — guided first-run setup (credentials → MQTT → integrations → notifications)
 
 ---
 
-## Requirements
+## Installation
 
-- Python 3.11+ **or** Docker
-- An [Energipays](https://energipays.com) account with at least one device
+### Option 1 — Home Assistant Add-on *(recommended)*
+
+> Requires Home Assistant OS or Supervised with the Supervisor panel.
+
+1. In Home Assistant go to **Settings → Add-ons → Add-on Store**
+2. Click **⋮ (three dots) → Repositories**
+3. Add the URL:
+   ```
+   https://github.com/david2069/energipays-bridge
+   ```
+4. Close the dialog — **Energipays Bridge** now appears in the store
+5. Click **Install** (the supervisor builds the image; takes 2–3 minutes)
+6. Go to the **Configuration** tab and fill in:
+
+   | Option | Description |
+   |--------|-------------|
+   | `energipays_email` | Your Energipays account email |
+   | `energipays_password` | Your Energipays account password |
+   | `poll_interval` | Seconds between polls (default: `60`) |
+   | `mqtt_enabled` | `true` to publish entities to HA via MQTT Discovery |
+   | `mqtt_host` | MQTT broker host (default: `core-mosquitto` for the Mosquitto add-on) |
+   | `mqtt_port` | MQTT broker port (default: `1883`) |
+   | `mqtt_username` | MQTT username (leave blank if unauthenticated) |
+   | `mqtt_password` | MQTT password |
+   | `log_level` | `info` / `debug` / `warning` / `error` |
+
+7. Click **Save** then **Start**
+8. Click **Open Web UI** — the setup wizard opens automatically on first run
+
+**Note:** the web UI is accessible at `http://<ha-ip>:8080`. Port 8080 must be reachable on your network.
 
 ---
 
-## Quick start (Python)
+### Option 2 — Docker (standalone)
 
-### 1. Clone and set up
+#### Prerequisites
+
+- Docker + Docker Compose
+- Git
+
+#### Steps
 
 ```bash
+# Clone the bridge
 git clone https://github.com/david2069/energipays-bridge.git
 cd energipays-bridge
-
-python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
 ```
 
-### 2. Install dependencies
-
-This project uses [energipays-client](https://github.com/david2069/energipays-client) as its API library. Clone it alongside this repo, then install both:
+Create a `.env` file with your credentials:
 
 ```bash
-# From the parent directory:
+cat > .env <<EOF
+ENERGIPAYS_EMAIL=you@example.com
+ENERGIPAYS_PASSWORD=your_password
+ENERGIPAYS_POLL_INTERVAL=60
+LOG_LEVEL=INFO
+
+# Optional: MQTT Discovery (remove # to enable)
+# MQTT_ENABLED=true
+# MQTT_HOST=192.168.0.1
+# MQTT_PORT=1883
+# MQTT_USERNAME=
+# MQTT_PASSWORD=
+EOF
+```
+
+Build and start:
+
+```bash
+docker-compose build && docker-compose up -d
+```
+
+Open **http://localhost:8080** — the setup wizard opens automatically if no credentials are saved yet, otherwise the dashboard loads directly.
+
+**Useful commands:**
+
+```bash
+docker-compose logs -f          # follow logs
+docker-compose down             # stop
+docker-compose build && docker-compose up -d   # rebuild after updates
+```
+
+Data (SQLite database, caches) is stored in `./data/` and survives container restarts.
+
+#### Updating
+
+```bash
+git pull
+docker-compose build && docker-compose up -d
+```
+
+---
+
+### Option 3 — Python venv (development / bare metal)
+
+#### Prerequisites
+
+- Python 3.11+
+- Git
+
+#### Steps
+
+```bash
+# Clone both repos into the same parent directory
+git clone https://github.com/david2069/energipays-bridge.git
 git clone https://github.com/david2069/energipays-client.git
 
-# Back in energipays-bridge:
-pip install -r ../energipays-client/requirements.txt
+cd energipays-bridge
+python3 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+
+# Install the bridge and the client library
 pip install -e .
+pip install -e ../energipays-client
 ```
 
-### 3. Configure credentials
-
-Copy the example env file and fill in your details:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+Create `.env`:
 
 ```env
 ENERGIPAYS_EMAIL=you@example.com
 ENERGIPAYS_PASSWORD=your_password
-ENERGIPAYS_POLL_INTERVAL=60        # seconds between API polls (default: 60)
-ADMIN_PORT=8080
+ENERGIPAYS_POLL_INTERVAL=60
+DATA_DIR=./data
 LOG_LEVEL=INFO
 ```
 
-> **Security:** `.env` is gitignored. Credentials are never stored in the database.
-
-### 4. Run
+Run:
 
 ```bash
-PYTHONPATH=../energipays-client energipays-bridge run
+energipays-bridge run
 ```
 
-Open **http://localhost:8080** in your browser.
+Open **http://localhost:8080**.
 
-The server will:
-1. Connect and authenticate to Energipays
-2. Auto-discover your first device
-3. Start polling every 60 seconds (configurable)
-4. Serve the dashboard at `http://localhost:8080`
-
----
-
-## Quick start (Docker)
-
-### 1. Clone both repos
-
-```bash
-git clone https://github.com/david2069/energipays-bridge.git
-git clone https://github.com/david2069/energipays-client.git  # must be sibling directory
-cd energipays-bridge
-```
-
-### 2. Configure credentials
-
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-```
-
-### 3. Build and start
-
-```bash
-docker-compose up --build
-```
-
-Open **http://localhost:8080**
-
-### Stop / restart
-
-```bash
-docker-compose down        # stop
-docker-compose up -d       # start in background
-docker-compose logs -f     # follow logs
-```
-
-Data (SQLite database) is stored in `./data/` and survives container restarts.
+To develop against local changes to `energipays-client`, edit files in `../energipays-client/` — the editable install picks up changes immediately without reinstalling.
 
 ---
 
 ## Configuration reference
 
-All settings are read from environment variables or a `.env` file in the project root.
+All settings can be set via environment variables, a `.env` file (Docker/venv), or the **Configuration** tab in the HA add-on UI.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ENERGIPAYS_EMAIL` | *(required)* | Energipays account email |
 | `ENERGIPAYS_PASSWORD` | *(required)* | Energipays account password |
 | `ENERGIPAYS_POLL_INTERVAL` | `60` | Seconds between API polls |
-| `ENERGIPAYS_DEVICE_ID` | *(auto)* | Device UUID — auto-discovered from account if blank |
-| `ENERGIPAYS_KEY` | *(auto)* | AES encryption key override (base64) — auto-extracted from JS bundle if blank |
-| `ADMIN_PORT` | `8080` | Web UI port |
+| `ENERGIPAYS_DEVICE_ID` | *(auto)* | Device UUID — auto-discovered if blank |
+| `ENERGIPAYS_KEY` | *(auto)* | AES key override (base64) — auto-extracted from JS bundle if blank |
+| `ADMIN_PORT` | `8080` | Web UI and REST API port |
 | `ADMIN_HOST` | `0.0.0.0` | Bind address |
 | `DATA_DIR` | `./data` | Directory for SQLite database and caches |
 | `RAW_AGE_DAYS` | `7` | Full-resolution metric retention (days) |
 | `RETENTION_DAYS` | `30` | Downsampled archive retention (days) |
-| `LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
+| `MQTT_ENABLED` | `false` | Enable MQTT Discovery |
+| `MQTT_HOST` | `localhost` | MQTT broker host |
+| `MQTT_PORT` | `1883` | MQTT broker port |
+| `MQTT_USERNAME` | *(blank)* | MQTT username |
+| `MQTT_PASSWORD` | *(blank)* | MQTT password |
 
 ---
 
-## Safe Mode
+## Setup wizard
 
-Safe Mode is **enabled by default**. In Safe Mode, all device write commands (boost, device on/off, heater on/off) are blocked — the dashboard is read-only.
+The setup wizard runs automatically on first install (no credentials saved). It walks through:
 
-To enable commands, go to **Settings → Safe Mode** and toggle it off, or via the API:
+1. **Account** — enter and verify Energipays credentials
+2. **MQTT Discovery** — optional, configure broker details
+3. **External integrations** — optional, connect a battery or solar inverter
+4. **Push notifications** — optional, configure Home Assistant instances and devices
+5. **Done** — summary and link to Settings for further configuration
 
-```bash
-curl -X PUT http://localhost:8080/api/config/safe_mode \
-     -H 'Content-Type: application/json' \
-     -d '{"value": "0"}'
-```
-
-Safe Mode state persists across restarts (stored in SQLite).
+To re-run the wizard at any time: **Settings → Re-run Setup Wizard**.
 
 ---
 
-## Install as PWA (mobile)
+## MQTT Discovery
 
-### iOS Safari
-1. Open `http://<your-server-ip>:8080` in Safari
-2. Tap the Share button → **Add to Home Screen**
-3. The app opens without browser chrome, like a native app
+When `MQTT_ENABLED=true`, the bridge publishes all sensors as Home Assistant entities under the `homeassistant/` discovery prefix. Entities appear automatically in HA — no manual configuration needed.
 
-### Android Chrome
-1. Open `http://<your-server-ip>:8080` in Chrome
-2. Tap the menu → **Add to Home screen** (or the install prompt)
+Published entities include: water temperatures (T1/T2/T3/avg), grid import/export power, phase voltages, heating status, boost status, active rule, state of charge, and more.
+
+**For the HA add-on:** set `mqtt_enabled: true` in the Configuration tab and point `mqtt_host` at your broker. If you use the [Mosquitto add-on](https://github.com/home-assistant/addons/tree/master/mosquitto), the default host `core-mosquitto` works without changes.
 
 ---
 
-## API reference
+## External integrations
 
-The REST API is used internally by the UI and can be called directly.
+Connect a FranklinWH battery, solar inverter, or any other device via:
+
+| Protocol | Use case |
+|----------|----------|
+| **REST** | Modbus bridge REST API, any JSON HTTP endpoint |
+| **Modbus TCP** | Direct register read with address + scale mapping |
+| **HA WebSocket** | Subscribe to any HA entity's state changes |
+| **MQTT** | Subscribe to any MQTT topic with JSON dot-path extraction |
+
+Configure in **Settings → External Integrations**. Mapped metrics (e.g. `ext.battery_soc`, `ext.solar_power_w`) appear in the Dashboard and Analytics tab automatically.
+
+---
+
+## Push notifications
+
+Receive phone alerts when:
+
+- Device comes online or goes offline
+- Boost starts or ends
+- Off-peak rule activates or deactivates
+- Water temperature reaches a threshold
+- Heating completes
+
+Notifications are sent via the Home Assistant [Mobile Companion App](https://companion.home-assistant.io/) `notify` service. Configure HA instances and companion devices in **Settings → Push Notifications**.
+
+---
+
+## PWA (mobile install)
+
+**iOS Safari:**
+1. Open `http://<server-ip>:8080` in Safari
+2. Tap **Share → Add to Home Screen**
+
+**Android Chrome:**
+1. Open `http://<server-ip>:8080` in Chrome
+2. Tap **⋮ → Add to Home screen** (or accept the install prompt)
+
+The app launches without browser chrome and works offline for cached assets.
+
+---
+
+## REST API
+
+The web UI is built on a documented REST API you can call directly.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/points/latest` | Latest polled data snapshot |
-| `GET` | `/api/metrics/history?point=phasePower&range=24h&bucket=5m` | Historical chart data |
-| `GET` | `/api/devices` | List Energipays devices |
-| `GET` | `/api/device/status` | Live device status (proxied from Energipays) |
+| `GET` | `/api/metrics/history?point=phasePower&range=24h` | Historical chart data |
 | `GET` | `/api/rules` | List automation rules |
-| `POST` | `/api/boost` | Trigger a timed boost `{"period": 1}` (1=1h, 2=2h, 3=3h) |
-| `POST` | `/api/device/set` | Toggle a device switch `{"fields": {"status": 1}}` |
-| `GET` | `/api/health` | Server health + poller status |
-| `GET` | `/api/logs` | Server log buffer (last 500 entries) |
-| `GET` | `/api/config/{key}` | Read a config value |
-| `PUT` | `/api/config/{key}` | Update a config value |
-
-**Write endpoints require Safe Mode to be disabled.** They return `403` otherwise.
-
-### `point` values for `/api/metrics/history`
-
-| Point | Description |
-|-------|-------------|
-| `phasePower` | Grid import/export power (kW, negative = export) |
-| `waterTemperature1` | Water temp T1 — bottom (hottest) |
-| `waterTemperature2` | Water temp T2 — middle |
-| `waterTemperature3` | Water temp T3 — top |
-| `waterTemperatureAvg` | Average of T1/T2/T3 |
-| `heaterStatus` | Immersion heater on/off (1/0) |
-| `boostStatus` | Boost active (1/0) |
-| `today.IEct` | Grid import today (kWh) |
-| `today.EEct` | Grid export today (kWh) |
-| `today.DE_h` | Diverted heating energy today (kWh) |
-
----
-
-## Data retention
-
-Metrics are stored at full resolution for 7 days, then downsampled to 5-minute averages and retained for 30 days. Both thresholds are configurable in Settings or via `RAW_AGE_DAYS` / `RETENTION_DAYS` env vars.
+| `POST` | `/api/boost` | Trigger boost `{"period": 1}` (1h/2h/3h) |
+| `POST` | `/api/device/set` | Toggle a device field `{"fields": {"status": 1}}` |
+| `GET` | `/api/integrations` | List external integrations |
+| `POST` | `/api/integrations/{id}/test` | Test integration, read live values |
+| `GET` | `/api/setup/status` | Setup state + runtime environment |
+| `GET` | `/api/health` | Server health and poller status |
+| `GET` | `/api/logs` | Server log buffer (last 500 lines) |
 
 ---
 
 ## Troubleshooting
 
-**Dashboard shows no data / "Offline"**
-- Check logs tab or `GET /api/health` for the last error
-- Verify credentials are correct: `python3 ../energipays-client/cli.py me`
-- The Energipays JWT expires every 5 minutes — the client auto-refreshes, but initial login must succeed
+**Dashboard shows "Bridge disconnected"**
+- Check the Logs tab for the error
+- Verify credentials are correct via `GET /api/setup/status`
+- Try re-running the setup wizard (Settings → Re-run Setup Wizard)
 
-**"Safe Mode" banner on boost/controls**
-- Go to Settings → toggle Safe Mode off
+**No data after first login**
+- Wait one poll cycle (default 60 s) for the first sample to arrive
+- The Energipays JWT auto-refreshes every ~5 minutes; initial login must succeed
 
-**Port already in use**
-- Change `ADMIN_PORT` in `.env` or pass `--port 9090` to `energipays-bridge run`
+**MQTT entities not appearing in HA**
+- Confirm `MQTT_ENABLED=true` and the broker host/port are correct
+- Check that the Mosquitto add-on (or your broker) is running
+- Use **Settings → MQTT → Republish** to re-send discovery payloads
 
-**Stale AES key (encrypted API calls fail)**
-- Delete `.key_cache.json` in the energipays-client directory — it will be re-extracted automatically
+**Port 8080 already in use**
+- Change `ADMIN_PORT` in `.env` and update `docker-compose.yml` port mapping
+
+**HA add-on fails to install / build error**
+- Check the add-on log in the Supervisor panel for the full error
+- Ensure your HA instance can reach `github.com` (needed to download the image)
 
 ---
 
@@ -238,27 +303,31 @@ Metrics are stored at full resolution for 7 days, then downsampled to 5-minute a
 
 ```
 energipays-bridge/
-├── src/energipays_bridge/
-│   ├── main.py              # FastAPI app + startup lifespan
-│   ├── poller.py            # Background Energipays API poll loop
-│   ├── sample.py            # SampleBus pub/sub (poller → storage/MQTT)
-│   ├── cli.py               # energipays-bridge run
-│   ├── api/                 # REST route handlers
-│   ├── config/              # Pydantic settings
-│   ├── store/               # SQLite init, migrations, metrics
-│   ├── publish/             # MQTT publisher (Phase 2)
-│   ├── templates/           # Jinja2 SPA shell + tab partials
-│   └── static/              # Alpine.js, Chart.js, Tailwind, CSS, PWA
-├── data/                    # SQLite database (gitignored)
-├── .env                     # Credentials (gitignored)
+├── config.yaml                  # HA add-on manifest
+├── build.yaml                   # Multi-arch base image config
+├── repository.json              # HA custom repository descriptor
+├── Dockerfile
 ├── docker-compose.yml
-└── Dockerfile
+├── docker-entrypoint.sh
+└── src/energipays_bridge/
+    ├── main.py                  # FastAPI app + lifespan startup
+    ├── poller.py                # Energipays API poll loop
+    ├── sample.py                # SampleBus pub/sub
+    ├── environment.py           # Runtime detection (ha_addon/docker/dev)
+    ├── ha_options.py            # Converts HA options.json → .env at startup
+    ├── api/                     # REST route handlers
+    ├── config/                  # Pydantic settings (env vars + .env + ha_options.env)
+    ├── integrations/            # External device pollers (REST/Modbus/HA WS/MQTT)
+    ├── notifications/           # Push notification dispatcher + trigger
+    ├── publish/                 # MQTT Discovery publisher
+    ├── store/                   # SQLite init, migrations, metrics, credentials
+    ├── templates/               # Jinja2 SPA shell + tab partials
+    └── static/                  # Alpine.js, Chart.js, Tailwind CSS, PWA assets
 ```
 
 ---
 
-## Roadmap
+## Related
 
-- **Phase 2 — MQTT + HA Discovery:** publish Thermino sensors, grid power, boost status, and heating controls as Home Assistant entities via MQTT Discovery
-- **Phase 3 — HA Add-on:** run as a Home Assistant supervisor add-on
-- **Rule editor:** create and edit automation rules (write endpoint shape pending HAR capture)
+- [energipays-client](https://github.com/david2069/energipays-client) — Python API client library used by this bridge
+- [Energipays](https://energipays.com) — cloud platform for Sunamp hot water devices
