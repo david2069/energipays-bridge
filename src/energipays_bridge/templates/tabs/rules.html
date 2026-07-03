@@ -537,6 +537,46 @@
     </div>
   </div>
 
+  <!-- Gap picker modal — shown when Add Slot finds multiple free periods -->
+  <div x-show="gapPicker.open" x-cloak
+       class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+       @keydown.escape.window="gapPicker.open = false">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="gapPicker.open = false"></div>
+    <div class="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
+      <div class="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-semibold text-white">Choose a time period</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Select which gap to fill with the new slot</p>
+        </div>
+        <button @click="gapPicker.open = false" class="text-slate-500 hover:text-slate-300 transition-colors">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="px-5 py-3 flex flex-col gap-2">
+        <template x-for="(gap, i) in gapPicker.gaps" :key="i">
+          <button @click="pickGap(gap)"
+                  class="flex items-center justify-between w-full px-4 py-3 rounded-xl border border-slate-700 hover:border-blue-500/60 hover:bg-blue-500/10 transition-all text-left group">
+            <div class="flex items-center gap-3">
+              <div class="w-2 h-2 rounded-full bg-blue-400 group-hover:bg-blue-300 shrink-0"></div>
+              <span class="text-sm font-medium text-slate-200 tabular-nums"
+                    x-text="gap.from + ' → ' + gap.to"></span>
+            </div>
+            <span class="text-xs text-slate-500 group-hover:text-slate-300 tabular-nums"
+                  x-text="(function(){ const [h1,m1]=gap.from.split(':').map(Number); const [h2,m2]=gap.to.split(':').map(Number); const mins=(h2*60+m2)-(h1*60+m1); return mins>=60 ? Math.floor(mins/60)+'h'+(mins%60?' '+mins%60+'m':'') : mins+'m' })()"></span>
+          </button>
+        </template>
+      </div>
+      <div class="px-5 py-3 border-t border-slate-700">
+        <button @click="gapPicker.open = false"
+                class="w-full px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Rename modal ──────────────────────────────────────────────────────── -->
   <div x-show="renameModal" x-cloak
        class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"

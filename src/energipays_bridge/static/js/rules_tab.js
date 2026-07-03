@@ -35,6 +35,8 @@ function rulesTab() {
     saveMsg: '',
     saveWarnBypass: false,   // true = user acknowledged gap warning, proceed on next click
     draft: null,
+    // Gap picker modal (shown when Add Slot finds multiple gaps)
+    gapPicker: { open: false, dayIdx: 0, gaps: [] },
     // Running slot ticker (updates every 30s for countdown)
     _rulesTick: 0,
     // Rename modal
@@ -639,15 +641,51 @@ function rulesTab() {
       this.saveWarnBypass = false
     },
 
-    addSlot(dayIdx) {
+    _computeGapsForDay(dayIdx) {
+      const key = `d${dayIdx + 1}`
+      const slots = (this.draft.data[key] || []).filter(s => s.timeFrom && s.timeTo)
+      if (!slots.length) return [{ from: '00:00', to: '23:59' }]
+      const sorted = [...slots].sort((a, b) => a.timeFrom.localeCompare(b.timeFrom))
+      const gaps = []
+      if (sorted[0].timeFrom > '00:00') gaps.push({ from: '00:00', to: sorted[0].timeFrom })
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i].timeTo < sorted[i + 1].timeFrom)
+          gaps.push({ from: sorted[i].timeTo, to: sorted[i + 1].timeFrom })
+      }
+      const last = sorted[sorted.length - 1].timeTo
+      if (last < '23:59') gaps.push({ from: last, to: '23:59' })
+      return gaps
+    },
+
+    _applyGap(dayIdx, gap) {
       const key = `d${dayIdx + 1}`
       if (!this.draft.data[key]) this.draft.data[key] = []
       this.draft.data[key].push({
-        timeFrom: '08:00', timeTo: '10:00',
+        timeFrom: gap.from, timeTo: gap.to,
         command: 2, boost_power: null,
         temperature_min: 60, price_max: null, price_min: null,
       })
       this._clearWarn()
+    },
+
+    addSlot(dayIdx) {
+      const gaps = this._computeGapsForDay(dayIdx)
+      if (gaps.length === 0) {
+        // No gaps — fall back to appending a blank slot at the end
+        const key = `d${dayIdx + 1}`
+        const slots = this.draft.data[key] || []
+        const lastEnd = slots.length ? slots[slots.length - 1].timeTo : '00:00'
+        this._applyGap(dayIdx, { from: lastEnd, to: '23:59' })
+      } else if (gaps.length === 1) {
+        this._applyGap(dayIdx, gaps[0])
+      } else {
+        this.gapPicker = { open: true, dayIdx, gaps }
+      }
+    },
+
+    pickGap(gap) {
+      this._applyGap(this.gapPicker.dayIdx, gap)
+      this.gapPicker.open = false
     },
 
     removeSlot(dayIdx, slotIdx) {
