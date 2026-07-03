@@ -154,14 +154,13 @@
     </div>
 
     <!-- Phase selector -->
-    <div class="flex rounded-lg overflow-hidden border border-slate-700">
-      <template x-for="[val, lbl] in [['sum','Sum'],['l1','L1'],['l2','L2'],['l3','L3']]" :key="val">
-        <button @click="cloudPhase = val"
-                :class="cloudPhase === val ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
-                class="px-2.5 py-1.5 text-xs font-medium transition-colors border-r border-slate-700 last:border-r-0"
-                x-text="lbl"></button>
-      </template>
-    </div>
+    <select x-model="cloudPhase"
+            class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
+      <option value="sum">Sum (L1+L2+L3)</option>
+      <option value="l1">L1</option>
+      <option value="l2">L2</option>
+      <option value="l3">L3</option>
+    </select>
 
     <!-- Chart style toggle -->
     <div class="flex rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700">

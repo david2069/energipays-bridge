@@ -82,6 +82,15 @@ function rulesTab() {
 
     isActive(rule) { return rule.id === this.activeRuleIdForType(rule.type) },
 
+    ruleAppliesToday(rule) {
+      const jsDay = new Date().getDay()
+      const todayKey = `d${jsDay === 0 ? 7 : jsDay}`
+      const data = rule.data || {}
+      const everyday = this.ruleIsEveryday(rule)
+      const slots = everyday ? (data['d1'] || []) : (data[todayKey] || [])
+      return slots.length > 0
+    },
+
     circuitLabel(type) { return CIRCUIT_LABEL[type] || type },
 
     filteredRules() {

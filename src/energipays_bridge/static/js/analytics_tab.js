@@ -33,6 +33,8 @@ function analyticsTab() {
       { key: 'today.IEct',          label: 'Import (kWh)',    color: '#ef4444', type: 'bar' },
       { key: 'today.EEct',          label: 'Export (kWh)',    color: '#22c55e', type: 'bar' },
       { key: 'today.DE_h',          label: 'Diverted (kWh)',  color: '#3b82f6', type: 'bar' },
+      { key: 'solarPower',          label: 'Solar (kW)',      color: '#fbbf24', type: 'line', scale: 0.001 },
+      { key: 'ext.solar_power_w',   label: 'Solar FWH (kW)',  color: '#f59e0b', type: 'line', device_id: 'ext', scale: 0.001 },
       { key: 'waterTemperatureAvg', label: 'Avg Temp (°C)',   color: '#f97316', type: 'line', yAxis: 'right' },
       { key: 'waterTemperature3',   label: 'T3 Top (°C)',     color: '#a78bfa', type: 'line', yAxis: 'right' },
       { key: 'waterTemperature2',   label: 'T2 Mid (°C)',     color: '#fb923c', type: 'line', yAxis: 'right' },
@@ -345,12 +347,14 @@ function analyticsTab() {
         for (const key of this.activeSeries) {
           const s = this.localSeries.find(x => x.key === key)
           if (!s) continue
-          const r = await fetch(`/api/metrics/history?point=${encodeURIComponent(key)}&${this._rangeParams()}`)
+          const deviceParam = s.device_id ? `&device_id=${s.device_id}` : ''
+          const r = await fetch(`/api/metrics/history?point=${encodeURIComponent(key)}&${this._rangeParams()}${deviceParam}`)
           if (!r.ok) continue
           const d = await r.json()
           const isArea = this.chartStyle === 'area'
           const isBar = !isArea && s.type === 'bar'
-          const rawVals = d.data.map(p => p.value ?? null)
+          const seriesScale = s.scale ?? 1
+          const rawVals = d.data.map(p => p.value != null ? p.value * seriesScale : null)
           const dispVals = rawVals.map(v => (s.type === 'bar' && !this.signedMode && v !== null) ? Math.abs(v) : v)
           allDatasets.push({
             label: s.label,

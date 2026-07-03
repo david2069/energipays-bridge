@@ -66,19 +66,28 @@
       <div class="px-3 py-2 max-h-56 overflow-auto">
         <template x-if="debugTab==='before'">
           <div>
-            <div class="text-slate-500 font-semibold mb-1">BEFORE — server state when edit was opened</div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-slate-500 font-semibold">BEFORE — server state when edit was opened</span>
+              <button @click="navigator.clipboard.writeText(JSON.stringify(debugBefore, null, 2)).then(()=>Alpine.store('app').addToast('Copied','success'))" class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600">Copy</button>
+            </div>
             <pre class="text-slate-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(debugBefore, null, 2)"></pre>
           </div>
         </template>
         <template x-if="debugTab==='sent'">
           <div>
-            <div class="text-sky-400 font-semibold mb-1">SENT — draft dispatched to server</div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-sky-400 font-semibold">SENT — draft dispatched to server</span>
+              <button @click="navigator.clipboard.writeText(JSON.stringify(debugDraft, null, 2)).then(()=>Alpine.store('app').addToast('Copied','success'))" class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600">Copy</button>
+            </div>
             <pre class="text-sky-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(debugDraft, null, 2)"></pre>
           </div>
         </template>
         <template x-if="debugTab==='returned'">
           <div>
-            <div class="text-green-400 font-semibold mb-1">RETURNED — server response after refresh</div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-green-400 font-semibold">RETURNED — server response after refresh</span>
+              <button @click="navigator.clipboard.writeText(JSON.stringify(debugServerReturn, null, 2)).then(()=>Alpine.store('app').addToast('Copied','success'))" class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600">Copy</button>
+            </div>
             <pre class="text-green-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(debugServerReturn, null, 2)"></pre>
           </div>
         </template>
@@ -159,7 +168,7 @@
                 <span x-show="activating !== rule.id">Enable</span>
                 <span x-show="activating === rule.id">…</span>
               </button>
-              <button x-show="isActive(rule)"
+              <button x-show="isActive(rule) || ruleAppliesToday(rule)"
                       @click.stop="disableRule(rule)"
                       :disabled="activating === '__disable__' + rule.type"
                       class="text-xs px-2.5 py-1 rounded-md bg-red-600/80 text-white font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm">
@@ -277,43 +286,69 @@
 
           <!-- Timeline bar -->
           <div class="mt-3" x-show="allDaySlots(rule).length"
-               x-data="{ nowPct() { const n = new Date(); return ((n.getHours()*60+n.getMinutes())/1440)*100 } }">
-            <div class="relative h-5 rounded overflow-hidden" style="background:rgba(253,230,138,0.25)">
+               x-data="{
+                 nowPct() { const n = new Date(); return ((n.getHours()*60+n.getMinutes())/1440)*100 },
+                 solarLeft() { const t=$store.app.points['sd.solar_restriction_from']||''; if(!t) return null; const [h,m]=t.split(':').map(Number); return ((h*60+m)/1440*100).toFixed(2)+'%' },
+                 solarWidth() {
+                   const f=$store.app.points['sd.solar_restriction_from']||'', t=$store.app.points['sd.solar_restriction_to']||'';
+                   if(!f||!t) return null;
+                   const [fh,fm]=f.split(':').map(Number), [th,tm]=t.split(':').map(Number);
+                   let w=((th*60+tm)-(fh*60+fm))/1440*100; if(w<0) w+=100;
+                   return w.toFixed(2)+'%'
+                 }
+               }">
+            <div class="relative h-4 rounded overflow-hidden bg-slate-600/40 dark:bg-slate-700/50">
               <template x-for="slot in (isEverydayIdentical(rule) ? (rule.data?.d1||[]) : (allDaySlots(rule)[0]?.slots||[]))" :key="slot.timeFrom">
-                <div class="absolute top-0 h-full opacity-80"
+                <div class="absolute top-0 h-full opacity-80 rounded-sm"
                      :style="slotStyle(slot, slot.command == 2 ? '#ef4444' : '#3b82f6')"></div>
               </template>
+              <!-- Solar blackout band -->
+              <template x-if="$store.app.points['sd.solarRestrictionSwitcherStatus'] && solarLeft()">
+                <div class="absolute top-0 h-full opacity-40 pointer-events-none"
+                     style="background:#fbbf24"
+                     :style="`left:${solarLeft()};width:${solarWidth()}`"></div>
+              </template>
               <template x-for="h in [6,12,18]" :key="h">
-                <div class="absolute top-0 bottom-0 w-px bg-slate-600/40" :style="`left:${(h/24)*100}%`"></div>
+                <div class="absolute top-0 bottom-0 w-px bg-slate-400/30" :style="`left:${(h/24*100).toFixed(1)}%`"></div>
               </template>
               <div class="absolute top-0 bottom-0 w-0.5 bg-green-400 z-10 shadow-[0_0_4px_#4ade80]"
                    :style="`left:${nowPct()}%`"></div>
             </div>
-            <div class="flex justify-between text-[10px] text-slate-600 mt-0.5">
+            <div class="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">
               <span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span>
             </div>
-            <div class="flex items-center gap-3 mt-1.5">
+            <div class="flex items-center gap-3 mt-1">
               <div class="flex items-center gap-1">
-                <span class="w-3 h-2 rounded-sm inline-block" style="background:#3b82f6"></span>
-                <span class="text-[10px] text-slate-500">Disable</span>
+                <span class="w-2.5 h-2 rounded-sm inline-block" style="background:#3b82f6"></span>
+                <span class="text-[9px] text-slate-500">Disable</span>
               </div>
               <div class="flex items-center gap-1">
-                <span class="w-3 h-2 rounded-sm inline-block" style="background:#ef4444"></span>
-                <span class="text-[10px] text-slate-500">Boost</span>
+                <span class="w-2.5 h-2 rounded-sm inline-block" style="background:#ef4444"></span>
+                <span class="text-[9px] text-slate-500">Boost</span>
               </div>
               <div class="flex items-center gap-1">
-                <span class="w-3 h-2 rounded-sm inline-block" style="background:rgba(253,230,138,0.5)"></span>
-                <span class="text-[10px] text-slate-500">Not set</span>
+                <span class="w-2.5 h-2 rounded-sm inline-block bg-slate-600/40 dark:bg-slate-700/50 border border-slate-400/40"></span>
+                <span class="text-[9px] text-slate-500">Not set</span>
               </div>
+              <template x-if="$store.app.points['sd.solarRestrictionSwitcherStatus']">
+                <div class="flex items-center gap-1">
+                  <span class="w-2.5 h-2 rounded-sm inline-block opacity-60" style="background:#fbbf24"></span>
+                  <span class="text-[9px] text-slate-500">Solar PV off</span>
+                </div>
+              </template>
               <div class="flex items-center gap-1">
-                <span class="w-0.5 h-3 rounded-sm inline-block bg-green-400"></span>
-                <span class="text-[10px] text-slate-500">Now</span>
+                <span class="w-2 h-2 rounded-sm inline-block bg-green-400"></span>
+                <span class="text-[9px] text-slate-500">Now</span>
               </div>
             </div>
           </div>
 
           <!-- JSON raw -->
           <div x-show="showJSON" class="mt-3 pt-3 border-t border-slate-700">
+            <div class="flex justify-end mb-1">
+              <button @click="navigator.clipboard.writeText(JSON.stringify(rule, null, 2)).then(()=>Alpine.store('app').addToast('JSON copied','success'))"
+                      class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors">Copy JSON</button>
+            </div>
             <pre class="text-xs text-slate-400 overflow-x-auto whitespace-pre-wrap leading-relaxed font-mono"
                  x-text="JSON.stringify(rule, null, 2)"></pre>
           </div>
@@ -505,8 +540,10 @@
         <!-- Debug live diff (in modal) -->
         <template x-if="debugMode && draft">
           <div class="mt-3 rounded-xl border border-amber-700/50 overflow-hidden text-[10px] font-mono bg-slate-950">
-            <div class="bg-amber-900/30 px-3 py-1 border-b border-amber-700/40">
+            <div class="bg-amber-900/30 px-3 py-1 border-b border-amber-700/40 flex items-center justify-between">
               <span class="text-amber-300 font-bold">DEBUG — live draft</span>
+              <button @click="navigator.clipboard.writeText(JSON.stringify(draft, null, 2)).then(()=>Alpine.store('app').addToast('JSON copied','success'))"
+                      class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors">Copy</button>
             </div>
             <div class="px-2 py-2 max-h-40 overflow-auto">
               <pre class="text-sky-200 whitespace-pre-wrap break-all" x-text="JSON.stringify(draft, null, 2)"></pre>

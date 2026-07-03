@@ -1,0 +1,18 @@
+build_from:
+  aarch64: "ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.20"
+  amd64:   "ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20"
+  armhf:   "ghcr.io/home-assistant/armhf-base-python:3.12-alpine3.20"
+  armv7:   "ghcr.io/home-assistant/armv7-base-python:3.12-alpine3.20"
+  i386:    "ghcr.io/home-assistant/i386-base-python:3.12-alpine3.20"
+
+labels:
+  io.hass.name: "Energipays Bridge"
+  io.hass.description: "Monitor and control your Energipays Sunamp hot water device"
+  io.hass.arch: "{arch}"
+  io.hass.type: "addon"
+  io.hass.version: "{version}"
+  maintainer: "David Hona <david.hona@gmail.com>"
+  org.opencontainers.image.title: "Energipays Bridge"
+  org.opencontainers.image.description: "Energipays Sunamp hot water device bridge for Home Assistant"
+  org.opencontainers.image.source: "https://github.com/david2069/energipays-bridge"
+  org.opencontainers.image.licenses: "MIT"

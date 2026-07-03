@@ -1,16 +1,15 @@
-FROM python:3.12-slim
+# Standalone Docker: uses python:3.12-slim (default)
+# HA Add-on:         HA supervisor overrides BUILD_FROM with arch-specific base image
+ARG BUILD_FROM=python:3.12-slim
+FROM $BUILD_FROM
 
 WORKDIR /app
 
 COPY pyproject.toml .
 COPY src/ src/
 
-# Install the bridge and its deps
 RUN pip install --no-cache-dir -e . && pip install --no-cache-dir requests pycryptodome
 
-# energipays-client is volume-mounted at /energipays-client at runtime.
-# Install it at startup via an entrypoint wrapper so the editable install
-# reflects the mounted source without needing a rebuild on every client change.
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 

@@ -34,7 +34,7 @@
       </div>
       <div class="ml-auto flex items-center gap-3">
         <span class="text-xs px-2 py-0.5 rounded-full"
-              :class="$store.app.connected ? 'bg-green-900/40 text-green-400' : 'bg-slate-700 text-slate-500'"
+              :class="$store.app.connected ? ($store.app.isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700') : ($store.app.isDark ? 'bg-slate-700 text-slate-500' : 'bg-slate-200 text-slate-500')"
               x-text="$store.app.connected ? 'Connected' : 'Offline'"></span>
       </div>
     </div>
@@ -122,14 +122,15 @@
     <!-- Empty state -->
     <div x-show="!loading && integrations.length === 0"
          class="text-xs text-slate-600 text-center py-6 border border-dashed border-slate-700 rounded-lg">
-      No integrations yet — add a 🔋 Battery or ☀️ Solar PV source
+      No integrations yet — add a Battery or Solar PV source
     </div>
 
     <!-- List -->
     <div class="space-y-2">
       <template x-for="intg in integrations" :key="intg.id">
         <div class="flex items-center gap-3 bg-slate-800/60 rounded-lg px-3 py-2.5">
-          <span class="text-lg shrink-0" x-text="intg.type === 'battery' ? '🔋' : '☀️'"></span>
+          <img :src="intg.type === 'battery' ? '/static/icons/devices/battery.svg' : '/static/icons/devices/solar.svg'"
+               class="w-5 h-5 shrink-0 opacity-70">
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium text-slate-200 truncate" x-text="intg.name"></div>
             <div class="flex items-center gap-2 mt-0.5">
@@ -180,13 +181,13 @@
             <div class="flex gap-3">
               <button @click="form.type='battery'"
                       :class="form.type==='battery' ? 'border-brand bg-brand/10 text-brand' : 'border-slate-700 text-slate-400'"
-                      class="flex-1 border rounded-lg px-3 py-3 text-sm font-medium transition-colors text-center">
-                🔋 Battery
+                      class="flex-1 border rounded-lg px-3 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                <img src="/static/icons/devices/battery.svg" class="w-4 h-4 opacity-80"> Battery
               </button>
               <button @click="form.type='solar'"
                       :class="form.type==='solar' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-400' : 'border-slate-700 text-slate-400'"
-                      class="flex-1 border rounded-lg px-3 py-3 text-sm font-medium transition-colors text-center">
-                ☀️ Solar PV
+                      class="flex-1 border rounded-lg px-3 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                <img src="/static/icons/devices/solar.svg" class="w-4 h-4 opacity-80"> Solar PV
               </button>
             </div>
           </div>
@@ -299,15 +300,24 @@
                 <button @click="discoverSunSpec()"
                         :disabled="ssDiscovering || !form.config.host"
                         class="text-xs px-3 py-1.5 rounded border border-brand/40 text-brand hover:bg-brand/10 transition-colors disabled:opacity-40 font-medium">
-                  <span x-show="!ssDiscovering">🔍 Discover SunSpec Models</span>
+                  <span x-show="!ssDiscovering" class="flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z"/></svg>
+                    Discover SunSpec Models
+                  </span>
                   <span x-show="ssDiscovering">Scanning…</span>
                 </button>
               </div>
               <!-- Discovery results -->
               <template x-if="ssModels.length > 0">
                 <div class="bg-slate-800/60 rounded-lg p-3 space-y-2">
-                  <div class="text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                    Found <span x-text="ssModels.length"></span> models — base address <span x-text="ssBaseAddress" class="font-mono"></span>
+                  <div class="flex items-center justify-between mb-1">
+                    <div class="text-[10px] text-slate-500 uppercase tracking-wide">
+                      Found <span x-text="ssModels.length"></span> models — base <span x-text="ssBaseAddress" class="font-mono"></span>
+                    </div>
+                    <button @click="applyAllDiscoveredMappings()"
+                            class="text-[10px] px-2 py-0.5 rounded bg-brand text-white hover:bg-brand/80 transition-colors font-medium shrink-0">
+                      Apply all
+                    </button>
                   </div>
                   <template x-for="m in ssModels" :key="m.model_id">
                     <div class="flex items-center gap-2 text-xs">
@@ -319,7 +329,7 @@
                       <button x-show="m.suggested_mappings.length > 0"
                               @click="applyDiscoveredMappings(m)"
                               class="text-[10px] px-1.5 py-0.5 rounded border border-brand/40 text-brand hover:bg-brand/10 transition-colors shrink-0">
-                        Apply mappings
+                        Apply
                       </button>
                     </div>
                   </template>
@@ -372,11 +382,20 @@
               <template x-for="(m, idx) in form.mappings" :key="idx">
                 <div class="bg-slate-800 rounded-lg p-2 space-y-2">
                   <div class="flex items-center gap-2">
+                    <!-- Enabled/Disabled toggle -->
+                    <button type="button" @click="m.enabled = m.enabled === false ? true : false"
+                            :title="m.enabled !== false ? 'Click to disable this mapping' : 'Click to enable this mapping'"
+                            class="shrink-0 w-8 h-5 rounded-full transition-colors relative"
+                            :class="m.enabled !== false ? 'bg-green-600' : 'bg-slate-600'">
+                      <span class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"
+                            :class="m.enabled !== false ? 'right-0.5' : 'left-0.5'"></span>
+                    </button>
                     <!-- Custom fixed-position metric dropdown — immune to overflow-y clipping -->
                     <div x-data="{open:false,pos:{t:0,l:0,w:0},tog(){const r=$el.firstElementChild.getBoundingClientRect();this.pos={t:r.bottom+2,l:r.left,w:r.width};this.open=!this.open}}"
                          class="relative flex-1" @click.outside="open=false" @keydown.escape.window="open=false">
                       <button @click="tog()" type="button"
-                              class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand flex items-center justify-between gap-1">
+                              class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand flex items-center justify-between gap-1"
+                              :class="m.enabled === false ? 'opacity-50' : ''">
                         <span class="truncate" x-text="metricKeys.find(k=>k.key===m.target_metric)?.label||'— select metric —'"></span>
                         <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" stroke-width="1.5" d="M6 8l4 4 4-4"/></svg>
                       </button>
@@ -411,30 +430,25 @@
                   <template x-if="form.protocol==='modbus_tcp' || form.protocol==='sunspec_tcp'">
                     <div class="space-y-1.5">
                       <div class="flex flex-wrap gap-1.5 items-center">
-                        <!-- FC toggle: no dropdown -->
-                        <div class="flex rounded border border-slate-600 text-[10px] shrink-0">
-                          <button type="button" @click="m._fc='fc3'"
-                                  :class="m._fc==='fc3' ? 'bg-brand text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'"
-                                  class="px-2 py-1.5 rounded-l transition-colors">FC3</button>
-                          <button type="button" @click="m._fc='fc4'"
-                                  :class="m._fc==='fc4' ? 'bg-brand text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'"
-                                  class="px-2 py-1.5 rounded-r border-l border-slate-600 transition-colors">FC4</button>
-                        </div>
+                        <select x-model="m._fc"
+                                class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand">
+                          <option value="fc3">Holding</option>
+                          <option value="fc4">Input</option>
+                        </select>
                         <input type="number" x-model.number="m._addr" placeholder="address"
                                class="w-24 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 font-mono focus:outline-none focus:border-brand"/>
-                        <!-- Type button group: no dropdown -->
-                        <div class="flex rounded border border-slate-600 text-[10px] shrink-0">
-                          <template x-for="t in ['uint16','int16','uint32','int32','float32']" :key="t">
-                            <button type="button" @click="m._rtype=t"
-                                    :class="m._rtype===t ? 'bg-brand text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'"
-                                    class="px-1.5 py-1.5 border-r border-slate-600 last:border-r-0 transition-colors first:rounded-l last:rounded-r"
-                                    x-text="t.replace('uint','u').replace('int','i').replace('float','f')"></button>
-                          </template>
-                        </div>
+                        <select x-model="m._rtype"
+                                class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand">
+                          <option value="uint16">u16</option>
+                          <option value="int16">i16</option>
+                          <option value="uint32">u32</option>
+                          <option value="int32">i32</option>
+                          <option value="float32">f32</option>
+                        </select>
                         <input type="number" x-model.number="m._scale" step="0.001" placeholder="scale"
                                class="w-20 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
                         <button @click="probeRegister(m, idx)" :disabled="m._probing"
-                                class="shrink-0 text-[10px] px-2 py-1.5 rounded border border-slate-600 text-slate-400 hover:text-brand hover:border-brand transition-colors disabled:opacity-50">
+                                class="shrink-0 text-xs px-3 py-1.5 rounded border border-slate-600 text-slate-400 hover:text-brand hover:border-brand transition-colors disabled:opacity-50">
                           <span x-show="!m._probing">Probe</span>
                           <span x-show="m._probing">…</span>
                         </button>
@@ -442,6 +456,7 @@
                       <div x-show="m._probeResult != null" class="text-[10px] font-mono text-slate-400 pl-1">
                         raw=<span class="text-slate-200" x-text="m._probeResult"></span>
                         &nbsp;scaled=<span class="text-brand" x-text="m._probeScaled"></span>
+                        <span x-show="m._probeLabel" class="ml-1 text-amber-400" x-text="'(' + m._probeLabel + ')'"></span>
                       </div>
                     </div>
                   </template>
@@ -466,7 +481,11 @@
               <template x-if="testResult.ok">
                 <div>
                   <template x-for="r in testResult.readings" :key="r.source">
-                    <div><span class="text-slate-400" x-text="r.target_metric + ': '"></span><span x-text="r.scaled ?? r.raw ?? '—'"></span></div>
+                    <div>
+                      <span class="text-slate-400" x-text="r.target_metric + ': '"></span>
+                      <span x-text="r.scaled ?? r.raw ?? '—'"></span>
+                      <span x-show="r.label" class="ml-1 text-amber-400" x-text="'(' + r.label + ')'"></span>
+                    </div>
                   </template>
                 </div>
               </template>
@@ -952,7 +971,7 @@
         <template x-for="inst in instances" :key="inst.id">
           <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg border"
                :class="$store.app.isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'">
-            <span class="text-base select-none">🏠</span>
+            <img src="/static/icons/ha-logo.svg" class="w-5 h-5 shrink-0">
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium truncate" :class="$store.app.isDark ? 'text-slate-200' : 'text-slate-800'"
                    x-text="inst.alias"></div>
@@ -1049,7 +1068,9 @@
         <template x-for="dev in devices" :key="dev.id">
           <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg border"
                :class="$store.app.isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'">
-            <span class="text-base select-none">📱</span>
+            <svg class="w-5 h-5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 9h3"/>
+            </svg>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium truncate" :class="$store.app.isDark ? 'text-slate-200' : 'text-slate-800'"
                    x-text="dev.alias"></div>
@@ -1102,7 +1123,13 @@
                 <label class="text-xs text-slate-500 flex-1">Notify Service</label>
                 <button @click="discoverTargets()" :disabled="!devForm.ha_instance_id || devDiscovering"
                         class="text-[10px] px-2 py-1 rounded border border-brand/40 text-brand hover:bg-brand/10 transition-colors disabled:opacity-40"
-                        x-text="devDiscovering ? 'Discovering…' : '🔍 Discover'"></button>
+                        >
+                  <span x-show="devDiscovering">Discovering…</span>
+                  <span x-show="!devDiscovering" class="flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z"/></svg>
+                    Discover
+                  </span>
+                </button>
               </div>
               <template x-if="devTargets.length > 0">
                 <select x-model="devForm.service_target"
@@ -1167,17 +1194,25 @@
                :class="notifSettings.enabled
                  ? ($store.app.isDark ? 'text-amber-300' : 'text-amber-700')
                  : ($store.app.isDark ? 'text-slate-200' : 'text-slate-800')">
-            <span x-text="notifSettings.enabled ? '🔔 Notifications ON' : '🔕 Notifications OFF'"></span>
+            <span class="flex items-center gap-1.5">
+              <svg x-show="notifSettings.enabled" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+              </svg>
+              <svg x-show="!notifSettings.enabled" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.143 17.082a24.248 24.248 0 003.844.148m-3.844-.148a23.856 23.856 0 01-5.455-1.31 8.964 8.964 0 002.3-5.542m3.155 6.852a3 3 0 005.667 1.97m1.965-2.277L21 21m-4.225-4.225a23.81 23.81 0 003.536-1.003A8.967 8.967 0 0118 9.75V9A6 6 0 006.53 6.53m10.245 10.245L6.53 6.53M3 3l3.53 3.53"/>
+              </svg>
+              <span x-text="notifSettings.enabled ? 'Notifications ON' : 'Notifications OFF'"></span>
+            </span>
           </div>
           <div class="text-xs text-slate-500 mt-0.5">Master switch — controls ALL push notifications</div>
         </div>
         <div class="flex rounded-lg overflow-hidden border shrink-0"
-             :class="notifSettings.enabled ? 'border-amber-600' : 'border-slate-700'">
+             :class="notifSettings.enabled ? 'border-amber-500' : ($store.app.isDark ? 'border-slate-600' : 'border-slate-300')">
           <button @click="setMaster(false)"
-                  :class="!notifSettings.enabled ? 'bg-slate-600 text-slate-200' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                  :class="!notifSettings.enabled ? ($store.app.isDark ? 'bg-slate-600 text-slate-200' : 'bg-slate-200 text-slate-800') : ($store.app.isDark ? 'bg-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white text-slate-400 hover:text-slate-600')"
                   class="px-4 py-1.5 text-xs font-medium transition-colors">Disable All</button>
           <button @click="setMaster(true)"
-                  :class="notifSettings.enabled ? 'bg-amber-600/30 text-amber-300' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                  :class="notifSettings.enabled ? 'bg-amber-500/20 text-amber-600' : ($store.app.isDark ? 'bg-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white text-slate-400 hover:text-slate-600')"
                   class="px-4 py-1.5 text-xs font-medium transition-colors">Enable All</button>
         </div>
       </div>
@@ -1206,12 +1241,13 @@
                 </template>
               </div>
             </div>
-            <div class="flex rounded-lg overflow-hidden border border-slate-700 shrink-0">
+            <div class="flex rounded-lg overflow-hidden border shrink-0"
+                 :class="$store.app.isDark ? 'border-slate-600' : 'border-slate-300'">
               <button @click="setTrigger(key, false)"
-                      :class="!hasTrigger(key) ? 'bg-slate-600 text-slate-200' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                      :class="!hasTrigger(key) ? ($store.app.isDark ? 'bg-slate-600 text-slate-200' : 'bg-slate-200 text-slate-800') : ($store.app.isDark ? 'bg-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white text-slate-400 hover:text-slate-600')"
                       class="px-4 py-1.5 text-xs font-medium transition-colors">Disable</button>
               <button @click="setTrigger(key, true)"
-                      :class="hasTrigger(key) ? 'bg-green-900/40 text-green-400' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                      :class="hasTrigger(key) ? ($store.app.isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700') : ($store.app.isDark ? 'bg-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white text-slate-400 hover:text-slate-600')"
                       class="px-4 py-1.5 text-xs font-medium transition-colors">Enable</button>
             </div>
           </div>

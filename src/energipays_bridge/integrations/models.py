@@ -9,6 +9,7 @@ class FieldMapping(BaseModel):
     source: str          # protocol-specific: dot-path / "fc3:40206:uint16:0.1" / entity_id / "topic:path"
     target_metric: str   # one of the standard ext.* metric keys (without the "ext." prefix)
     scale: float = 1.0   # multiply raw value by this (default 1.0 = no scaling)
+    enabled: bool = True # when False this mapping is skipped during polling
 
 
 class IntegrationIn(BaseModel):

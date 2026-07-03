@@ -14,6 +14,27 @@ from ..integrations.rest_poller import RestPoller, _extract_mappings, _dotpath
 router = APIRouter(prefix="/api/integrations")
 log = logging.getLogger(__name__)
 
+_INV_ST = {0:"Off",1:"Sleeping",2:"Starting",3:"Running",4:"Throttled",5:"Shutting Down",6:"Fault",7:"Standby"}
+
+def _enum_label(metric: str, value) -> str | None:
+    """Return a human-readable enum/bitfield label for well-known metrics, or None."""
+    if value is None:
+        return None
+    try:
+        v = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if metric == "inverter_state":
+        return _INV_ST.get(v)
+    if metric == "connection_state":
+        return "Connected" if v == 1 else "Disconnected"
+    if metric == "grid_status":
+        if v & 2: return "Grid Forming"
+        if v & 1: return "Grid Following"
+        if v & 4: return "PV Clipped"
+        return f"Mode {v}"
+    return None
+
 
 def _registry(request: Request):
     reg = getattr(request.app.state, "integration_registry", None)
@@ -89,7 +110,8 @@ async def test_integration(request: Request, row_id: str) -> dict:
                 raw = _dotpath(data, m.source)
                 scaled = float(raw) * m.scale if raw is not None else None
                 readings.append({"source": m.source, "target_metric": m.target_metric,
-                                  "raw": raw, "scaled": scaled})
+                                  "raw": raw, "scaled": scaled,
+                                  "label": _enum_label(m.target_metric, scaled)})
             return {"ok": True, "readings": readings}
 
         if proto in ("modbus_tcp", "sunspec_tcp"):
@@ -102,7 +124,8 @@ async def test_integration(request: Request, row_id: str) -> dict:
                 raw = values[0] if values else None
                 scaled = raw * scale if raw is not None else None
                 readings.append({"source": m.source, "target_metric": m.target_metric,
-                                  "raw": raw, "scaled": scaled})
+                                  "raw": raw, "scaled": scaled,
+                                  "label": _enum_label(m.target_metric, scaled)})
             return {"ok": True, "readings": readings}
 
         if proto == "ha_ws":
@@ -123,7 +146,8 @@ async def test_integration(request: Request, row_id: str) -> dict:
                 except (TypeError, ValueError):
                     scaled = raw
                 readings.append({"source": m.source, "target_metric": m.target_metric,
-                                  "raw": raw, "scaled": scaled})
+                                  "raw": raw, "scaled": scaled,
+                                  "label": _enum_label(m.target_metric, scaled)})
             return {"ok": True, "readings": readings}
 
         if proto == "mqtt":

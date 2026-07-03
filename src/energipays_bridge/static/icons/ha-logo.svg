@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Rounded house shape — HA brand blue -->
+  <path fill="#41BDF5"
+    d="M50,4
+       C53,4 98,37 98,43
+       L98,88
+       Q98,96 90,96
+       L10,96
+       Q2,96 2,88
+       L2,43
+       C2,37 47,4 50,4Z"/>
+  <!-- Circuit-tree internals (white/off-white) -->
+  <!-- Trunk: junction point → top -->
+  <line x1="50" y1="33" x2="50" y2="66" stroke="#EEF6FF" stroke-width="8" stroke-linecap="round"/>
+  <!-- Branch left-down -->
+  <line x1="50" y1="64" x2="29" y2="80" stroke="#EEF6FF" stroke-width="8" stroke-linecap="round"/>
+  <!-- Branch right -->
+  <line x1="50" y1="55" x2="67" y2="64" stroke="#EEF6FF" stroke-width="8" stroke-linecap="round"/>
+  <!-- Top dot -->
+  <circle cx="50" cy="31" r="8" fill="#EEF6FF"/>
+  <!-- Bottom-left dot -->
+  <circle cx="28" cy="82" r="8" fill="#EEF6FF"/>
+  <!-- Right dot -->
+  <circle cx="68" cy="65" r="8" fill="#EEF6FF"/>
+</svg>

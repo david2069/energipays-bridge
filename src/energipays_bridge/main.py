@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from .api import admin, cloud_stats, devices, integrations as integrations_api, metrics, mqtt_api, notifications as notifications_api, points, ui, weather_nem
+from .api import admin, cloud_stats, devices, integrations as integrations_api, metrics, mqtt_api, notifications as notifications_api, points, solar, ui, weather_nem
 from .api import setup as setup_api
 from .api.admin import install_log_handler, set_log_db
 from .api.http_metrics import HttpMetrics, attach_metrics_hook
@@ -51,7 +51,8 @@ async def lifespan(app: FastAPI):
         stream=sys.stdout,
     )
     install_log_handler()
-    log.info("energipays-bridge starting")
+    from .environment import RUNTIME
+    log.info("energipays-bridge starting [%s]", RUNTIME)
 
     # ── 2. DB ─────────────────────────────────────────────────────────────────
     db = await init_db(settings.db_path)
@@ -258,6 +259,7 @@ def create_app() -> FastAPI:
     app.include_router(http_metrics_api.router)
     app.include_router(cloud_stats.router)
     app.include_router(weather_nem.router)
+    app.include_router(solar.router)
     app.include_router(notifications_api.router)
     return app
 

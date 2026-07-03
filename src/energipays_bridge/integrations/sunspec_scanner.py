@@ -34,7 +34,7 @@ MODEL_NAMES: dict[int, tuple[str, str | None]] = {
     123: ("Immediate Controls",        None),
     124: ("Basic Storage Controls",    "battery"),
     160: ("Multiple MPPT Extension",   "solar"),
-    701: ("DER AC Measurement",        "solar"),
+    701: ("DER AC Measurement",        "battery"),
     702: ("DER Capacity",              "battery"),
     703: ("DER Enter Service",         None),
     704: ("DER Controls",              None),
@@ -68,8 +68,18 @@ MODEL_AUTO_POINTS: dict[int, list[tuple[int, str, str, int | None, str]]] = {
     111: [(12, "W", "float32", None, "solar_power_w")],
     112: [(12, "W", "float32", None, "solar_power_w")],
     113: [(12, "W", "float32", None, "solar_power_w")],
-    # Model 701 DER AC Measurement — W (int32) at offset 0, W_SF at 2
-    701: [(0, "W", "int32", 2, "solar_power_w")],
+    # Model 701 DER AC Measurement (offsets from data_addr, after 2-register ID/L header)
+    # Verified against SunSpec 701 register map via FranklinWH /api/models/701/read
+    # data_off: ACType=0, St=1, InvSt=2, ConnSt=3, Alrm=4-5, DERMode=6-7, W=8, ...
+    #           TmpAmb=33, TmpCab=34, ..., W_SF=114, ..., Tmp_SF=120
+    701: [
+        (8,   "W",       "int16",  114, "solar_power_w"),     # Active power (W)
+        (2,   "InvSt",   "uint16", None, "inverter_state"),   # Inverter state enum
+        (3,   "ConnSt",  "uint16", None, "connection_state"), # Grid connection state enum
+        (6,   "DERMode", "uint32", None, "grid_status"),      # DER mode bitfield32
+        (33,  "TmpAmb",  "int16",  120, "ambient_temp_c"),   # Ambient temperature
+        (34,  "TmpCab",  "int16",  120, "cabinet_temp_c"),   # Cabinet temperature
+    ],
     # Model 713 DER Storage Capacity
     # data[0]=WHRtg, data[1]=WHAvail, data[2]=SoC, data[3]=SoH, data[5]=WH_SF, data[6]=Pct_SF
     713: [

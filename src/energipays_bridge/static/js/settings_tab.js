@@ -244,23 +244,31 @@ function settingsTab() {
 
 function integrationsCard() {
   const METRIC_KEYS = [
+    // Battery
     { key: 'battery_soc',           label: 'Battery SoC %' },
     { key: 'battery_soh',           label: 'Battery SoH %' },
     { key: 'battery_power_w',       label: 'Battery Power W (+charge/−discharge)' },
     { key: 'battery_state',         label: 'Battery State (charging/discharging/idle)' },
-    { key: 'battery_grid_status',   label: 'Battery Grid Status' },
-    { key: 'battery_inverter_state',label: 'Battery Inverter State' },
     { key: 'battery_capacity_kwh',  label: 'Battery Capacity kWh' },
     { key: 'energy_available_kwh',  label: 'Energy Available kWh' },
+    // Solar / Inverter
+    { key: 'solar_power_w',         label: 'Solar PV Power W' },
+    { key: 'grid_status',           label: 'Grid Status (701.DERMode)' },
+    { key: 'inverter_state',        label: 'Inverter State (701.InvSt)' },
+    { key: 'connection_state',      label: 'Connection State (701.ConnSt)' },
+    { key: 'ambient_temp_c',        label: 'Ambient Temperature °C (701.TmpAmb)' },
+    { key: 'cabinet_temp_c',        label: 'Cabinet Temperature °C (701.TmpCab)' },
+    // System
     { key: 'home_load_w',           label: 'Home Load W' },
-    { key: 'operating_mode',        label: 'Operating Mode (1=Backup 2=Self-Consumption 3=TOU)' },
+    { key: 'operating_mode',        label: 'Operating Mode (1=Backup 2=Self 3=TOU)' },
     { key: 'self_reserve_soc',      label: 'Self Reserve SOC %' },
     { key: 'tou_reserve_soc',       label: 'TOU Reserve SOC %' },
-    { key: 'solar_power_w',         label: 'Solar PV Power W' },
+    { key: 'battery_grid_status',   label: 'Battery Grid Status' },
+    { key: 'battery_inverter_state',label: 'Battery Inverter State' },
   ]
 
   const _blankMapping = () => ({
-    target_metric: '', source: '', scale: 1.0,
+    target_metric: '', source: '', scale: 1.0, enabled: true,
     _fc: 'fc3', _addr: '', _rtype: 'uint16', _scale: 1.0,
     _probing: false, _probeResult: null, _probeScaled: null,
   })
@@ -411,6 +419,33 @@ function integrationsCard() {
       Alpine.store('app').addToast(`${newMappings.length} mapping(s) applied from Model ${model.model_id}`)
     },
 
+    applyAllDiscoveredMappings() {
+      let total = 0
+      for (const model of this.ssModels) {
+        if (!model.suggested_mappings?.length) continue
+        const existing = new Set(this.form.mappings.map(m => m.target_metric).filter(Boolean))
+        for (const s of model.suggested_mappings) {
+          if (existing.has(s.target_metric)) continue
+          this.form.mappings.push({
+            target_metric: s.target_metric,
+            source: s.source,
+            scale: 1.0,
+            _fc: s.source.split(':')[0] || 'fc3',
+            _addr: parseInt(s.source.split(':')[1]) || '',
+            _rtype: s.source.split(':')[2] || 'uint16',
+            _scale: parseFloat(s.source.split(':')[3]) || 1.0,
+            _probing: false,
+            _probeResult: s.live_value != null ? s.live_value : null,
+            _probeScaled: s.live_value != null ? s.live_value : null,
+          })
+          existing.add(s.target_metric)
+          total++
+        }
+      }
+      this.form.mappings = this.form.mappings.filter(m => m.target_metric)
+      Alpine.store('app').addToast(`${total} mapping(s) applied from all models`)
+    },
+
     addMapping() {
       this.form.mappings.push(_blankMapping())
     },
@@ -419,10 +454,11 @@ function integrationsCard() {
       return this.form.mappings
         .filter(m => m.target_metric)
         .map(m => {
+          const enabled = m.enabled !== false  // default true
           if (this.form.protocol === 'modbus_tcp' || this.form.protocol === 'sunspec_tcp') {
-            return { target_metric: m.target_metric, source: `${m._fc}:${m._addr}:${m._rtype}:${m._scale}`, scale: 1 }
+            return { target_metric: m.target_metric, source: `${m._fc}:${m._addr}:${m._rtype}:${m._scale}`, scale: 1, enabled }
           }
-          return { target_metric: m.target_metric, source: m.source, scale: m.scale || 1 }
+          return { target_metric: m.target_metric, source: m.source, scale: m.scale || 1, enabled }
         })
     },
 
@@ -475,8 +511,23 @@ function integrationsCard() {
       }
     },
 
+    _decodeLabel(metric, value) {
+      if (value == null) return null
+      const v = parseInt(value)
+      const INV_ST = {0:'Off',1:'Sleeping',2:'Starting',3:'Running',4:'Throttled',5:'Shutting Down',6:'Fault',7:'Standby'}
+      if (metric === 'inverter_state') return INV_ST[v] ?? null
+      if (metric === 'connection_state') return v === 1 ? 'Connected' : 'Disconnected'
+      if (metric === 'grid_status') {
+        if (v & 2) return 'Grid Forming'
+        if (v & 1) return 'Grid Following'
+        if (v & 4) return 'PV Clipped'
+        return `Mode ${v}`
+      }
+      return null
+    },
+
     async probeRegister(m, idx) {
-      m._probing = true; m._probeResult = null; m._probeScaled = null
+      m._probing = true; m._probeResult = null; m._probeScaled = null; m._probeLabel = null
       try {
         const r = await fetch('/api/integrations/probe', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -492,6 +543,7 @@ function integrationsCard() {
         if (d.ok && d.registers?.length) {
           m._probeResult = d.registers[0]
           m._probeScaled = +(d.registers[0] * (m._scale || 1)).toFixed(4)
+          m._probeLabel = this._decodeLabel(m.target_metric, m._probeScaled)
         } else {
           m._probeResult = d.error || 'error'
         }

@@ -6,7 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MqttSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="MQTT_", env_file=".env",
+    model_config = SettingsConfigDict(env_prefix="MQTT_",
+                                      env_file=[".env", "/data/ha_options.env"],
                                       env_file_encoding="utf-8", extra="ignore")
 
     host: str = "localhost"
@@ -19,7 +20,8 @@ class MqttSettings(BaseSettings):
 
 
 class BridgeSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env", "/data/ha_options.env"],
+                                      env_file_encoding="utf-8", extra="ignore")
 
     # Energipays credentials
     energipays_email: str = ""

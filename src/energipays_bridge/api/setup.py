@@ -52,6 +52,7 @@ async def _test_login(email: str, password: str) -> dict:
 
 @router.get("/api/setup/status")
 async def setup_status(request: Request) -> dict:
+    from ..environment import RUNTIME
     db = request.app.state.db
     data_dir = request.app.state.settings.data_path
     configured = await has_credentials(db, data_dir)
@@ -59,6 +60,7 @@ async def setup_status(request: Request) -> dict:
         "configured": configured,
         "poller_running": bool(request.app.state.poller
                                and request.app.state.poller.connected),
+        "runtime": RUNTIME,  # "ha_addon" | "docker" | "dev"
     }
 
 

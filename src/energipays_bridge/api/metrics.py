@@ -23,6 +23,7 @@ async def metrics_history(
     bucket: str = Query("5m", description="bucket size: 1m,5m,15m,1h"),
     from_ts: float = Query(None, alias="from", description="unix timestamp — overrides range"),
     to_ts: float = Query(None, alias="to", description="unix timestamp — overrides range"),
+    device_id_override: str = Query(None, alias="device_id", description="override device_id (e.g. 'ext')"),
 ) -> dict:
     bucket_s = _BUCKET_SECONDS.get(bucket, 300)
     now = time.time()
@@ -30,7 +31,7 @@ async def metrics_history(
         range_s = _RANGE_SECONDS.get(range, 86400)
         to_ts = now
         from_ts = now - range_s
-    device_id = request.app.state.device_id
+    device_id = device_id_override if device_id_override else request.app.state.device_id
     db = request.app.state.db
 
     rows = await query_metrics(db, device_id, point, from_ts, to_ts, bucket_s)

@@ -3,8 +3,11 @@
      x-init="setInterval(() => { _tick++ }, 1000)">
   <!-- _tick is a reactive counter that forces boostRemaining() to re-evaluate every second -->
 
+  <!-- Dashboard layout: flex-col so CSS order property controls card sequence -->
+  <div class="flex flex-col gap-4">
+
   <!-- Hot Water card -->
-  <div class="card mb-4">
+  <div class="card" x-show="cardEnabled('hotwater')" :style="'order:'+cardOrder('hotwater')">
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
         <img src="/static/icons/devices/heater2-icon.svg" class="w-5 h-5" alt="heater"/>
@@ -210,8 +213,8 @@
 
       </div>
 
-      <!-- Active rule — dropdown + Device Rules button -->
-      <div class="mt-2 flex items-center gap-2">
+      <!-- Active rule — dropdown + Device Rules + Weather boost buttons -->
+      <div class="mt-2 flex flex-wrap items-center gap-2">
         <span class="text-xs text-slate-500 shrink-0">Active Rule</span>
         <select :value="rulePickerValue"
                 @change="const r=_rulePickerRules.find(x=>x.id===$event.target.value); openRuleConfirm($event.target.value, r?.type||'command')"
@@ -222,12 +225,13 @@
         </select>
         <button @click="deviceRulesOpen=true"
                 class="shrink-0 text-xs px-2.5 py-1 rounded-md bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors">
-          Device Rules
+          Rules
         </button>
         <button @click="weatherBoostOpen=true; wbPending=$store.app.points['sd.weatherSwitcherStatus']==1?1:0"
-                class="shrink-0 text-xs px-2.5 py-1 rounded-md font-semibold transition-colors"
+                class="shrink-0 text-xs px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1"
                 :class="$store.app.points['sd.weatherSwitcherStatus']==1 ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'">
-          ☁ Weather boost
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/></svg>
+          <span class="hidden sm:inline">Weather boost</span>
         </button>
       </div>
 
@@ -256,10 +260,16 @@
             <span class="text-[10px] text-slate-500" x-text="rule?.name || ''"></span>
           </div>
           <!-- 24h bar -->
-          <div class="relative h-4 rounded overflow-hidden bg-amber-50 dark:bg-amber-900/20">
+          <div class="relative h-4 rounded overflow-hidden bg-slate-600/40 dark:bg-slate-700/50">
             <template x-for="s in todaySlots" :key="s.timeFrom">
               <div class="absolute top-0 h-full opacity-80 rounded-sm"
                    :style="`left:${slotLeft(s)};width:${slotWidth(s)};background:${s.command===2?'#ef4444':'#3b82f6'}`"></div>
+            </template>
+            <!-- Solar blackout band -->
+            <template x-if="$store.app.points['sd.solarRestrictionSwitcherStatus'] && $store.app.points['sd.solar_restriction_from']">
+              <div class="absolute top-0 h-full opacity-40 pointer-events-none"
+                   style="background:#fbbf24"
+                   :style="(()=>{ const f=$store.app.points['sd.solar_restriction_from']||'', t=$store.app.points['sd.solar_restriction_to']||''; const [fh,fm]=f.split(':').map(Number), [th,tm]=t.split(':').map(Number); const l=(fh*60+fm)/1440*100; let w=((th*60+tm)-(fh*60+fm))/1440*100; if(w<0)w+=100; return `left:${l.toFixed(2)}%;width:${w.toFixed(2)}%` })()"></div>
             </template>
             <!-- hour grid lines -->
             <template x-for="h in [6,12,18]" :key="h">
@@ -284,6 +294,16 @@
               <span class="text-[9px] text-slate-500">Boost</span>
             </div>
             <div class="flex items-center gap-1">
+              <span class="w-2.5 h-2 rounded-sm inline-block bg-slate-600/40 dark:bg-slate-700/50 border border-slate-400/40"></span>
+              <span class="text-[9px] text-slate-500">Not set</span>
+            </div>
+            <template x-if="$store.app.points['sd.solarRestrictionSwitcherStatus']">
+              <div class="flex items-center gap-1">
+                <span class="w-2.5 h-2 rounded-sm inline-block opacity-60" style="background:#fbbf24"></span>
+                <span class="text-[9px] text-slate-500">Solar PV off</span>
+              </div>
+            </template>
+            <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-sm inline-block bg-green-400"></span>
               <span class="text-[9px] text-slate-500">Now</span>
             </div>
@@ -291,11 +311,15 @@
         </div>
       </template>
 
-  </div>
+  </div><!-- end Hot Water card -->
 
   <!-- Combined Power Flow + Metrics card (Grid / Solar / Heater / Diverter tabs) -->
   <!-- Clicking any SVG node switches the tab below -->
-  <div class="card mb-4" x-data="{metricsTab:'grid', showDeviceTooltip:false,
+  <div class="card" x-show="cardEnabled('powerflow')" :style="'order:'+cardOrder('powerflow')"
+       x-data="{metricsTab: $store.metrics.defaultTab || 'grid',
+    metricsCollapsed: localStorage.getItem('metricsCollapsed')==='1',
+    toggleMetrics(){ this.metricsCollapsed=!this.metricsCollapsed; localStorage.setItem('metricsCollapsed', this.metricsCollapsed?'1':'0') },
+    showDeviceTooltip:false,
     diagH: parseInt(localStorage.getItem('diagH')||'200'),
     diagScale(d){ this.diagH=Math.max(120,Math.min(380,this.diagH+d)); localStorage.setItem('diagH',this.diagH) }}">
 
@@ -310,8 +334,10 @@
         <span class="text-xs text-slate-400" x-text="$store.app.deviceTimezone.replace('_',' ')"></span>
       </template>
       <template x-if="$store.app.userAddress || $store.app.userCity">
-        <span class="text-xs text-slate-500 truncate"
-              x-text="'📍 ' + [$store.app.userAddress, $store.app.userCity].filter(Boolean).join(', ')"></span>
+        <span class="text-xs text-slate-500 truncate flex items-center gap-1">
+          <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+          <span x-text="[$store.app.userAddress, $store.app.userCity].filter(Boolean).join(', ')"></span>
+        </span>
       </template>
     </div>
 
@@ -470,7 +496,7 @@
         <!-- ── Battery ↔ House flow line (battery at TOP, y=38 → house top y=84) ── -->
         <g x-show="$store.app.points['ext.battery_soc'] != null">
           <line x1="155" y1="38" x2="155" y2="84" stroke-width="1.5" stroke-dasharray="5 3"
-                :stroke="($store.app.points['ext.battery_power_w']||0) > 50 ? '#4ade80' : ($store.app.points['ext.battery_power_w']||0) < -50 ? '#f59e0b' : ($store.app.isDark ? '#334155' : '#cbd5e1')">
+                :stroke="($store.app.points['ext.battery_power_w']||0) > 50 ? '#f59e0b' : ($store.app.points['ext.battery_power_w']||0) < -50 ? '#4ade80' : ($store.app.isDark ? '#334155' : '#cbd5e1')">
             <animate attributeName="stroke-dashoffset"
                      :values="($store.app.points['ext.battery_power_w']||0) > 50 ? '16;0' : ($store.app.points['ext.battery_power_w']||0) < -50 ? '0;16' : '0;0'"
                      dur="1.4s" repeatCount="indefinite"/>
@@ -510,8 +536,10 @@
                const v=$store.app.points['ext.battery_state'];
                if(this._modeMap[v]) return this._modeMap[v];
                if(typeof v==='string'){
-                 if(v.toLowerCase().includes('charg')) return '↑ Charging';
-                 if(v.toLowerCase().includes('discharg')) return '↓ Discharging';
+                 if(v.toLowerCase().includes('charg') || v.toLowerCase().includes('discharg')) {
+                   const pw=$store.app.points['ext.battery_power_w']||0;
+                   return pw > 50 ? '↓ Discharging' : pw < -50 ? '↑ Charging' : 'Idle';
+                 }
                  if(v.toLowerCase().includes('idle')) return 'Idle';
                  return v;
                }
@@ -704,35 +732,39 @@
       </div>
     </div>
 
-    <!-- Tab bar -->
-    <div class="flex -mt-1 mb-3 border-b border-slate-700">
-      <button @click="metricsTab='grid'"
-              class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-              :class="metricsTab==='grid' ? 'border-green-400 text-green-400' : 'border-transparent text-slate-500 hover:text-slate-300'">
-        Grid
-      </button>
-      <button @click="metricsTab='solar'"
-              class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-              :class="metricsTab==='solar' ? 'border-yellow-400 text-yellow-400' : 'border-transparent text-slate-500 hover:text-slate-300'">
-        Solar
-      </button>
-      <button @click="metricsTab='heater'"
-              class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-              :class="metricsTab==='heater' ? 'border-rose-400 text-rose-400' : 'border-transparent text-slate-500 hover:text-slate-300'">
-        Heater
-      </button>
-      <button @click="metricsTab='diverter'"
-              class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-              :class="metricsTab==='diverter' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-300'">
-        Diverter
-      </button>
-      <button x-show="$store.app.points['ext.battery_soc'] != null"
-              @click="metricsTab='battery'"
-              class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-              :class="metricsTab==='battery' ? 'border-green-400 text-green-400' : 'border-transparent text-slate-500 hover:text-slate-300'">
-        Battery
+    <!-- Tab bar + collapse toggle -->
+    <div class="flex items-end gap-2 -mt-1" :class="metricsCollapsed ? 'mb-1' : 'mb-3'">
+      <div class="flex flex-1 overflow-x-auto border-b border-slate-700">
+        <template x-for="tab in $store.metrics.metricsTabOrder" :key="tab.id">
+          <button x-show="tab.id !== 'battery' || $store.app.points['ext.battery_soc'] != null"
+                  @click="metricsTab=tab.id; metricsCollapsed=false; localStorage.setItem('metricsCollapsed','0')"
+                  class="px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px shrink-0"
+                  :class="{
+                    'border-green-400 text-green-400':   metricsTab===tab.id && (tab.id==='grid'||tab.id==='battery'),
+                    'border-yellow-400 text-yellow-400': metricsTab===tab.id && tab.id==='solar',
+                    'border-rose-400 text-rose-400':     metricsTab===tab.id && tab.id==='heater',
+                    'border-sky-400 text-sky-400':       metricsTab===tab.id && tab.id==='diverter',
+                    'border-transparent text-slate-500 hover:text-slate-300': metricsTab!==tab.id
+                  }"
+                  x-text="tab.label">
+          </button>
+        </template>
+      </div>
+      <!-- Collapse pill button -->
+      <button @click="toggleMetrics()"
+              class="mb-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors shrink-0"
+              :class="metricsCollapsed
+                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                : 'bg-slate-800 text-slate-500 hover:text-slate-300'"
+              :title="metricsCollapsed ? 'Expand metrics' : 'Collapse metrics'">
+        <svg class="w-3 h-3 transition-transform duration-200" :class="metricsCollapsed ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
       </button>
     </div>
+
+    <!-- ── Metrics content (collapsible) ──────────────────────────────── -->
+    <div x-show="!metricsCollapsed" x-collapse>
 
     <!-- ── Grid tab ──────────────────────────────────────────────────── -->
     <div x-show="metricsTab==='grid'">
@@ -805,7 +837,7 @@
     </div>
 
     <!-- ── Heater tab ─────────────────────────────────────────────────── -->
-    <div x-show="metricsTab==='heater'" x-cloak>
+    <div x-show="metricsTab==='heater'" x-cloak class="overflow-y-auto max-h-80 pr-1 scrollbar-thin">
       <!-- Primary: status + avg + target (prominent) -->
       <div class="flex items-end gap-4 mb-3">
         <div>
@@ -872,7 +904,7 @@
 
     <!-- ── Diverter tab ────────────────────────────────────────────────── -->
     <div x-show="metricsTab==='diverter'" x-cloak>
-      <div class="space-y-2.5">
+      <div class="overflow-y-auto max-h-80 pr-1 scrollbar-thin space-y-2.5">
 
         <!-- Toggles row -->
         <div class="grid grid-cols-2 gap-2">
@@ -1055,7 +1087,7 @@
 
     <!-- ── Battery tab ────────────────────────────────────────────────── -->
     <div x-show="metricsTab==='battery'" x-cloak>
-      <div class="space-y-3">
+      <div class="overflow-y-auto max-h-80 pr-1 scrollbar-thin space-y-3">
         <!-- Integration source -->
         <div class="text-xs text-slate-500 mb-1" x-text="$store.app.batteryLabel ? $store.app.batteryLabel + ' — Battery Metrics' : 'Battery Metrics'"></div>
 
@@ -1072,8 +1104,8 @@
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">Power</span>
             <span class="font-semibold"
-                  :class="($store.app.points['ext.battery_power_w']||0)>50?'text-green-500 dark:text-green-400':($store.app.points['ext.battery_power_w']||0)<-50?'text-amber-500 dark:text-amber-400':'text-slate-400'"
-                  x-text="$store.app.points['ext.battery_power_w'] != null ? fmt(Math.abs($store.app.points['ext.battery_power_w'])/1000,'kW',2)+' · '+(($store.app.points['ext.battery_power_w']||0)>50?'Charging':($store.app.points['ext.battery_power_w']||0)<-50?'Discharging':'Idle') : '—'"></span>
+                  :class="($store.app.points['ext.battery_power_w']||0)>50?'text-amber-500 dark:text-amber-400':($store.app.points['ext.battery_power_w']||0)<-50?'text-green-500 dark:text-green-400':'text-slate-400'"
+                  x-text="$store.app.points['ext.battery_power_w'] != null ? fmt(Math.abs($store.app.points['ext.battery_power_w'])/1000,'kW',2)+' · '+(($store.app.points['ext.battery_power_w']||0)>50?'Discharging':($store.app.points['ext.battery_power_w']||0)<-50?'Charging':'Idle') : '—'"></span>
           </div>
           <!-- Home Load -->
           <div class="flex items-center justify-between py-1.5">
@@ -1128,12 +1160,54 @@
                     x-text="$store.app.points['ext.battery_state']"></span>
             </div>
           </template>
-          <!-- Grid Status (conditional) -->
+          <!-- Grid Status — REST integration (string value) -->
           <template x-if="$store.app.points['ext.battery_grid_status']">
             <div class="flex items-center justify-between py-1.5">
               <span class="text-slate-500">Grid Status</span>
               <span class="font-medium text-slate-700 dark:text-slate-300"
                     x-text="$store.app.points['ext.battery_grid_status']"></span>
+            </div>
+          </template>
+          <!-- Inverter State — SunSpec 701.InvSt -->
+          <template x-if="$store.app.points['ext.inverter_state'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Inverter State</span>
+              <span class="font-medium"
+                    :class="$store.app.points['ext.inverter_state']==3?'text-green-500 dark:text-green-400':$store.app.points['ext.inverter_state']==7?'text-red-500 dark:text-red-400':'text-slate-700 dark:text-slate-300'"
+                    x-text="({1:'Off',2:'Sleeping',3:'Running',4:'Starting',5:'Throttled',6:'Shutting Down',7:'Fault',8:'Standby'})[$store.app.points['ext.inverter_state']] || $store.app.points['ext.inverter_state']"></span>
+            </div>
+          </template>
+          <!-- Connection State — SunSpec 701.ConnSt -->
+          <template x-if="$store.app.points['ext.connection_state'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Connection State</span>
+              <span class="font-medium"
+                    :class="$store.app.points['ext.connection_state']>0?'text-green-500 dark:text-green-400':'text-red-500 dark:text-red-400'"
+                    x-text="$store.app.points['ext.connection_state']>0?'Connected':'Disconnected'"></span>
+            </div>
+          </template>
+          <!-- Grid Status — SunSpec 701.DERMode -->
+          <template x-if="$store.app.points['ext.grid_status'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Grid Mode</span>
+              <span class="font-medium text-sky-600 dark:text-sky-300"
+                    x-text="({1:'Grid Following',2:'Grid Forming',3:'Island',4:'Microgrid'})[$store.app.points['ext.grid_status']] || $store.app.points['ext.grid_status']"></span>
+            </div>
+          </template>
+          <!-- Ambient Temp — SunSpec 701.TmpAmb -->
+          <template x-if="$store.app.points['ext.ambient_temp_c'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Ambient Temp</span>
+              <span class="font-semibold text-slate-700 dark:text-slate-300"
+                    x-text="fmt($store.app.points['ext.ambient_temp_c'],'°C',1)"></span>
+            </div>
+          </template>
+          <!-- Cabinet Temp — SunSpec 701.TmpCab -->
+          <template x-if="$store.app.points['ext.cabinet_temp_c'] != null">
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-slate-500">Cabinet Temp</span>
+              <span class="font-semibold text-slate-700 dark:text-slate-300"
+                    x-text="fmt($store.app.points['ext.cabinet_temp_c'],'°C',1)"></span>
             </div>
           </template>
           <!-- Solar PV ext (conditional) -->
@@ -1153,7 +1227,359 @@
       </div>
     </div>
 
+    </div><!-- end metrics collapse wrapper -->
+
+  </div><!-- end Power Flow card -->
+
+  <!-- ── Solar Forecast card ─────────────────────────────────────────────── -->
+  <div class="card overflow-hidden" x-show="cardEnabled('solar')" :style="'order:'+cardOrder('solar')">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m8.66-9H20M4 12H3m15.07-6.07-.71.71M6.64 17.36l-.71.71m12.73 0-.71-.71M6.64 6.64l-.71-.71M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+        </svg>
+        <h2 class="font-semibold text-sm" :class="$store.app.isDark ? 'text-slate-100' : 'text-slate-800'">Solar Forecast</h2>
+        <span class="text-[10px] text-slate-500">openmeteo</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- Overlay toggles -->
+        <button @click="solarShowActual=!solarShowActual; localStorage.setItem('solarShowActual',solarShowActual?'1':'0'); if(solarShowActual)fetchSolarActual()"
+                :title="solarShowActual ? 'Hide actual solar' : 'Show actual solar PV'"
+                class="text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1"
+                :class="solarShowActual
+                  ? 'border-amber-400/60 text-amber-400 bg-amber-400/10'
+                  : 'border-slate-600 text-slate-500 hover:text-slate-300'">
+          <span class="w-2.5 h-0.5 bg-current rounded inline-block"></span> Actual
+        </button>
+        <button @click="solarShowTemp=!solarShowTemp; localStorage.setItem('solarShowTemp',solarShowTemp?'1':'0')"
+                :title="solarShowTemp ? 'Hide temperature' : 'Show temperature forecast'"
+                class="text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1"
+                :class="solarShowTemp
+                  ? 'border-sky-400/60 text-sky-400 bg-sky-400/10'
+                  : 'border-slate-600 text-slate-500 hover:text-slate-300'">
+          <span class="w-2.5 h-0.5 bg-current rounded inline-block" style="background:repeating-linear-gradient(90deg,currentColor 0,currentColor 2px,transparent 2px,transparent 4px)"></span> Temp
+        </button>
+        <button @click="fetchSolar()" :disabled="solarLoading"
+                class="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors disabled:opacity-40">
+          <svg class="w-3 h-3" :class="solarLoading ? 'animate-spin' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading skeleton -->
+    <div x-show="solarLoading" class="flex items-center justify-center h-32 text-xs text-slate-500">
+      Fetching forecast…
+    </div>
+
+    <!-- No location -->
+    <div x-show="!solarLoading && solarError"
+         class="text-xs text-slate-500 text-center py-8">
+      Set your location in <strong>Settings → Location &amp; NEM Region</strong> to enable solar forecast.
+    </div>
+
+    <!-- Content -->
+    <div x-show="!solarLoading && !solarError && solar48Hours.today.length">
+
+      <!-- Today + Tomorrow summary cards (compact) -->
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <!-- Today -->
+        <div class="rounded-lg px-3 py-2 border min-w-0 overflow-hidden"
+             :class="$store.app.isDark ? 'border-amber-500/25 bg-amber-500/5' : 'border-amber-400/30 bg-amber-50'">
+          <div class="text-[10px] font-semibold text-amber-500 mb-1" x-text="solarDayHeading(0)"></div>
+          <div class="flex gap-3 flex-wrap">
+            <div>
+              <div class="text-[9px] text-slate-500 uppercase tracking-wide">Total</div>
+              <div class="text-sm font-bold leading-tight" :class="$store.app.isDark ? 'text-slate-100' : 'text-slate-800'"
+                   x-text="(solarSummary.today?.total ?? '—') + ' kWh'"></div>
+            </div>
+            <div>
+              <div class="text-[9px] text-slate-500 uppercase tracking-wide">Peak</div>
+              <div class="text-sm font-bold leading-tight" :class="$store.app.isDark ? 'text-slate-100' : 'text-slate-800'"
+                   x-text="(solarSummary.today?.peak ?? '—') + ' kW @ ' + (solarSummary.today?.peakTime ?? '—')"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Tomorrow -->
+        <div class="rounded-lg px-3 py-2 border min-w-0 overflow-hidden"
+             :class="$store.app.isDark ? 'border-sky-500/25 bg-sky-500/5' : 'border-sky-400/30 bg-sky-50'">
+          <div class="text-[10px] font-semibold text-sky-400 mb-1" x-text="solarDayHeading(1)"></div>
+          <div class="flex gap-3 flex-wrap">
+            <div>
+              <div class="text-[9px] text-slate-500 uppercase tracking-wide">Total</div>
+              <div class="text-sm font-bold leading-tight" :class="$store.app.isDark ? 'text-slate-100' : 'text-slate-800'"
+                   x-text="(solarSummary.tomorrow?.total ?? '—') + ' kWh'"></div>
+            </div>
+            <div>
+              <div class="text-[9px] text-slate-500 uppercase tracking-wide">Peak</div>
+              <div class="text-sm font-bold leading-tight" :class="$store.app.isDark ? 'text-slate-100' : 'text-slate-800'"
+                   x-text="(solarSummary.tomorrow?.peak ?? '—') + ' kW @ ' + (solarSummary.tomorrow?.peakTime ?? '—')"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 48h bar chart: Today (amber) + Tomorrow (sky) -->
+      <div class="relative mt-1" x-data="{tip:null, tipX:0, tipY:0}">
+        <div class="flex gap-1 items-stretch">
+        <!-- Left Y-axis: kW/m² (irradiance) -->
+        <div class="flex flex-col justify-between text-right shrink-0" style="width:22px;padding:6px 0 2px">
+          <span class="text-[8px] text-amber-400/70 leading-none" x-text="solarMax48 ? (solarMax48/1000).toFixed(1) : ''"></span>
+          <span class="text-[8px] text-amber-400/40 leading-none" x-text="solarMax48 ? (solarMax48/2000).toFixed(1) : ''"></span>
+          <span class="text-[8px] text-amber-400/40 leading-none">0</span>
+        </div>
+        <!-- Chart area -->
+        <div class="relative flex-1">
+        <div class="relative flex items-end gap-px rounded overflow-visible"
+             :class="$store.app.isDark ? 'bg-slate-800/50' : 'bg-slate-100/80'"
+             style="height:88px; padding: 6px 0 0">
+
+          <!-- Today bars -->
+          <template x-for="(h,i) in solar48Hours.today" :key="'t'+h.hour">
+            <div class="flex-1 flex flex-col justify-end h-full relative group"
+                 @mouseenter="tip={time:h.hour.slice(11,16),rad:(h.radiation_wm2/1000).toFixed(2)+'kW',temp:h.temp_c!=null?h.temp_c+'°C':null}; tipX=((i+0.5)/24*50); tipY=Math.max(10,82-solarBarH(h.radiation_wm2,76))"
+                 @mouseleave="tip=null">
+              <div class="w-full"
+                   :class="h.radiation_wm2 < 10
+                     ? ($store.app.isDark ? 'bg-slate-700/40' : 'bg-slate-200/60')
+                     : 'bg-amber-400'"
+                   :style="'height:' + solarBarH(h.radiation_wm2, 76) + 'px'">
+              </div>
+            </div>
+          </template>
+
+          <!-- Divider between today and tomorrow -->
+          <div class="w-px self-stretch shrink-0"
+               :class="$store.app.isDark ? 'bg-slate-500/50' : 'bg-slate-400/40'"></div>
+
+          <!-- Tomorrow bars -->
+          <template x-for="(h,i) in solar48Hours.tomorrow" :key="'r'+h.hour">
+            <div class="flex-1 flex flex-col justify-end h-full relative group"
+                 @mouseenter="tip={time:h.hour.slice(11,16),rad:(h.radiation_wm2/1000).toFixed(2)+'kW',temp:h.temp_c!=null?h.temp_c+'°C':null}; tipX=(50+(i+0.5)/24*50); tipY=Math.max(10,82-solarBarH(h.radiation_wm2,76))"
+                 @mouseleave="tip=null">
+              <div class="w-full"
+                   :class="h.radiation_wm2 < 10
+                     ? ($store.app.isDark ? 'bg-slate-700/40' : 'bg-slate-200/60')
+                     : 'bg-sky-400'"
+                   :style="'height:' + solarBarH(h.radiation_wm2, 76) + 'px'">
+              </div>
+            </div>
+          </template>
+
+          <!-- NOW marker (red) — positioned in today's half -->
+          <div class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20 pointer-events-none"
+               :style="`left:${solarNowPct48}%`">
+            <span class="absolute -top-0.5 text-[8px] font-bold text-red-400 leading-none select-none"
+                  :style="solarNowPct48 > 20 ? 'right:2px' : 'left:2px'">NOW</span>
+          </div>
+
+          <!-- Hour grid lines -->
+          <template x-for="pct in [12.5, 25, 37.5, 62.5, 75, 87.5]" :key="pct">
+            <div class="absolute top-0 bottom-0 w-px opacity-20 pointer-events-none"
+                 :class="$store.app.isDark ? 'bg-slate-400' : 'bg-slate-500'"
+                 :style="`left:${pct}%`"></div>
+          </template>
+
+          <!-- SVG overlays: actual solar + temperature lines -->
+          <!-- viewBox 0 0 100 88 maps X=0-100 (percentage) and Y=0-88 (pixels) -->
+          <svg class="absolute inset-0 w-full h-full pointer-events-none z-10"
+               viewBox="0 0 100 88" preserveAspectRatio="none">
+            <!-- Actual solar PV line (today only, up to NOW) -->
+            <polyline x-show="solarShowActual && solarActualPoints.length > 1"
+                      :points="solarActualPoints.map((p,i)=>(((i+0.5)/24*50)).toFixed(2)+' '+p).join(', ')"
+                      fill="none" stroke="#f97316" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+            <!-- Temperature line (48h) -->
+            <polyline x-show="solarShowTemp && solarTempPoints.length > 1"
+                      :points="solarTempPoints.map((p,i)=>((i/(solarTempPoints.length-1||1))*100).toFixed(2)+' '+p).join(', ')"
+                      fill="none" stroke="#38bdf8" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-dasharray="2 1.5" opacity="0.8"/>
+          </svg>
+
+          <!-- Hover tooltip -->
+          <div x-show="tip" x-cloak
+               class="absolute z-30 pointer-events-none px-2 py-1 rounded text-[10px] font-medium shadow-lg border"
+               :class="$store.app.isDark ? 'bg-slate-800 border-slate-600 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
+               :style="`left:${tipX>75?tipX-14:tipX+1}%;top:${tipY}px;transform:translateX(${tipX>75?'-100%':'0'})`">
+            <div x-text="tip?.time" class="font-bold"></div>
+            <div class="text-amber-400" x-text="tip?.rad"></div>
+            <div x-show="solarShowTemp && tip?.temp" class="text-sky-400" x-text="tip?.temp"></div>
+          </div>
+        </div>
+        </div><!-- end chart flex-1 (relative flex-1) -->
+        <!-- Right Y-axis: °C (only when temp overlay enabled) -->
+        <div class="flex flex-col justify-between shrink-0" style="width:22px;padding:6px 0 2px" x-show="solarShowTemp && solarTempMax !== null">
+          <span class="text-[8px] text-sky-400/70 leading-none" x-text="solarTempMax !== null ? solarTempMax + '°' : ''"></span>
+          <span class="text-[8px] text-sky-400/40 leading-none" x-text="solarTempMin !== null && solarTempMax !== null ? Math.round((solarTempMax+solarTempMin)/2) + '°' : ''"></span>
+          <span class="text-[8px] text-sky-400/40 leading-none" x-text="solarTempMin !== null ? solarTempMin + '°' : ''"></span>
+        </div>
+        <!-- Right Y-axis placeholder (keeps chart width stable) -->
+        <div class="shrink-0" style="width:22px" x-show="!solarShowTemp || solarTempMax === null"></div>
+        </div><!-- end flex gap-1 -->
+
+        <!-- X-axis labels: today half + tomorrow half -->
+        <div class="flex text-[9px] mt-0.5 ml-[23px] mr-[23px]"
+             :class="$store.app.isDark ? 'text-slate-600' : 'text-slate-400'">
+          <div class="flex justify-between flex-1">
+            <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span>
+          </div>
+          <div class="w-px"></div>
+          <div class="flex justify-between flex-1 text-sky-500/70">
+            <span class="pl-1">12AM</span><span>6AM</span><span>12PM</span><span class="pr-0.5">12AM</span>
+          </div>
+        </div>
+
+        <!-- Today / Tomorrow axis labels -->
+        <div class="flex text-[9px] font-medium mt-0.5">
+          <div class="flex-1 text-center text-amber-500/70">← Today</div>
+          <div class="flex-1 text-center text-sky-400/70">Tomorrow →</div>
+        </div>
+      </div>
+
+      <!-- Rule schedule strip (today only, aligned to today's 50% of chart) -->
+      <div class="mt-3" x-show="solarActiveRuleSlots.length">
+        <div class="text-[10px] mb-1" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Rule schedule (today)</div>
+        <div class="relative h-3 rounded overflow-hidden"
+             :class="$store.app.isDark ? 'bg-slate-700/60' : 'bg-slate-200'">
+          <template x-for="slot in solarActiveRuleSlots" :key="slot.timeFrom">
+            <div class="absolute top-0 h-full opacity-80"
+                 :style="solarSlotStyle(slot, slot.command==2?'#ef4444':'#3b82f6')"></div>
+          </template>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+               :style="`left:${solarNowPct48}%`"></div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="flex items-center gap-3 mt-2 flex-wrap">
+        <div class="flex items-center gap-1">
+          <span class="w-2.5 h-2 rounded-sm bg-amber-400 inline-block"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Today</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="w-2.5 h-2 rounded-sm bg-sky-400 inline-block"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Tomorrow</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="w-0.5 h-3 bg-red-500 inline-block"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Now</span>
+        </div>
+        <div x-show="solarActiveRuleSlots.length" class="flex items-center gap-1">
+          <span class="w-2.5 h-2 rounded-sm bg-blue-500 inline-block"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Disable</span>
+        </div>
+        <div x-show="solarActiveRuleSlots.length" class="flex items-center gap-1">
+          <span class="w-2.5 h-2 rounded-sm bg-red-500 inline-block"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Boost</span>
+        </div>
+        <div x-show="solarShowActual" class="flex items-center gap-1">
+          <span class="w-4 h-0.5 bg-orange-500 inline-block rounded"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Actual PV</span>
+        </div>
+        <div x-show="solarShowTemp" class="flex items-center gap-1">
+          <span class="w-4 h-0.5 bg-sky-400 inline-block rounded" style="background: repeating-linear-gradient(90deg,#38bdf8 0,#38bdf8 3px,transparent 3px,transparent 5px)"></span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Temp</span>
+        </div>
+      </div>
+    </div>
+  </div><!-- end Solar Forecast card -->
+
+  <!-- Customize Dashboard button — fixed order at bottom of flex col -->
+  <div style="order:99">
+    <button @click="cardConfigOpen=true"
+            class="w-full py-2 text-xs text-slate-600 hover:text-slate-400 flex items-center justify-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      Customize Dashboard
+    </button>
   </div>
+
+  </div><!-- end flex-col wrapper -->
+
+  <!-- ── Dashboard Customize modal ─────────────────────────────────────────── -->
+  <template x-if="cardConfigOpen">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+         @keydown.escape.window="cardConfigOpen=false">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-100 text-sm">Customize Dashboard</h3>
+          <button @click="cardConfigOpen=false" class="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-4">Show, hide, or reorder cards. At least one card must remain visible.</p>
+
+        <div class="space-y-2">
+          <template x-for="(card, idx) in cardCfg" :key="card.id">
+            <div class="flex items-center gap-3 bg-slate-800/60 rounded-xl px-3 py-2.5">
+              <!-- Reorder arrows -->
+              <div class="flex flex-col gap-0.5 shrink-0">
+                <button @click="moveCard(card.id, -1)" :disabled="idx===0"
+                        class="text-slate-500 hover:text-slate-200 disabled:opacity-20 leading-none text-xs px-1">▲</button>
+                <button @click="moveCard(card.id, 1)" :disabled="idx===cardCfg.length-1"
+                        class="text-slate-500 hover:text-slate-200 disabled:opacity-20 leading-none text-xs px-1">▼</button>
+              </div>
+              <!-- Icon + label -->
+              <template x-if="card.id==='hotwater'">
+                <img src="/static/icons/devices/heater2-icon.svg" class="w-5 h-5 opacity-70 shrink-0">
+              </template>
+              <template x-if="card.id==='powerflow'">
+                <img src="/static/icons/devices/lightning.svg" class="w-5 h-5 opacity-70 shrink-0">
+              </template>
+              <template x-if="card.id==='solar'">
+                <svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m8.66-9H20M4 12H3m15.07-6.07-.71.71M6.64 17.36l-.71.71m12.73 0-.71-.71M6.64 6.64l-.71-.71M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+                </svg>
+              </template>
+              <span class="flex-1 text-sm text-slate-200" x-text="card.label"></span>
+              <!-- Enabled toggle -->
+              <button @click="toggleCard(card.id)"
+                      :title="card.enabled!==false ? 'Hide card' : 'Show card'"
+                      :disabled="card.enabled!==false && cardCfg.filter(c=>c.enabled!==false).length<=1"
+                      class="relative w-10 h-5 rounded-full transition-colors duration-200 shrink-0 disabled:opacity-30"
+                      :class="card.enabled!==false ? 'bg-green-600' : 'bg-slate-600'">
+                <span class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"
+                      :class="card.enabled!==false ? 'right-0.5' : 'left-0.5'"></span>
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <!-- Metrics tabs section -->
+        <div class="mt-4 pt-4 border-t border-slate-700/60">
+          <p class="text-xs text-slate-400 font-medium mb-1">Metrics tabs</p>
+          <p class="text-[10px] text-slate-600 mb-3">Reorder tabs. Star sets the default on open.</p>
+          <div class="space-y-2">
+            <template x-for="(tab, idx) in $store.metrics.metricsTabOrder" :key="tab.id">
+              <div class="flex items-center gap-3 bg-slate-800/60 rounded-xl px-3 py-2">
+                <div class="flex flex-col gap-0.5 shrink-0">
+                  <button @click="$store.metrics.moveTab(tab.id, -1)" :disabled="idx===0"
+                          class="text-slate-500 hover:text-slate-200 disabled:opacity-20 leading-none text-xs px-1">▲</button>
+                  <button @click="$store.metrics.moveTab(tab.id, 1)" :disabled="idx===$store.metrics.metricsTabOrder.length-1"
+                          class="text-slate-500 hover:text-slate-200 disabled:opacity-20 leading-none text-xs px-1">▼</button>
+                </div>
+                <span class="flex-1 text-sm text-slate-200" x-text="tab.label"></span>
+                <!-- Default star -->
+                <button @click="$store.metrics.setDefault(tab.id)"
+                        :title="$store.metrics.defaultTab===tab.id ? 'Default tab' : 'Set as default'"
+                        class="text-lg leading-none transition-colors"
+                        :class="$store.metrics.defaultTab===tab.id ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'">★</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <p class="text-[10px] text-slate-600 mt-3 text-center">Changes are saved automatically</p>
+        <button @click="cardConfigOpen=false"
+                class="mt-4 w-full bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm rounded-xl py-2 transition-colors">
+          Done
+        </button>
+      </div>
+    </div>
+  </template>
 
   <!-- ── Hot Water mini chart modal ────────────────────────────────────────── -->
   <template x-if="hotWaterModal">
@@ -1315,7 +1741,10 @@
       <div class="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-5">
         <!-- Header -->
         <div class="flex items-center justify-between mb-4">
-          <span class="font-semibold text-slate-100 text-sm">☁ Weather boost</span>
+          <span class="font-semibold text-slate-100 text-sm flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/></svg>
+            Weather boost
+          </span>
           <button @click="weatherBoostOpen=false" class="text-slate-500 hover:text-slate-300 transition-colors">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>

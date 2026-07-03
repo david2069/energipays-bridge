@@ -83,6 +83,12 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
     else:
         points["errorCount"] = 0
 
+    # computed solar power (sum of per-phase streams, in watts)
+    streams = [points.get(k) for k in ("solarStreamA", "solarStreamB", "solarStreamC")]
+    solar_vals = [v for v in streams if isinstance(v, (int, float))]
+    if solar_vals:
+        points["solarPower"] = round(sum(solar_vals), 1)
+
     # computed average temperature
     t1 = points.get("waterTemperature1")
     t2 = points.get("waterTemperature2")

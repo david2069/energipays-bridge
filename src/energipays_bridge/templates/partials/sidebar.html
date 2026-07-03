@@ -28,7 +28,11 @@
         <img src="/static/icons/devices/sidebar-rules.svg" class="w-5 h-5"
              :style="$store.app.activeTab === 'rules' ? 'filter:invert(59%) sepia(52%) saturate(500%) hue-rotate(95deg) brightness(95%) contrast(90%)' : 'filter:brightness(0.55)'" alt=""/>
       </template>
-      <template x-if="tab.id !== 'dashboard' && tab.id !== 'analytics' && tab.id !== 'rules'">
+      <template x-if="tab.id === 'mqtt'">
+        <img src="/static/icons/mqtt-logo.svg" class="w-5 h-5"
+             :style="$store.app.activeTab === 'mqtt' ? 'opacity:1' : 'opacity:0.5'" alt="MQTT"/>
+      </template>
+      <template x-if="tab.id !== 'dashboard' && tab.id !== 'analytics' && tab.id !== 'rules' && tab.id !== 'mqtt'">
         <span x-html="tab.icon" class="w-5 h-5"></span>
       </template>
     </button>

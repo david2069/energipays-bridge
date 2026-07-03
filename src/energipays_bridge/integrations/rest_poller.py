@@ -68,6 +68,8 @@ class RestPoller(IntegrationPoller):
 def _extract_mappings(data: Any, mappings: list[FieldMapping]) -> dict[str, object]:
     result: dict[str, object] = {}
     for m in mappings:
+        if not m.enabled:
+            continue
         raw = _dotpath(data, m.source)
         if raw is not None:
             try:

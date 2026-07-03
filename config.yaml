@@ -1,0 +1,47 @@
+name: "Energipays Bridge"
+description: "Monitor and control your Energipays Sunamp hot water device. Dashboard, analytics, automation rules, MQTT Discovery, and push notifications via Home Assistant."
+version: "1.0.0"
+slug: "energipays_bridge"
+url: "https://github.com/david2069/energipays-bridge"
+init: false
+homeassistant: "2024.1.0"
+
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+
+ports:
+  8080/tcp: 8080
+ports_description:
+  8080/tcp: "Energipays Bridge Web UI and REST API"
+
+map:
+  - data:rw
+
+options:
+  energipays_email: ""
+  energipays_password: ""
+  poll_interval: 60
+  mqtt_enabled: false
+  mqtt_host: "core-mosquitto"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  log_level: "info"
+
+schema:
+  energipays_email: str
+  energipays_password: str
+  poll_interval: int
+  mqtt_enabled: bool
+  mqtt_host: str
+  mqtt_port: int
+  mqtt_username: str
+  mqtt_password: str
+  log_level: "list(trace|debug|info|notice|warning|error|fatal)"
+
+panel_icon: "mdi:water-boiler"
+panel_title: "Energipays"

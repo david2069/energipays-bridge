@@ -40,6 +40,249 @@ function dashboardTab() {
     _tick: 0,              // incremented every second to drive countdown re-render
     _rulesCache: {},
 
+    // ── Solar forecast ──────────────────────────────────────────────────────
+    solarData: null,
+    solarLoading: false,
+    solarError: null,
+    _solarRules: [],
+    solarShowActual: localStorage.getItem('solarShowActual') === '1',
+    solarShowTemp:   localStorage.getItem('solarShowTemp')   === '1',
+    _solarActualData: [],  // [{ts, value}] from metrics history
+
+    async fetchSolar() {
+      if (this.solarLoading) return
+      this.solarLoading = true
+      this.solarError = null
+      try {
+        const fetches = [fetch('/api/solar/forecast'), fetch('/api/rules')]
+        if (this.solarShowActual) fetches.push(this.fetchSolarActual())
+        const [sr, rr] = await Promise.all(fetches)
+        if (sr.ok) {
+          const d = await sr.json()
+          if (d.error) { this.solarError = d.error } else { this.solarData = d }
+        }
+        if (rr.ok) {
+          const d = await rr.json()
+          this._solarRules = Array.isArray(d) ? d : (d.data || d.rules || [])
+        }
+      } catch (e) { this.solarError = String(e) }
+      finally { this.solarLoading = false }
+    },
+
+    async fetchSolarActual() {
+      try {
+        const r = await fetch('/api/metrics/history?point=ext.solar_power_w&device_id=ext&range=24h&bucket=1h')
+        if (r.ok) { const d = await r.json(); this._solarActualData = d.data || [] }
+      } catch {}
+    },
+
+    // Actual solar PV: Y pixel values for today's 24 hours (bars 0-23), null if no data
+    get solarActualPoints() {
+      if (!this._solarActualData.length || !this.solar48Hours.today.length) return []
+      const chartH = 76
+      const todayHours = this.solar48Hours.today
+      const nowTs = Date.now() / 1000
+      // Build a map: hour-of-day → watts
+      const byHour = {}
+      this._solarActualData.forEach(({ts, value}) => {
+        const d = new Date(ts * 1000)
+        if (d.toDateString() === new Date().toDateString()) byHour[d.getHours()] = value
+      })
+      // Normalize against max actual power, NOT irradiance (different units)
+      const vals = Object.values(byHour).filter(v => v > 0)
+      if (!vals.length) return []
+      const maxActual = Math.max(...vals)
+      const pts = []
+      for (let i = 0; i < todayHours.length; i++) {
+        const hh = parseInt(todayHours[i].hour.slice(11, 13))
+        const slotTs = new Date(todayHours[i].hour).getTime() / 1000 + 1800
+        if (slotTs > nowTs) break  // only up to NOW
+        const w = byHour[hh] ?? null
+        if (w === null) { pts.push(null); continue }
+        const scaled = Math.min(Math.max(w, 0), maxActual)
+        pts.push((chartH - (scaled / maxActual) * chartH + 6).toFixed(1))
+      }
+      return pts.filter(p => p !== null)
+    },
+
+    // Max actual power seen today (kW, for Y-axis label)
+    get solarActualMaxKw() {
+      if (!this._solarActualData.length) return null
+      const vals = this._solarActualData.map(d => d.value).filter(v => v > 0)
+      return vals.length ? (Math.max(...vals) / 1000).toFixed(2) : null
+    },
+
+    // Temperature: Y pixel values across all 48h (today+tomorrow), one per hour
+    get solarTempPoints() {
+      if (!this.solarData?.hourly?.length) return []
+      const { today, tomorrow } = this.solar48Hours
+      const all = [...today, ...tomorrow]
+      const temps = all.map(h => h.temp_c).filter(t => t !== null)
+      if (!temps.length) return []
+      const minT = Math.min(...temps), maxT = Math.max(...temps)
+      const range = maxT - minT || 1
+      const chartH = 76
+      return all.map(h => {
+        if (h.temp_c === null) return null
+        return (chartH - ((h.temp_c - minT) / range) * chartH * 0.8 + 6 + chartH * 0.1).toFixed(1)
+      }).filter(p => p !== null)
+    },
+
+    get solarTempMin() {
+      const { today, tomorrow } = this.solar48Hours
+      const temps = [...today, ...tomorrow].map(h => h.temp_c).filter(t => t !== null)
+      return temps.length ? Math.round(Math.min(...temps)) : null
+    },
+    get solarTempMax() {
+      const { today, tomorrow } = this.solar48Hours
+      const temps = [...today, ...tomorrow].map(h => h.temp_c).filter(t => t !== null)
+      return temps.length ? Math.round(Math.max(...temps)) : null
+    },
+
+    _localDateStr(offset) {
+      const d = new Date()
+      d.setDate(d.getDate() + offset)
+      return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-')
+    },
+
+    // Today + tomorrow hourly arrays
+    get solar48Hours() {
+      if (!this.solarData?.hourly?.length) return { today: [], tomorrow: [] }
+      return {
+        today:    this.solarData.hourly.filter(h => h.hour.startsWith(this._localDateStr(0))),
+        tomorrow: this.solarData.hourly.filter(h => h.hour.startsWith(this._localDateStr(1))),
+      }
+    },
+
+    get solarMax48() {
+      const { today, tomorrow } = this.solar48Hours
+      return Math.max(...[...today, ...tomorrow].map(h => h.radiation_wm2), 1)
+    },
+
+    solarBarH(v, containerH) {
+      return Math.max(1, Math.round((v / this.solarMax48) * (containerH || 72)))
+    },
+
+    _solarSummarize(hours) {
+      if (!hours.length) return null
+      const total = hours.reduce((s, h) => s + h.radiation_wm2, 0)
+      const peak  = Math.max(...hours.map(h => h.radiation_wm2))
+      const ph    = hours.find(h => h.radiation_wm2 === peak)
+      const t     = ph?.hour.slice(11,16) || '—'
+      const hh    = parseInt(t), mm = parseInt(t.slice(3))
+      return {
+        total:    (total / 1000).toFixed(1),
+        peak:     (peak  / 1000).toFixed(2),
+        peakTime: t,
+        slots:    hours.filter(h => h.radiation_wm2 >= 100).length,
+      }
+    },
+
+    get solarSummary() {
+      const { today, tomorrow } = this.solar48Hours
+      return { today: this._solarSummarize(today), tomorrow: this._solarSummarize(tomorrow) }
+    },
+
+    solarDayHeading(offset) {
+      const d = new Date()
+      d.setDate(d.getDate() + offset)
+      const day  = d.toLocaleDateString('en', { weekday: 'short' }).toUpperCase()
+      const date = d.toLocaleDateString('en', { day: 'numeric', month: 'long' }).toUpperCase()
+      return `${day}, ${date}`
+    },
+
+    // NOW position within the 48h chart (today = left 50%, tomorrow = right 50%)
+    get solarNowPct48() {
+      const n = new Date()
+      const minOfDay = n.getHours() * 60 + n.getMinutes()
+      return (minOfDay / 1440 * 50).toFixed(2)  // 0–50% for today's position
+    },
+
+    // Rule slots for today (for the strip below the chart)
+    get solarActiveRuleSlots() {
+      const pts = Alpine.store('app').points
+      const activeId = pts.active_rule_id || pts['sd.active_rule_id'] || null
+      let rule = activeId ? this._solarRules.find(r => r.id === activeId) : null
+      if (!rule) rule = this._solarRules.find(r => r.enabled !== false) || null
+      if (!rule?.data) return []
+      const jsDay = new Date().getDay()  // 0=Sun
+      const dKey = jsDay === 0 ? 'd7' : `d${jsDay}`
+      const keys = Object.keys(rule.data).filter(k => /^d\d$/.test(k))
+      const useKey = keys.includes(dKey) ? dKey : (keys.includes('d1') ? 'd1' : keys[0])
+      return rule.data[useKey] || []
+    },
+
+    solarSlotStyle(slot, color) {
+      const toMin = t => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + m }
+      const left = toMin(slot.timeFrom)
+      let end = toMin(slot.timeTo)
+      if (end === 0) end = 1440
+      const width = Math.max(2, end - left)
+      // Rule strip spans only the TODAY half (50% of the 48h chart)
+      return `left:${(left/1440*50).toFixed(2)}%;width:${(width/1440*50).toFixed(2)}%;background:${color}`
+    },
+
+    // ── Card customization ──────────────────────────────────────────────────
+    cardConfigOpen: false,
+    _cardConfig: null,
+
+    _loadCardConfig() {
+      const defaults = [
+        { id: 'hotwater',  label: 'Hot Water' },
+        { id: 'powerflow', label: 'Energy Power Flow' },
+        { id: 'solar',     label: 'Solar Forecast' },
+      ]
+      try {
+        const stored = JSON.parse(localStorage.getItem('dashCardConfig') || 'null')
+        if (stored && Array.isArray(stored)) {
+          // Merge: keep stored order/enabled; add any new defaults at end
+          const merged = stored
+            .map(s => ({ ...(defaults.find(d => d.id === s.id) || {}), ...s }))
+            .filter(s => defaults.some(d => d.id === s.id))
+          defaults.forEach(d => { if (!merged.find(m => m.id === d.id)) merged.push(d) })
+          this._cardConfig = merged
+          return
+        }
+      } catch {}
+      this._cardConfig = defaults.map(d => ({ ...d, enabled: true }))
+    },
+    _saveCardConfig() {
+      localStorage.setItem('dashCardConfig', JSON.stringify(
+        this._cardConfig.map(c => ({ id: c.id, enabled: c.enabled }))
+      ))
+    },
+    get cardCfg() {
+      if (!this._cardConfig) this._loadCardConfig()
+      return this._cardConfig
+    },
+    cardOrder(id) {
+      const idx = this.cardCfg.findIndex(c => c.id === id)
+      return idx === -1 ? 99 : idx
+    },
+    cardEnabled(id) {
+      const c = this.cardCfg.find(c => c.id === id)
+      return c ? (c.enabled !== false) : true
+    },
+    toggleCard(id) {
+      const c = this.cardCfg.find(c => c.id === id)
+      if (!c) return
+      const enabledCount = this.cardCfg.filter(x => x.enabled !== false).length
+      if (c.enabled !== false && enabledCount <= 1) return  // must keep ≥1
+      c.enabled = c.enabled === false ? true : false
+      this._saveCardConfig()
+    },
+    moveCard(id, dir) {
+      const idx = this.cardCfg.findIndex(c => c.id === id)
+      if (idx === -1) return
+      const newIdx = idx + dir
+      if (newIdx < 0 || newIdx >= this.cardCfg.length) return
+      const tmp = this.cardCfg[idx]
+      this.cardCfg[idx] = this.cardCfg[newIdx]
+      this.cardCfg[newIdx] = tmp
+      this._saveCardConfig()
+    },
+
+
     // ── Hot Water mini chart modal ───────────────────────────────────────────
     hotWaterModal: false,
     _hwChart: null,
@@ -259,6 +502,8 @@ function dashboardTab() {
       } catch (_) {}
       this._fetchWeatherNem()
       setInterval(() => this._fetchWeatherNem(), 300000)
+      this.fetchSolar()
+      setInterval(() => this.fetchSolar(), 3600000)
     },
 
     async _fetchWeatherNem() {

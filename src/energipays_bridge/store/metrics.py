@@ -16,6 +16,7 @@ _RECORDED_POINTS = {
     "phasePower", "phasePowerA", "phasePowerB", "phasePowerC",
     "voltageA", "voltageB", "voltageC",
     "heaterStatus", "boostStatus", "stateOfCharge",
+    "solarStreamA", "solarStreamB", "solarStreamC", "solarPower",
     "today.EEct", "today.IEct", "today.DE_h", "today.DE_e",
     "yesterday.EEct", "yesterday.IEct",
 }
@@ -33,7 +34,7 @@ class MetricsRecorder:
         rows = [
             (sample.device_id, k, sample.ts, float(v))
             for k, v in sample.points.items()
-            if k in _RECORDED_POINTS and isinstance(v, (int, float))
+            if (k in _RECORDED_POINTS or k.startswith("ext.")) and isinstance(v, (int, float))
         ]
         if rows:
             await self._db.executemany(
