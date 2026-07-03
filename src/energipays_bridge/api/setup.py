@@ -29,12 +29,27 @@ class AesKeyBody(BaseModel):
     key: str
 
 
+async def _ensure_key_logged(client) -> None:
+    """Call _ensure_key and log the exact failure reason if it fails."""
+    import energipays as ep
+    if ep._KEY:
+        return
+    log.info("auth: AES key not loaded — attempting JS bundle extraction from energipays.com")
+    try:
+        await asyncio.to_thread(client._ensure_key)
+        log.info("auth: AES key extracted successfully")
+    except Exception as exc:
+        log.error("auth: AES key extraction failed — %s: %s", type(exc).__name__, exc)
+        raise
+
+
 async def _test_login(email: str, password: str) -> dict:
     """Try to log in; return {"ok": True, "user": {...}} or {"ok": False, "error": "..."}."""
     log.info("auth: attempting login for %s", email)
     try:
         from energipays import EnergipaysClient
         client = EnergipaysClient(email=email, password=password, auto_login=False)
+        await _ensure_key_logged(client)
         log.debug("auth: sending CSRF bootstrap + encrypted login POST to energipays.com")
         resp = await asyncio.to_thread(client.login)
         token = resp.get("access_token") or resp.get("token") or resp.get("accessToken")

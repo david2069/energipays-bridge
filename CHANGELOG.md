@@ -1,3 +1,12 @@
+## 1.0.7 — Diagnose AES key extraction failure + HA config field
+
+### Added
+- **AES Key diagnostic logging** — when key extraction fails at login, the add-on log
+  now shows the exact error class and message so the root cause is visible.
+  Look for `auth: AES key extraction failed — <ErrorType>: <message>` in the add-on log.
+
+---
+
 ## 1.0.6 — AES key via HA add-on configuration field
 
 ### Added
