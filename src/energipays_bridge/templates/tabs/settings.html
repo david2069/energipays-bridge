@@ -372,13 +372,27 @@
               <template x-for="(m, idx) in form.mappings" :key="idx">
                 <div class="bg-slate-800 rounded-lg p-2 space-y-2">
                   <div class="flex items-center gap-2">
-                    <select x-model="m.target_metric"
-                            class="flex-1 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand">
-                      <option value="">— select metric —</option>
-                      <template x-for="mk in metricKeys" :key="mk.key">
-                        <option :value="mk.key" x-text="mk.label"></option>
-                      </template>
-                    </select>
+                    <!-- Custom fixed-position metric dropdown — immune to overflow-y clipping -->
+                    <div x-data="{open:false,pos:{t:0,l:0,w:0},tog(){const r=$el.firstElementChild.getBoundingClientRect();this.pos={t:r.bottom+2,l:r.left,w:r.width};this.open=!this.open}}"
+                         class="relative flex-1" @click.outside="open=false" @keydown.escape.window="open=false">
+                      <button @click="tog()" type="button"
+                              class="w-full bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand flex items-center justify-between gap-1">
+                        <span class="truncate" x-text="metricKeys.find(k=>k.key===m.target_metric)?.label||'— select metric —'"></span>
+                        <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" stroke-width="1.5" d="M6 8l4 4 4-4"/></svg>
+                      </button>
+                      <div x-show="open" x-cloak style="display:none"
+                           class="fixed z-[300] bg-slate-800 border border-slate-600 rounded-lg shadow-2xl overflow-y-auto max-h-64"
+                           :style="`top:${pos.t}px;left:${pos.l}px;width:${pos.w}px`">
+                        <button type="button" @click="m.target_metric='';open=false"
+                                class="w-full text-left px-3 py-2 text-xs text-slate-500 hover:bg-slate-700 border-b border-slate-700">— select metric —</button>
+                        <template x-for="mk in metricKeys" :key="mk.key">
+                          <button type="button" @click="m.target_metric=mk.key;open=false"
+                                  :class="m.target_metric===mk.key?'text-brand bg-brand/10':'text-slate-200 hover:bg-slate-700'"
+                                  class="w-full text-left px-3 py-2 text-xs"
+                                  x-text="mk.label"></button>
+                        </template>
+                      </div>
+                    </div>
                     <button @click="form.mappings.splice(idx,1)"
                             class="text-slate-600 hover:text-red-400 transition-colors text-xs shrink-0">✕</button>
                   </div>
@@ -396,22 +410,27 @@
                   </template>
                   <template x-if="form.protocol==='modbus_tcp' || form.protocol==='sunspec_tcp'">
                     <div class="space-y-1.5">
-                      <div class="flex gap-1.5 items-center">
-                        <select x-model="m._fc"
-                                class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand">
-                          <option value="fc3">Holding Registers (FC3)</option>
-                          <option value="fc4">Input Registers (FC4)</option>
-                        </select>
+                      <div class="flex flex-wrap gap-1.5 items-center">
+                        <!-- FC toggle: no dropdown -->
+                        <div class="flex rounded border border-slate-600 text-[10px] shrink-0">
+                          <button type="button" @click="m._fc='fc3'"
+                                  :class="m._fc==='fc3' ? 'bg-brand text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'"
+                                  class="px-2 py-1.5 rounded-l transition-colors">FC3</button>
+                          <button type="button" @click="m._fc='fc4'"
+                                  :class="m._fc==='fc4' ? 'bg-brand text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'"
+                                  class="px-2 py-1.5 rounded-r border-l border-slate-600 transition-colors">FC4</button>
+                        </div>
                         <input type="number" x-model.number="m._addr" placeholder="address"
-                               class="w-28 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 font-mono focus:outline-none focus:border-brand"/>
-                        <select x-model="m._rtype"
-                                class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand">
-                          <option value="uint16">uint16</option>
-                          <option value="int16">int16</option>
-                          <option value="uint32">uint32</option>
-                          <option value="int32">int32</option>
-                          <option value="float32">float32</option>
-                        </select>
+                               class="w-24 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 font-mono focus:outline-none focus:border-brand"/>
+                        <!-- Type button group: no dropdown -->
+                        <div class="flex rounded border border-slate-600 text-[10px] shrink-0">
+                          <template x-for="t in ['uint16','int16','uint32','int32','float32']" :key="t">
+                            <button type="button" @click="m._rtype=t"
+                                    :class="m._rtype===t ? 'bg-brand text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'"
+                                    class="px-1.5 py-1.5 border-r border-slate-600 last:border-r-0 transition-colors first:rounded-l last:rounded-r"
+                                    x-text="t.replace('uint','u').replace('int','i').replace('float','f')"></button>
+                          </template>
+                        </div>
                         <input type="number" x-model.number="m._scale" step="0.001" placeholder="scale"
                                class="w-20 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
                         <button @click="probeRegister(m, idx)" :disabled="m._probing"
