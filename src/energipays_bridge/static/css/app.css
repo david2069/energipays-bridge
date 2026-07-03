@@ -1,3 +1,6 @@
+/* ── Alpine x-cloak: hide elements until Alpine initialises ─────────────────── */
+[x-cloak] { display: none !important; }
+
 /* ── Switch card (Power Diverter / Immersion toggle rows) ──────────────────── */
 .switch-card { background: rgba(30,41,59,0.5); }      /* dark default: slate-800/50 */
 .switch-label { color: #cbd5e1; }                      /* dark default: slate-300 */
