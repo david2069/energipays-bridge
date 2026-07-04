@@ -71,6 +71,14 @@ async def upsert_ha_instance_route(body: HAInstanceIn, request: Request) -> dict
     if not inst.get("id"):
         inst["id"] = str(uuid.uuid4())
 
+    existing = await get_ha_instance(db, inst["id"])
+    if existing and existing.get("source") == "supervisor":
+        # Auto-managed row (ha_supervisor.sync_supervisor_ha_instance): identity
+        # (alias/host/token) is Supervisor-controlled and re-synced every boot —
+        # only the enabled flag is user-editable here.
+        await upsert_ha_instance(db, {**existing, "enabled": inst["enabled"]})
+        return {"ok": True, "id": inst["id"]}
+
     # Connectivity test before save (skip if token is masked — editing existing)
     if inst["token"] != _MASKED:
         try:
@@ -92,7 +100,15 @@ async def upsert_ha_instance_route(body: HAInstanceIn, request: Request) -> dict
 
 @router.delete("/api/ha/instances/{instance_id}")
 async def delete_ha_instance_route(instance_id: str, request: Request) -> dict:
-    await delete_ha_instance(request.app.state.db, instance_id)
+    db = request.app.state.db
+    existing = await get_ha_instance(db, instance_id)
+    if existing and existing.get("source") == "supervisor":
+        raise HTTPException(
+            400,
+            "This instance is auto-managed by the HA Supervisor and cannot be "
+            "deleted — disable it instead, or it will simply be re-added next restart.",
+        )
+    await delete_ha_instance(db, instance_id)
     return {"ok": True}
 
 

@@ -901,6 +901,31 @@ function notificationsCard() {
       await Promise.all([this.loadInstances(), this.loadDevices()])
     },
 
+    // Supervisor-sourced instance: identity (alias/host/token) is auto-managed
+    // and re-synced every boot — only the enabled flag is user-editable, via
+    // this same upsert endpoint (the backend ignores everything else we send
+    // here for a source==='supervisor' row).
+    async toggleInstanceEnabled(inst) {
+      try {
+        const r = await fetch('/api/ha/instances', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            id: inst.id, alias: inst.alias, host: inst.host, token: '••••',
+            enabled: !inst.enabled, is_default: inst.is_default,
+          }),
+        })
+        if (r.ok) {
+          inst.enabled = !inst.enabled
+          Alpine.store('app').addToast(inst.enabled ? 'Instance enabled' : 'Instance disabled', 'success')
+        } else {
+          Alpine.store('app').addToast('Failed to update instance', 'error')
+        }
+      } catch (e) {
+        Alpine.store('app').addToast('Network error', 'error')
+      }
+    },
+
     // ── Devices ───────────────────────────────────────────────────────────
     async loadDevices() {
       this.devLoading = true

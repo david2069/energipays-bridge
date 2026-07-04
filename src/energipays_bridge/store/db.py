@@ -106,6 +106,10 @@ _MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_notif_log_event ON notification_log (event_type, ts DESC);
     """,
+    # v6 — distinguish auto-detected HA instances (Supervisor) from user-added ones
+    """
+    ALTER TABLE ha_instances ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+    """,
 ]
 
 
@@ -195,7 +199,7 @@ async def set_mqtt_override(db: aiosqlite.Connection, field: str, value) -> None
 async def get_ha_instances(db: aiosqlite.Connection) -> list[dict]:
     db.row_factory = aiosqlite.Row
     rows = await (await db.execute(
-        "SELECT id,alias,host,enabled,is_default,created_at FROM ha_instances ORDER BY created_at"
+        "SELECT id,alias,host,enabled,is_default,source,created_at FROM ha_instances ORDER BY created_at"
     )).fetchall()
     return [dict(r) for r in rows]
 
@@ -211,13 +215,15 @@ async def get_ha_instance(db: aiosqlite.Connection, instance_id: str) -> dict | 
 async def upsert_ha_instance(db: aiosqlite.Connection, inst: dict) -> None:
     import time
     now = time.time()
+    inst = {**inst, "source": inst.get("source", "manual")}
     await db.execute(
-        """INSERT INTO ha_instances (id,alias,host,token,enabled,is_default,created_at)
-           VALUES (:id,:alias,:host,:token,:enabled,:is_default,:now)
+        """INSERT INTO ha_instances (id,alias,host,token,enabled,is_default,source,created_at)
+           VALUES (:id,:alias,:host,:token,:enabled,:is_default,:source,:now)
            ON CONFLICT(id) DO UPDATE SET
              alias=excluded.alias, host=excluded.host,
              token=CASE WHEN excluded.token='••••' THEN token ELSE excluded.token END,
-             enabled=excluded.enabled, is_default=excluded.is_default""",
+             enabled=excluded.enabled, is_default=excluded.is_default,
+             source=excluded.source""",
         {**inst, "now": now},
     )
     if inst.get("is_default"):

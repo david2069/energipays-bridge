@@ -1,3 +1,46 @@
+## 1.1.4 — Auto-detect this Home Assistant for push notifications (Supervisor proxy)
+
+### Added
+- **"This Home Assistant" auto-registers as a push-notification target on the
+  HA add-on** — previously, sending a push notification required manually
+  typing a reachable HA URL and generating a long-lived access token, even
+  when the add-on is running *inside* the exact HA instance you want to
+  notify through. Added `hassio_api`/`homeassistant_api: true` +
+  `services: ["mqtt:want"]` capability grants let this add-on reach
+  `http://supervisor/core/api/...` — HA's own REST API, proxied by the
+  Supervisor — authenticated with the add-on's own `SUPERVISOR_TOKEN`. On
+  every boot (HA add-on runtime only), `ha_supervisor.sync_supervisor_ha_instance()`
+  auto-registers/re-verifies a "This Home Assistant" instance with zero user
+  input, and sets it as the default target if the user hasn't already chosen
+  one. Re-syncs every restart since `SUPERVISOR_TOKEN` can rotate.
+- New `ha_instances.source` column (`'manual'` | `'supervisor'`, migration
+  v6) distinguishes the auto-managed row from user-added ones. The Settings
+  → Push Notifications card renders it with a distinct 🏠 badge and only an
+  Enable/Disable control — no Edit/Delete, since its identity is
+  Supervisor-controlled and re-synced automatically. The API layer enforces
+  the same restriction server-side (`POST /api/ha/instances` ignores
+  alias/host/token for a supervisor-sourced row; `DELETE` refuses it outright
+  with a clear message) so a crafted request can't bypass the UI's intent.
+- No dispatcher changes — once the auto-instance exists, adding a companion
+  device against it (`notify.mobile_app_...`) works through the existing
+  `dispatcher.py` path exactly like any manually-added instance.
+
+### Verified (isolated test, simulating the HA add-on environment)
+- First sync creates the row correctly (alias, host, `source=supervisor`,
+  `enabled=true`) and auto-sets it as default when nothing else already is
+- Re-sync after a simulated user "Disable" correctly leaves `enabled=false`
+  in place — a token refresh never silently re-enables a disabled instance
+- A crafted `POST /api/ha/instances` attempting to change alias/host/token
+  on the supervisor row is ignored except for the `enabled` field
+- `DELETE` on the supervisor row is rejected with `400` and the row survives
+- **Known gap** (same shape as MQTT's Supervisor path in v1.1.3): the actual
+  `http://supervisor/core` reachability check can't be exercised outside
+  real HA — there is no fake Supervisor to simulate in the dev container.
+  Needs a live check on the HA add-on: confirm "This Home Assistant" appears
+  automatically and shows reachable.
+
+---
+
 ## 1.1.3 — MQTT actually configurable: Supervisor auto-discovery + working wizard/Settings
 
 ### Fixed

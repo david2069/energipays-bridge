@@ -188,3 +188,21 @@ chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
   toggling off/on twice showed zero subscriber leak. Known gap: the
   Supervisor discovery branch itself needs a live HA check — no fake
   Supervisor exists to simulate it in the dev container.
+- **v1.1.4 (2026-07-04) — Auto-detect this Home Assistant for push
+  notifications**: sending a notification previously always required a
+  manually-typed HA URL + manually-generated long-lived token, even when the
+  add-on runs inside the exact HA instance it wants to notify. Added
+  `homeassistant_api: true` to config.yaml (Supervisor Core-API proxy grant,
+  parallel to MQTT's `hassio_api` grant from v1.1.3);
+  `ha_supervisor.sync_supervisor_ha_instance()` auto-registers a "This Home
+  Assistant" instance every boot using `http://supervisor/core` +
+  `SUPERVISOR_TOKEN`, zero user input, auto-defaulted if nothing else is
+  default. New `ha_instances.source` column (migration v6) distinguishes it
+  from user-added instances; Settings renders it with a 🏠 badge and only an
+  Enable/Disable control (no Edit/Delete — enforced server-side too, not
+  just hidden in the UI). Verified via an isolated test simulating the HA
+  add-on env: first-sync creates + auto-defaults correctly, re-sync preserves
+  a user's "disabled" choice, a crafted edit request is correctly restricted
+  to the enabled field only, delete is correctly rejected. Known gap: same
+  shape as v1.1.3's MQTT Supervisor path — the actual reachability check
+  needs a live HA check, no fake Supervisor to simulate here.

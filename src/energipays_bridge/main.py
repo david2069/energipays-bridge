@@ -27,6 +27,7 @@ from .api.admin import install_log_handler, set_log_db
 from .api.http_metrics import HttpMetrics, attach_metrics_hook
 from .api import http_metrics as http_metrics_api
 from .config.settings import BridgeSettings
+from .ha_supervisor import sync_supervisor_ha_instance
 from .mqtt_lifecycle import reconfigure_mqtt
 from .poller import EnergipaysPoller
 from .sample import SampleBus
@@ -187,6 +188,9 @@ async def lifespan(app: FastAPI):
     notif_trigger = NotificationTrigger(db, device_id or "")
     bus.subscribe(notif_trigger)
     log.info("NotificationTrigger registered")
+
+    # ── 7c. Auto-detect this add-on's own HA instance (Supervisor proxy) ──────
+    await sync_supervisor_ha_instance(app)
 
     # ── 8. Metrics archival loop ──────────────────────────────────────────────
     async def _archival_loop():

@@ -1,6 +1,6 @@
 name: "Energipays Bridge"
 description: "Unofficial self-hosted integration and dashboard for Powerdiverter solar PV diverters using the Energipays Cloud."
-version: "1.1.3"
+version: "1.1.4"
 slug: "energipays_bridge"
 url: "https://github.com/david2069/energipays-bridge"
 init: false
@@ -22,6 +22,11 @@ ingress_port: 8080
 hassio_api: true
 services:
   - "mqtt:want"
+
+# Grants access to http://supervisor/core/api/... (this add-on's own Home
+# Assistant instance, proxied) so push notifications can be sent through it
+# with zero user-supplied URL or long-lived token.
+homeassistant_api: true
 
 ports:
   8080/tcp: 8080

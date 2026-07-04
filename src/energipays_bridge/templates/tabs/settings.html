@@ -1026,16 +1026,29 @@
         <template x-for="inst in instances" :key="inst.id">
           <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg border"
                :class="$store.app.isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'">
-            <img src="static/icons/ha-logo.svg" class="w-5 h-5 shrink-0">
+            <span x-show="inst.source === 'supervisor'" class="text-base shrink-0" title="Auto-detected via HA Supervisor">🏠</span>
+            <img x-show="inst.source !== 'supervisor'" src="static/icons/ha-logo.svg" class="w-5 h-5 shrink-0">
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium truncate" :class="$store.app.isDark ? 'text-slate-200' : 'text-slate-800'"
                    x-text="inst.alias"></div>
-              <div class="text-xs font-mono text-slate-500 truncate" x-text="inst.host"></div>
+              <div class="text-xs font-mono text-slate-500 truncate"
+                   x-text="inst.source === 'supervisor' ? 'Auto-detected (Supervisor)' : inst.host"></div>
             </div>
+            <span x-show="!inst.enabled" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 font-medium">Disabled</span>
             <span x-show="inst.is_default" class="text-[10px] px-1.5 py-0.5 rounded bg-brand/20 text-brand font-medium">Default</span>
             <div class="flex items-center gap-1.5 shrink-0">
-              <button @click="openInstForm(inst)" class="text-xs text-slate-400 hover:text-slate-200 px-1.5 py-1 rounded hover:bg-slate-700 transition-colors">Edit</button>
-              <button @click="deleteInstance(inst.id)" class="text-xs text-red-400 hover:text-red-300 px-1.5 py-1 rounded hover:bg-red-900/20 transition-colors">Delete</button>
+              <template x-if="inst.source === 'supervisor'">
+                <button @click="toggleInstanceEnabled(inst)"
+                        class="text-xs px-2 py-1 rounded border transition-colors"
+                        :class="inst.enabled ? 'text-slate-400 border-slate-600 hover:text-slate-200' : 'text-brand border-brand/40 hover:bg-brand/10'"
+                        x-text="inst.enabled ? 'Disable' : 'Enable'"></button>
+              </template>
+              <template x-if="inst.source !== 'supervisor'">
+                <button @click="openInstForm(inst)" class="text-xs text-slate-400 hover:text-slate-200 px-1.5 py-1 rounded hover:bg-slate-700 transition-colors">Edit</button>
+              </template>
+              <template x-if="inst.source !== 'supervisor'">
+                <button @click="deleteInstance(inst.id)" class="text-xs text-red-400 hover:text-red-300 px-1.5 py-1 rounded hover:bg-red-900/20 transition-colors">Delete</button>
+              </template>
             </div>
           </div>
         </template>
