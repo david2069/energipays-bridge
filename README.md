@@ -1,6 +1,9 @@
 # Energipays Bridge
 
-Self-hosted dashboard for [Energipays](https://energipays.com) Sunamp hot water devices.
+** Unofficial ** locally self-hosted integration for [Energipays](https://energipays.com) PowerDiverter - a Solar PV panel power diverter for hot water devices.
+
+NOTE: This software is NOT affilated with Energipays and is provided "as is" with not warranty, support or endorsement from the vendor.
+This software relies-upon reverse engineering the web portal and as such my cease to work at any time - due to changes imposed by Energipays or should the Cloud service no longer be available in it's current form.
 
 Connects to the Energipays cloud API, stores metrics locally in SQLite, and serves a responsive web UI with live data, historical analytics, automation rule management, device controls, and push notifications via Home Assistant.
 
