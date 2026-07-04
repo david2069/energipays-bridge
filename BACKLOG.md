@@ -63,6 +63,67 @@ reuse its `_cached_fetch` pattern.
 
 ---
 
+## Deferred (not scheduled — needs a trigger to activate)
+
+### [enh] Apple Web Push (installed-PWA) as an HA-independent notification channel
+Proposed 2026-07-04. **Status: DEFERRED — do not schedule until the trigger
+condition below is met.**
+
+**Use case this solves:** an Apple-device user who does NOT run Home
+Assistant (or doesn't want to install its Companion App) currently has no
+way to receive push notifications from the bridge at all — today's only
+delivery path (`notifications/dispatcher.py` → an `ha_instances` row →
+`notify.mobile_app_*`) requires HA end-to-end. This would add a second,
+parallel delivery channel that needs neither HA nor the Companion App: the
+bridge's own installed PWA receiving native push directly.
+
+**Why deferred, explicitly:** every current user of this bridge already runs
+Home Assistant (it's the reason the bridge exists — MQTT Discovery, the
+dashboard, the whole point). The HA Instance → Companion App path already
+covers 100% of today's userbase, including Apple users, as long as they have
+the HA app installed (which is virtually certain if they're using Home
+Assistant seriously enough to have added a community add-on). Building this
+now would be effort spent on a hypothetical user who doesn't yet exist in
+the reported userbase. **Trigger condition to un-defer:** a real user
+reports "I use this bridge without Home Assistant" or "I don't want to
+install the HA Companion App on iOS" and asks for notifications. Until that
+happens, this stays parked here as a ready-to-execute plan rather than
+consuming a release slot.
+
+**How it works (for whoever picks this up):**
+- Since iOS/Safari 16.4, standard Web Push (VAPID + `PushManager`) works,
+  but ONLY from an installed PWA (Share → Add to Home Screen) — it does
+  NOT work from a normal Safari tab. Apple's browser proxies the standard
+  Web Push protocol through APNs internally; no APNs certificates or Apple
+  Developer account needed server-side, same as Chrome/Firefox Web Push.
+  Notification permission can only be requested from inside the installed,
+  standalone PWA context.
+- Prerequisites already in place: `static/manifest.json` and `static/sw.js`
+  exist (from the v1.0.0 PWA work) but `sw.js` (30 lines) has no push
+  handling yet.
+
+**Implementation shape (unchanged scope if/when un-deferred):**
+1. Generate a VAPID key pair (one-time, server-side; store private key in
+   `app_config` or `.secret_key`-style file, never in the repo)
+2. Extend `sw.js`: handle `push` (render notification from payload) and
+   `notificationclick` (focus/open the app) — roughly +15-20 lines
+3. Client: after permission grant (only reachable from the installed PWA),
+   `PushManager.subscribe()` with the VAPID public key; POST the resulting
+   subscription (endpoint + p256dh/auth keys) to a new backend endpoint
+4. New table `push_subscriptions` (endpoint, p256dh_key, auth_key,
+   created_at) — one row per installed device/browser
+5. Add a third delivery path in `notifications/dispatcher.py` (parallel to
+   the existing HA-instance path) that POSTs an encrypted payload to each
+   stored subscription via `pywebpush`, signed with the VAPID private key
+6. Settings UI: its own enable/manage section, independent of the existing
+   HA Instances card
+7. **Known UX cost, unavoidable**: no way to detect "opened in a normal
+   Safari tab, not installed as a PWA" and show a helpful prompt beforehand
+   — iOS just silently fails the permission request outside the installed
+   context. This needs to be documented for users, not solved in code.
+
+---
+
 ## Defects (untriaged)
 
 ### [defect] Rule edit silently not written — no failure surfaced (P1)
