@@ -1,3 +1,57 @@
+## 1.1.5 — Boost-vs-active-rule conflict, logging correctness, single-state rule buttons
+
+### Fixed
+- **Boost now fails while a rule is active — Energipays changed enforcement.**
+  Diagnosed live: the cloud API rejects `POST /boost` whenever a rule is
+  active, reporting it via a generic, misleading
+  `{"message": "Heater is disabled"}` rather than naming the actual conflict
+  — confirmed by log evidence showing boost succeed immediately after
+  manually clearing the active rule, and fail every time beforehand. This
+  looks like Energipays closing a gap that let API clients bypass a
+  restriction their own web UI and the physical PD button have always
+  enforced, not a bug on their end. Our "Active Rule Conflict" modal's old
+  "Boost Anyway" button no longer worked — it sent the boost as-is and the
+  cloud rejected it every time. `POST /api/boost` now accepts `clear_rule`;
+  when set, it clears the active PD rule first and only proceeds to boost if
+  the clear succeeds (verified: clear failure stops before ever attempting
+  the boost — no half-done state). The rule is left cleared, not restored
+  automatically (Energipays has no "temporary override" concept) — the modal
+  is renamed "Clear Rule & Boost" and its copy says so plainly.
+- **Failed commands were logging at WARNING, or not logging at all.** Boost
+  failures logged at `WARNING` — bumped to `ERROR`. `cancel_boost` had NO
+  failure log line at all — added one. `set_device_status` logged "OK"
+  **unconditionally**, before checking whether the command actually
+  succeeded — a rejected command was misreported in the log as having
+  worked. All three now log success/failure only after checking the result.
+- **Doubled "Boost failed: Boost failed: ..." toast** — the backend's error
+  detail already included the "Boost failed:" prefix; the frontend was
+  adding it a second time. Frontend now shows the backend's message as-is.
+- **Rule cards showed both Enable AND Disable simultaneously** — traced to
+  `ruleAppliesToday(rule)` also triggering the Disable button for
+  non-active rules with a schedule slot today, so a rule could show two
+  competing action buttons at once. This was worse than a display bug:
+  `disableRule()` clears whichever rule is currently active FOR THAT
+  CIRCUIT, not "this" rule — so clicking Disable on a non-active row (e.g.
+  a rule literally named "Monday" whose data happened to be stored under
+  Saturday's day-key) would have silently cleared a completely different
+  rule. Disable now only ever appears for the actually-active rule,
+  matching `isActive(rule)` exactly. A non-active rule with a slot today
+  now shows an informational "Scheduled today" badge instead of a second,
+  misleading action button.
+
+### Verified
+- Mocked-client test: clear-then-boost calls happen in the correct order;
+  a failed clear stops immediately and boost_device is never called;
+  `clear_rule=false` leaves the original single-call behavior untouched
+- Dev-container template render: new "Clear Rule & Boost" copy and
+  "Scheduled today" badge present, old "Boost Anyway" text gone, page
+  div-balanced, zero console/log errors
+- Package 1 (Safe Mode/READ_ONLY/rules-race) and Package 3 (MQTT) guards
+  re-checked — all still green, zero regressions from touching
+  `api/devices.py` again
+
+---
+
 ## 1.1.4 — Auto-detect this Home Assistant for push notifications (Supervisor proxy)
 
 ### Added

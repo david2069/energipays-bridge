@@ -157,6 +157,22 @@ cause per hypothesis: likely block/warn on editing the running rule (align
 with vendor behaviour, or deactivate → edit → reactivate), and fix the
 everyday/single-day editor state.
 
+**Update 2026-07-04 — corroborating evidence for hypothesis 1, plus a
+related (now-fixed) bug found along the way.** Confirmed live and shipped in
+v1.1.5: Energipays now also refuses to BOOST while a rule is active (cloud
+returns a misleading generic error rather than naming the conflict) — the
+same pattern as hypothesis 1's "vendor blocks operations on the active rule
+that our bridge naively allowed through." This makes hypothesis 1 more
+likely to be the actual cause here too, not just a possibility.
+Also found and fixed in the same pass: `rules_tab.js`'s Enable/Disable
+buttons could BOTH show for a non-active rule with a slot scheduled today,
+and clicking Disable in that state cleared a DIFFERENT (the actually-active)
+rule, not the one clicked — genuinely dangerous, not just a display bug.
+Fixed by restricting Disable to `isActive(rule)` only. This is now DONE and
+should not be re-investigated — what's still open is exactly what's
+described above: write-back verification after PUT, and the
+everyday/single-day editor day-key state.
+
 ### [defect] Push Notifications: local integration control conflated with cloud API master
 Reported 2026-07-04. The Settings card's "Notifications OFF — Master switch —
 controls ALL push notifications" implies it governs everything, but it is
@@ -267,3 +283,22 @@ chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
   to the enabled field only, delete is correctly rejected. Known gap: same
   shape as v1.1.3's MQTT Supervisor path — the actual reachability check
   needs a live HA check, no fake Supervisor to simulate here.
+- **v1.1.5 (2026-07-04) — Boost-vs-active-rule conflict, logging
+  correctness, single-state rule buttons**: diagnosed live (via Chrome +
+  direct REST calls against the user's real HA instance) that Energipays now
+  refuses to boost while a rule is active, mislabeling the rejection as
+  `"Heater is disabled"`. `POST /api/boost` gained a `clear_rule` flag that
+  clears the active PD rule and only proceeds to boost if the clear
+  succeeds; the "Active Rule Conflict" modal is renamed "Clear Rule & Boost"
+  with honest copy (the rule stays cleared — no vendor "temporary override"
+  concept exists). Also fixed: boost/cancel-boost/set-device-status logging
+  (WARNING → ERROR for failures; `set_device_status` was logging "OK"
+  unconditionally even on failure; `cancel_boost` had no failure log at
+  all); a doubled "Boost failed: Boost failed: ..." toast; and rule cards
+  showing both Enable AND Disable simultaneously — traced to a real bug
+  (`disableRule()` clears whichever rule is active for the circuit, not the
+  clicked rule, so the old dual-button state could silently clear the wrong
+  rule). Verified via a mocked-client test (correct clear→boost ordering, a
+  failed clear stops before ever attempting the boost) and a dev-container
+  template render; Package 1 and Package 3 guards re-checked with zero
+  regressions.

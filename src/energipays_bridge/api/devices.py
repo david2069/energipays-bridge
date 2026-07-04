@@ -56,20 +56,24 @@ async def set_device_status(body: DeviceStatusBody, request: Request) -> dict:
         result = await _thread(client.set_rule, device_id, body.rule_id, body.rule_type)
         circuit = {"command": "PD", "offpeak": "Off-Peak", "heater2": "Heater 2"}.get(body.rule_type, body.rule_type)
         action = "cleared" if body.rule_id == "0" else f"→ {body.rule_id}"
-        log.info("cmd (UI): %s rule %s", circuit, action)
+        description = f"{circuit} rule {action}"
     elif "boost_power" in body.fields:
         # Boost power uses a separate endpoint: POST /api/devices/{id}/boostPower
         idx = body.fields["boost_power"]
         result = await _thread(client.set_boost_power, device_id, idx)
-        log.info("cmd (UI): Boost Power → %d (%d%%)", idx, idx * 25)
+        description = f"Boost Power → {idx} ({idx * 25}%)"
     else:
         result = await _thread(client.set_device_status, device_id, **body.fields)
-        for field, val in body.fields.items():
-            label = _FIELD_LABELS.get(field, field)
-            state = "ON" if val == 1 else "OFF"
-            log.info("cmd (UI): %s → %s", label, state)
+        parts = [f"{_FIELD_LABELS.get(field, field)} → {'ON' if val == 1 else 'OFF'}"
+                 for field, val in body.fields.items()]
+        description = ", ".join(parts) if parts else "device status"
+    # Log AFTER checking the result — the previous version logged "OK" here
+    # unconditionally, before the error check below, so a rejected command
+    # was misreported in the log as having succeeded.
     if isinstance(result, dict) and "error" in result:
+        log.error("cmd (UI): %s: FAILED (%s)", description, result.get('body') or result['error'])
         raise HTTPException(502, f"Command failed: {result.get('body') or result['error']}")
+    log.info("cmd (UI): %s: OK", description)
     return result
 
 
@@ -201,7 +205,12 @@ async def switch_device(body: DeviceSwitchBody, request: Request) -> dict:
 
 
 class BoostBody(BaseModel):
-    period: int = 1   # 1=1h, 2=2h, 3=3h
+    period: int = 1          # 1=1h, 2=2h, 3=3h
+    clear_rule: bool = False  # clear the active PD rule first (Energipays now
+                               # refuses to boost while a rule is active — the
+                               # cloud reports this as a misleading generic
+                               # "Heater is disabled" error rather than naming
+                               # the actual conflict)
 
 
 @router.post("/api/boost")
@@ -209,13 +218,25 @@ async def boost(body: BoostBody, request: Request):
     if body.period not in (1, 2, 3):
         raise HTTPException(400, "period must be 1, 2, or 3")
     client = _get_client(request)
-    _check_writable(request, f"POST /api/boost period={body.period}")
+    _check_writable(request, f"POST /api/boost period={body.period} clear_rule={body.clear_rule}")
     device_id = request.app.state.device_id
     data_server = request.app.state.data_server
+
+    if body.clear_rule:
+        # Note: this LEAVES the rule cleared — Energipays has no "temporary
+        # override, restore after" concept, so the user must re-enable it
+        # manually from Rules once the boost is done.
+        clear_result = await _thread(client.set_rule, device_id, "0", "command")
+        if isinstance(clear_result, dict) and "error" in clear_result:
+            log.error("cmd (UI): clear rule before boost: FAILED (%s)",
+                      clear_result.get('body') or clear_result['error'])
+            raise HTTPException(502, f"Could not clear the active rule: {clear_result.get('body') or clear_result['error']}")
+        log.info("cmd (UI): PD rule cleared (pre-boost)")
+
     result = await _thread(client.boost_device, device_id, data_server, period=body.period)
     hours = {1: "30 min", 2: "1 hour", 3: "2 hours"}.get(body.period, f"{body.period}h")
     if isinstance(result, dict) and "error" in result:
-        log.warning("cmd (UI): Boost → %s: FAILED (%s)", hours, result.get('body') or result['error'])
+        log.error("cmd (UI): Boost → %s: FAILED (%s)", hours, result.get('body') or result['error'])
         raise HTTPException(502, f"Boost failed: {result.get('body') or result['error']}")
     log.info("cmd (UI): Boost → %s: OK", hours)
     # Data server returns [] on success; normalise so callers always get a dict
@@ -232,6 +253,7 @@ async def cancel_boost(request: Request):
     data_server = request.app.state.data_server
     result = await _thread(client.cancel_boost, device_id, data_server)
     if isinstance(result, dict) and "error" in result:
+        log.error("cmd (UI): Boost cancel: FAILED (%s)", result.get('body') or result['error'])
         raise HTTPException(502, f"Cancel boost failed: {result.get('body') or result['error']}")
     log.info("cmd (UI): Boost cancelled")
     if isinstance(result, list):

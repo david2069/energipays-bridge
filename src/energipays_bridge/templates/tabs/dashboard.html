@@ -1718,15 +1718,15 @@
             </div>
           </div>
         </template>
-        <p class="text-xs text-slate-500 mb-4">Boosting may override the scheduled command. You can still proceed.</p>
+        <p class="text-xs text-slate-500 mb-4">Energipays refuses to boost while a rule is active. Proceeding will turn the rule off — you'll need to re-enable it afterward from Rules.</p>
         <div class="flex gap-2">
           <button @click="boostConflictOpen=false"
                   class="flex-1 px-3 py-2 text-xs rounded-lg border border-slate-600 text-slate-400 hover:text-slate-200 transition-colors">
             Cancel
           </button>
-          <button @click="boostConflictOpen=false; sendBoost(_boostConflictPeriod)"
+          <button @click="boostConflictOpen=false; sendBoost(_boostConflictPeriod, true)"
                   class="flex-1 px-3 py-2 text-xs rounded-lg bg-orange-700 hover:bg-orange-600 text-white font-medium transition-colors">
-            Boost Anyway
+            Clear Rule &amp; Boost
           </button>
         </div>
       </div>

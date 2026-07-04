@@ -168,7 +168,16 @@
             </span>
 
             <div class="ml-auto flex items-center gap-1.5">
-              <!-- Enable/Disable toggle -->
+              <!-- Enable/Disable toggle — single state, matching isActive(rule) exactly.
+                   Disable only ever appears for the currently active rule: disableRule()
+                   clears whichever rule is active for this circuit, not "this" rule, so
+                   showing it for a non-active row (even one scheduled for today) was
+                   misleading — clicking it would silently clear a DIFFERENT rule. -->
+              <span x-show="!isActive(rule) && ruleAppliesToday(rule)"
+                    class="text-[10px] px-2 py-1 rounded-md bg-slate-700/60 text-slate-400 font-medium"
+                    title="This rule has a schedule slot today, but isn't the active rule for this circuit">
+                Scheduled today
+              </span>
               <button x-show="!isActive(rule)"
                       @click.stop="setActiveRule(rule)"
                       :disabled="!!activating"
@@ -176,7 +185,7 @@
                 <span x-show="activating !== rule.id">Enable</span>
                 <span x-show="activating === rule.id">…</span>
               </button>
-              <button x-show="isActive(rule) || ruleAppliesToday(rule)"
+              <button x-show="isActive(rule)"
                       @click.stop="disableRule(rule)"
                       :disabled="activating === '__disable__' + rule.type"
                       class="text-xs px-2.5 py-1 rounded-md bg-red-600/80 text-white font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm">

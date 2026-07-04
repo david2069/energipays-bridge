@@ -380,25 +380,27 @@ function dashboardTab() {
       }
     },
 
-    async sendBoost(period) {
+    async sendBoost(period, clearRule = false) {
       if (this.boosting) return
       this.boosting = true
       try {
         const r = await fetch('/api/boost', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ period }),
+          body: JSON.stringify({ period, clear_rule: clearRule }),
         })
         const d = await r.json()
         const pct = this.boostPowerLabel() || '—'
         const hrs = {2:'1h', 3:'2h', 4:'3h'}[period] || `${period}h`
         if (!r.ok) {
-          Alpine.store('app').addToast(`Boost failed: ${d.detail || 'unknown error'}`, 'error')
+          // d.detail already reads "Boost failed: ..." (set server-side) — don't re-prefix it
+          Alpine.store('app').addToast(d.detail || 'Boost failed: unknown error', 'error')
         } else {
           // Optimistically flip — guard in _fetchPoints prevents poll from overwriting
           Alpine.store('app')._boostPendingTs = Date.now()
           Alpine.store('app').points.boostStatus = true
-          Alpine.store('app').addToast(`Boost ${hrs} @ ${pct} started`, 'success')
+          const clearedNote = clearRule ? ' (active rule cleared — re-enable it from Rules when done)' : ''
+          Alpine.store('app').addToast(`Boost ${hrs} @ ${pct} started${clearedNote}`, 'success')
         }
       } catch (e) {
         Alpine.store('app').addToast('Boost: network error', 'error')
