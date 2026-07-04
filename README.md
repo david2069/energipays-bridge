@@ -41,7 +41,9 @@ Runs as a **Home Assistant Add-on**, a **Docker container**, or a bare **Python 
    ```
 4. Close the dialog — **Energipays Bridge** now appears in the store
 5. Click **Install** (the supervisor builds the image; takes 2–3 minutes)
-6. Go to the **Configuration** tab and fill in:
+6. Choose one of the two installation configuration methods
+
+### OPTION A: Go to the **Configuration** tab and fill in:
 
    | Option | Description |
    |--------|-------------|
@@ -55,8 +57,9 @@ Runs as a **Home Assistant Add-on**, a **Docker container**, or a bare **Python 
    | `mqtt_password` | MQTT password |
    | `log_level` | `info` / `debug` / `warning` / `error` |
 
-7. Click **Save** then **Start**
-8. Click **Open Web UI** — the setup wizard opens automatically on first run
+   Click **Save** then **Start**
+
+### OPTION B: Click **Open Web UI** — the setup wizard opens automatically on first run
 
 **Note:** the web UI is accessible at `http://<ha-ip>:8080`. Port 8080 must be reachable on your network.
 
