@@ -2,7 +2,7 @@
 
 An **unofficial** locally self-hosted integration for [Energipays](https://energipays.com) PowerDiverter - a Solar PV panel power diverter for hot water devices.
 
-NOTE: This software package is **NOT affilated with Energipays and is provided "as is" with NO warranty, NO support nor is acknowledged or endorsed nor approved for use by the vendor**. Any use is at your own risk and without any support by the author(s) nor Engeripays.
+NOTE: This software package is **NOT affilated with Energipays and is provided "as is" with NO warranty, NO support nor is acknowledged or endorsed nor is it any way approved for use by the vendor**. Any use is at your own risk and without any support by the author(s) nor Engeripays.
 
 This software was developed by reverse engineering the web portal and as such my cease to work at any time. This may be due to changes imposed by Energipays and/or should the Cloud service no longer be available in it's current form. 
 
