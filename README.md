@@ -334,4 +334,4 @@ energipays-bridge/
 ## Related
 
 - [energipays-client](https://github.com/david2069/energipays-client) — Python API client library used by this bridge
-- [Energipays](https://energipays.com) — cloud platform for Sunamp hot water devices
+- [Energipays](https://energipays.com) — cloud platform for Energipays Powerdiverter - a solar PV power diverter for hot water devices
