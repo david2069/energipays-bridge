@@ -36,6 +36,29 @@ a 1 kWp horizontal array. No system size or orientation stored anywhere.
 - UI: display scaled kW/kWh; keep "Actual" overlay; if kWp unset show a
   "Set system size in Settings" hint instead of silently-wrong numbers
 
+**UI plan (2026-07-04, inspired by a similar "PV System" panel in the
+FWHAI/franklinwh project, verified live via curl before writing this):**
+- Match FWHAI's field set and layout for cross-project consistency:
+  Latitude, Longitude, Azimuth°, Tilt°, Size (kWp) — same names/order.
+  **Do NOT copy FWHAI's azimuth helper text verbatim** — theirs reads
+  "0=N · 90=E · 180=S", which is the OPPOSITE convention to Open-Meteo
+  (0=south, −90=east, 90=west, ±180=north, already noted above). Write our
+  own accurate helper text for Open-Meteo's actual reference frame, or
+  users will enter a value expecting north and get south.
+- Skip FWHAI's "Home Load Assumption (kW)" field — that's for their
+  battery SoC-trajectory modeling; no equivalent concept here (hot-water
+  diverter, not a battery dispatch system).
+- **"Sync Location from Cloud" button** next to Lat/Lon — unlike FWHAI's
+  version (which needs a live API call), ours is free: `poller.py:194-195`
+  already populates `points["dev.latitude"]`/`["dev.longitude"]` from the
+  device profile, exposed as `device_lat`/`device_lon` in
+  `/api/points/latest` (`api/points.py:32-33`) and already read into
+  `$store.app.deviceLat`/`deviceLon` in `app.js`. The button just copies
+  those already-live store values into the form fields — no new backend
+  endpoint needed. Pre-fill the form from these values on first load;
+  the button re-syncs if the user has since entered custom coordinates
+  and wants to revert to the device's registered address.
+
 ### 2b. [enh] History charts: default to cloud, toggle for local
 `dashboard_tab.js` ~296-301: Hot Water 24h modal reads ONLY local SQLite
 (`/api/metrics/history`) — empty on fresh installs, permanently empty on HA
