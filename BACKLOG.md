@@ -217,6 +217,33 @@ below coloured the same rule correctly — investigate the slot-fill lookup
 consumed by all three renderings + a shared legend partial; separate the
 chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
 
+### [defect] Boost Duration: app UI's "3 h" button is non-functional, not just mislabeled vs. MQTT
+Reported 2026-07-04 (screenshot: MQTT entity shows 30 min / 1 hour / 2 hours;
+app shows 1 h / 2 h / 3 h). Verified precisely — this is bigger than a label
+mismatch, the vendor has no 3-hour boost option at all:
+- **Ground truth**: Energipays' real period semantic is `1=30min, 2=1h,
+  3=2h` — confirmed in `energipays-client/cli.py:13,577` help text and
+  `mqtt_publisher.py:339,388` (`period_map = {"30 min": 1, "1 hour": 2,
+  "2 hours": 3}`). The MQTT `Boost Duration` select
+  (`publish/entities.py:114`, `BOOST_DURATION_OPTIONS`) matches this
+  correctly.
+- **The app's Duration buttons are wrong**: `templates/tabs/dashboard.html`
+  ~146 — `[{label:'1 h',val:2},{label:'2 h',val:3},{label:'3 h',val:4}]`.
+  `val:2`/`val:3` happen to still work (they coincidentally land on the
+  real 1h/2h periods), but **`val:4` ("3 h") sends `period=4`, which
+  `api/devices.py boost()`'s own validation (`if body.period not in
+  (1,2,3)`) flatly rejects with 400** — confirmed via isolated test, not
+  just static reading. The app's "3 h" boost button has been dead the whole
+  time; clicking it always fails.
+- **Fix shape**: change the app's Duration buttons to
+  `[{label:'30 min',val:1},{label:'1 hour',val:2},{label:'2 hours',val:3}]`
+  — three options, matching MQTT and the vendor exactly, dropping the
+  fictitious "3 h" entirely. Also fix the default `boostPeriod` value if it
+  currently assumes the old val scheme. Cross-check `dashboard_tab.js`'s
+  toast label map (`{2:'1h', 3:'2h', 4:'3h'}` — a THIRD, separate mapping
+  found while investigating) for the same off-by-one/phantom-4h assumption
+  and correct it to match.
+
 ## Notes / smaller items (unscheduled)
 
 - **aemo.com.au in-container TLS** — root cause was payload size + handshake
