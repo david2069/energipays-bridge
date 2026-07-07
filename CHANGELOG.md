@@ -1,3 +1,44 @@
+## 1.1.6 — Rule-save write-back verification (P1: silent discard no longer silent)
+
+### Fixed
+- **Rule edits could silently fail to save, with the UI reporting success
+  anyway.** `saveRule()` only ever checked `r.ok` on the PUT response, and
+  the server can return `200 OK` while discarding the change — confirmed
+  live tonight that edits to an INACTIVE rule persist correctly (added,
+  then reverted, a 2-slot test edit; `updated_at` and slot data matched
+  exactly), narrowing this specifically to editing the currently ACTIVE
+  rule, consistent with Energipays' own web UI blocking that operation and
+  with tonight's finding that boosting is now blocked the same way while a
+  rule is active.
+- **The fix**: `saveRule()` now always re-fetches `/api/rules` after a
+  successful PUT and diffs what was actually sent against what came back
+  (`_ruleDataMatches()` — compares day-keys and slot arrays, not just a
+  timestamp). A mismatch surfaces a real, visible error — "Save did not
+  take effect... try disabling it first, edit, then re-enable" — instead of
+  the previous false "saved successfully" message, and refreshes the UI to
+  show the true current state rather than the stale draft. This catches
+  the silent-discard regardless of root cause (active-rule restriction,
+  body-format quirks, day-key mismatches) and will keep catching it if the
+  cause ever changes again.
+- The prior debug-only comparison (`updated_at` before/after, visible only
+  with Debug mode on) is preserved for the debug panel; the new check is
+  unconditional and user-facing.
+
+### Verified
+- Isolated logic test (5 cases): exact match, silent discard with fewer
+  slots persisted, an entire day-key silently ignored, correctly-collapsed
+  everyday rules, and key-order independence — all behave correctly with
+  no false positives on legitimate saves
+- Live test against an inactive rule via the authenticated REST API: a
+  2-slot edit persisted exactly as sent, then cleanly reverted — confirms
+  the underlying PUT→GET sequence this fix relies on works correctly when
+  the write actually succeeds
+- Dev-container template/script render: fix present in served JS, zero
+  console/log errors; Package 1 (Safe Mode/READ_ONLY/rules-race) guards
+  re-checked with zero regressions
+
+---
+
 ## 1.1.5 — Boost-vs-active-rule conflict, logging correctness, single-state rule buttons
 
 ### Fixed

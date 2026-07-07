@@ -192,9 +192,25 @@ buttons could BOTH show for a non-active rule with a slot scheduled today,
 and clicking Disable in that state cleared a DIFFERENT (the actually-active)
 rule, not the one clicked — genuinely dangerous, not just a display bug.
 Fixed by restricting Disable to `isActive(rule)` only. This is now DONE and
-should not be re-investigated — what's still open is exactly what's
-described above: write-back verification after PUT, and the
-everyday/single-day editor day-key state.
+should not be re-investigated.
+
+**Update 2026-07-08 — write-back verification shipped in v1.1.6, hypothesis
+1 further confirmed live.** Tested directly: a 2-slot edit to an INACTIVE
+rule ("New PD Test") persisted exactly as sent (confirmed via re-GET, then
+reverted) — the silent-discard is specific to editing the ACTIVE rule, not
+edits in general. Per the earlier "test against an inactive rule" plan,
+this result is strong confirmation of hypothesis 1; testing directly
+against the real active rule was deliberately skipped (it controls a real
+physical heater's live schedule) since the write-back-verification fix
+below makes root-cause certainty less urgent — it catches the failure
+regardless of cause. `saveRule()` now always re-fetches and diffs
+what was sent vs. what persisted, surfacing a real visible error instead
+of a false "saved" message. **What's still open, NOT done**: (a) any
+proactive UI warning/block when opening the editor on the currently active
+rule (we now detect and report the failure after the fact, but don't yet
+warn beforehand or block/redirect to a disable-then-edit flow); (b) the
+everyday/single-day editor day-key mismatch (hypothesis 3) — separate from
+the discard-detection work, still unconfirmed and unfixed.
 
 ### [defect] Push Notifications: local integration control conflated with cloud API master
 Reported 2026-07-04. The Settings card's "Notifications OFF — Master switch —
@@ -363,3 +379,23 @@ confirms.
   failed clear stops before ever attempting the boost) and a dev-container
   template render; Package 1 and Package 3 guards re-checked with zero
   regressions.
+- **v1.1.6 (2026-07-08) — P1 rule-save write-back verification**:
+  `saveRule()` no longer trusts `r.ok` — it re-fetches `/api/rules` after
+  every save and diffs the actual persisted day-keys/slots against what
+  was sent (`_ruleDataMatches()`), surfacing a real visible error instead
+  of a false "saved successfully" message when the server silently
+  discards a change. Confirmed live: a 2-slot edit to an inactive test
+  rule persisted correctly (then reverted), narrowing the silent-discard
+  specifically to editing the currently ACTIVE rule — consistent with
+  Energipays' own web UI blocking that operation, and with v1.1.5's
+  finding that boosting is now blocked the same way. Testing directly
+  against the real active rule was deliberately skipped (it drives a real
+  physical heater's live schedule); this fix catches the failure
+  regardless of root cause instead. Verified via 5 isolated diff-logic
+  test cases (exact match, fewer slots persisted, an entire day-key
+  ignored, correctly-collapsed everyday rules, key-order independence —
+  all correct, no false positives) plus a dev-container render with
+  Package 1 guards re-checked. Still open: proactive UI warning when
+  opening the editor on the active rule, and the everyday/single-day
+  editor day-key mismatch (hypothesis 3) — tracked separately in the
+  Defects section.

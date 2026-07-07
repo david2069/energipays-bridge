@@ -95,6 +95,22 @@ function rulesTab() {
 
     circuitLabel(type) { return CIRCUIT_LABEL[type] || type },
 
+    // Write-back verification for saveRule(): the server can return 200 while silently
+    // discarding a rule edit (observed when editing the currently ACTIVE rule) — this
+    // compares what was actually sent against what a fresh GET says persisted.
+    _ruleDataMatches(sent, persisted) {
+      const sentKeys = Object.keys(sent || {}).filter(k => /^d\d$/.test(k)).sort()
+      const persistedKeys = Object.keys(persisted || {}).filter(k => /^d\d$/.test(k)).sort()
+      if (sentKeys.length !== persistedKeys.length) return false
+      for (let i = 0; i < sentKeys.length; i++) {
+        if (sentKeys[i] !== persistedKeys[i]) return false
+      }
+      for (const key of sentKeys) {
+        if (JSON.stringify(sent[key] || []) !== JSON.stringify(persisted[key] || [])) return false
+      }
+      return true
+    },
+
     filteredRules() {
       // Sort: active rules (any circuit) first
       const activeIds = new Set(Object.values(CIRCUIT_POINT).map(pt => Alpine.store('app').points?.[pt]).filter(Boolean))
@@ -807,6 +823,8 @@ function rulesTab() {
           }
         }
         // Step 2: save schedule data
+        const sentData = JSON.parse(JSON.stringify(this.draft.data || {}))
+        const savedId = this.draft.id
         const r = await fetch(`/api/rules/${this.draft.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -814,27 +832,54 @@ function rulesTab() {
         })
         const d = await r.json()
         if (r.ok) {
-          this.saveResult = 'ok'
-          this.saveMsg = `Rule "${this.draft.name}" saved successfully.`
-          Alpine.store('app').addToast('Rule saved', 'success')
-          const savedId = this.draft.id
-          setTimeout(async () => {
-            this.closeEdit()
-            await this.refresh()
-            if (this.debugMode) {
-              const returned = this.rules.find(r => r.id === savedId)
-              if (returned) {
-                this.debugServerReturn = JSON.parse(JSON.stringify(returned))
-                const beforeTs = this.debugBefore?.updated_at
-                const afterTs = returned.updated_at
-                const changed = beforeTs !== afterTs
-                this.debugSnapshotLabel = changed
-                  ? `✓ saved ${new Date(afterTs).toLocaleTimeString()} (was ${new Date(beforeTs).toLocaleTimeString()})`
-                  : `⚠ saved but updated_at unchanged (${afterTs})`
-                this.debugTab = 'returned'
+          // The server can return 200 while silently discarding the change (observed
+          // when editing the currently ACTIVE rule) — never trust r.ok alone. Re-fetch
+          // and diff what actually persisted against what we sent.
+          let verifyDetail = ''
+          try {
+            const vr = await fetch('/api/rules')
+            if (vr.ok) {
+              const vd = await vr.json()
+              const list = Array.isArray(vd) ? vd : (vd.data || [])
+              const persisted = list.find(x => x.id === savedId)
+              if (!persisted) {
+                verifyDetail = 'rule no longer found after save'
+              } else if (!this._ruleDataMatches(sentData, persisted.data)) {
+                verifyDetail = 'the server accepted the save but the schedule that came back does not match what was sent'
               }
             }
-          }, 1200)
+          } catch (_) { /* verification request itself failing shouldn't block the happy path */ }
+
+          if (!verifyDetail) {
+            this.saveResult = 'ok'
+            this.saveMsg = `Rule "${this.draft.name}" saved successfully.`
+            Alpine.store('app').addToast('Rule saved', 'success')
+            setTimeout(async () => {
+              this.closeEdit()
+              await this.refresh()
+              if (this.debugMode) {
+                const returned = this.rules.find(r => r.id === savedId)
+                if (returned) {
+                  this.debugServerReturn = JSON.parse(JSON.stringify(returned))
+                  const beforeTs = this.debugBefore?.updated_at
+                  const afterTs = returned.updated_at
+                  const changed = beforeTs !== afterTs
+                  this.debugSnapshotLabel = changed
+                    ? `✓ saved ${new Date(afterTs).toLocaleTimeString()} (was ${new Date(beforeTs).toLocaleTimeString()})`
+                    : `⚠ saved but updated_at unchanged (${afterTs})`
+                  this.debugTab = 'returned'
+                }
+              }
+            }, 1200)
+          } else {
+            // Silent-discard case — surface a real, visible error instead of a false
+            // "saved" message, and refresh so the UI shows the TRUE current state
+            // (not the stale draft the user thinks they just saved).
+            this.saveResult = 'error'
+            this.saveMsg = `Save did not take effect: ${verifyDetail}. This is known to happen when editing the currently ACTIVE rule — try disabling it first, edit, then re-enable.`
+            Alpine.store('app').addToast('Rule save silently failed — see details', 'error')
+            await this.refresh()
+          }
         } else {
           this.saveResult = 'error'
           this.saveMsg = d.detail || d.error || 'Save failed — check logs for details'
