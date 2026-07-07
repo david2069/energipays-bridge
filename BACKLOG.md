@@ -217,32 +217,43 @@ below coloured the same rule correctly — investigate the slot-fill lookup
 consumed by all three renderings + a shared legend partial; separate the
 chart-series legend (Today/Tomorrow) from the slot legend in the solar card.
 
-### [defect] Boost Duration: app UI's "3 h" button is non-functional, not just mislabeled vs. MQTT
-Reported 2026-07-04 (screenshot: MQTT entity shows 30 min / 1 hour / 2 hours;
-app shows 1 h / 2 h / 3 h). Verified precisely — this is bigger than a label
-mismatch, the vendor has no 3-hour boost option at all:
-- **Ground truth**: Energipays' real period semantic is `1=30min, 2=1h,
-  3=2h` — confirmed in `energipays-client/cli.py:13,577` help text and
-  `mqtt_publisher.py:339,388` (`period_map = {"30 min": 1, "1 hour": 2,
-  "2 hours": 3}`). The MQTT `Boost Duration` select
-  (`publish/entities.py:114`, `BOOST_DURATION_OPTIONS`) matches this
-  correctly.
-- **The app's Duration buttons are wrong**: `templates/tabs/dashboard.html`
-  ~146 — `[{label:'1 h',val:2},{label:'2 h',val:3},{label:'3 h',val:4}]`.
-  `val:2`/`val:3` happen to still work (they coincidentally land on the
-  real 1h/2h periods), but **`val:4` ("3 h") sends `period=4`, which
-  `api/devices.py boost()`'s own validation (`if body.period not in
-  (1,2,3)`) flatly rejects with 400** — confirmed via isolated test, not
-  just static reading. The app's "3 h" boost button has been dead the whole
-  time; clicking it always fails.
-- **Fix shape**: change the app's Duration buttons to
-  `[{label:'30 min',val:1},{label:'1 hour',val:2},{label:'2 hours',val:3}]`
-  — three options, matching MQTT and the vendor exactly, dropping the
-  fictitious "3 h" entirely. Also fix the default `boostPeriod` value if it
-  currently assumes the old val scheme. Cross-check `dashboard_tab.js`'s
-  toast label map (`{2:'1h', 3:'2h', 4:'3h'}` — a THIRD, separate mapping
-  found while investigating) for the same off-by-one/phantom-4h assumption
-  and correct it to match.
+### [defect] Boost Duration: three different mappings across app/MQTT/backend — TRUE mapping still unconfirmed
+Reported 2026-07-04 (screenshot: MQTT entity shows 30 min / 1 hour /
+2 hours; app shows 1 h / 2 h / 3 h). **Correction 2026-07-04**: my first
+pass here concluded MQTT was ground truth and the app was wrong. That was
+wrong — the user then showed a screenshot of the actual energipays.com
+website's own "Main load" boost control, which shows exactly **1 h / 2 h /
+3 h, no 30-minute option at all**. That directly contradicts the
+`1=30min, 2=1h, 3=2h` mapping asserted in `energipays-client/cli.py:13,577`
+and mirrored in `mqtt_publisher.py`'s `period_map` — those comments were
+apparently never HAR-verified and may be stale (matching this session's
+broader pattern of Energipays changing platform behavior).
+**What the HAR captures actually show** (`Boost 1hour 100 and reduce power
+then Stop.har`): two real `POST .../boost` calls in one recorded session —
+`period=2` at 11:58:47, then several `boostPower` (encrypted, unreadable)
+adjustments, then `period=1` at 12:00:04. This does NOT cleanly resolve
+which period value means which duration — the filename's "1hour" could
+refer to either call, and there's no captured evidence at all for a
+"3 hour" click. **Do not trust either the CLI comment or the app's current
+button values as ground truth without a fresh, clean capture.**
+**What's confirmed, independent of the mapping question**: `api/devices.py
+boost()` validates `if body.period not in (1,2,3)` — the app's own "3 h"
+button (`templates/tabs/dashboard.html` ~146, `val:4`) sends `period=4` and
+is **rejected with 400 every time**, confirmed via isolated test (not just
+static reading). That part of the finding stands regardless of which
+mapping is correct: the app's 3rd Duration button is dead right now.
+**Fix shape — do this FIRST, before changing any code:** capture a clean
+HAR from energipays.com — one isolated boost click per duration button
+(1 h, 2 h, 3 h), nothing else happening in between, no power changes mixed
+in — to get an unambiguous period-value-to-duration mapping. Only then
+correct whichever of {app buttons, MQTT `BOOST_DURATION_OPTIONS`, backend's
+`(1,2,3)` validation range} is actually wrong — likely the backend's
+validation range needs to extend to allow a real 3rd/4th period value once
+the mapping is confirmed, and MQTT's option labels may need to drop
+"30 min" entirely if the vendor removed it. Also cross-check
+`dashboard_tab.js`'s toast label map (`{2:'1h', 3:'2h', 4:'3h'}` — a THIRD,
+separate mapping found while investigating) against whatever the HAR
+confirms.
 
 ## Notes / smaller items (unscheduled)
 
