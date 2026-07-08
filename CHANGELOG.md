@@ -1,3 +1,21 @@
+## 1.1.9 — Restore the real HA logo on the auto-detected instance row
+
+### Fixed
+- **The official Home Assistant logo was replaced with a 🏠 emoji** for the
+  Supervisor auto-detected "This Home Assistant" row — an unrequested
+  design decision made while building that feature, agreed to be reverted
+  days ago, and then never actually fixed. Restored the real
+  `ha-logo.svg` for every row without exception; the auto-detected
+  instance is now distinguished only by a small "Auto" text badge next to
+  the existing "Default"/"Disabled" badges, not by swapping the icon.
+
+### Verified
+- Dev-container render: zero 🏠 occurrences anywhere, "Auto" badge markup
+  present, page div-balanced, zero console/log errors; rules-race guard
+  re-checked with zero regressions
+
+---
+
 ## 1.1.8 — Companion Device form: real crypto bug + confusing duplicate fields
 
 ### Fixed
