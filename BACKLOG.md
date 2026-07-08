@@ -380,3 +380,20 @@ confirms.
   (0.6394 ratio both times). Dev-container render clean, `radiation_wm2`
   fully gone codebase-wide, Package 1/3 guards re-checked with zero
   regressions.
+- **v1.1.8 (2026-07-08) — Add Companion Device form fixes**: reported live
+  from the HA add-on — `crypto.randomUUID()` only exists in secure
+  contexts (HTTPS/localhost) and is `undefined` when the add-on is reached
+  over plain HTTP on a LAN IP, a completely normal setup, causing "Test
+  Notification" to fail outright. All 4 client-side ID-generation sites
+  now go through a `uuidv4()` helper (native when available, a
+  `Math.random()`-based v4 fallback otherwise — fine, since these are only
+  local DB primary keys). Also fixed, all from one screenshot: Notify
+  Service showed the same value in two widgets at once (select + input
+  both bound to `service_target`) — now only one renders; Alias/Notify-
+  Service placeholders used a realistic name/device-id that looked like
+  real pre-filled data — changed to unambiguous "e.g. ..." examples; the
+  "Enabled" checkbox appeared even when adding a brand-new device — now
+  only shown when editing an existing one. Verified: isolated test with
+  `crypto.randomUUID` explicitly undefined produces valid unique
+  v4-format UUIDs; dev-container render clean; Package 1 guards
+  re-checked with zero regressions.
