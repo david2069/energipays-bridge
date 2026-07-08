@@ -1,3 +1,47 @@
+## 1.1.8 — Companion Device form: real crypto bug + confusing duplicate fields
+
+### Fixed
+- **"Test Notification" failed with `TypeError: crypto.randomUUID is not a
+  function"` in the HA add-on.** `crypto.randomUUID()` only exists in
+  secure contexts (HTTPS or `localhost`) — it's `undefined` when the add-on
+  is reached over plain HTTP on a LAN IP (`http://192.168.x.x:8123`), which
+  is completely normal for a home HA install. All 4 client-side ID
+  generation call sites (`settings_tab.js`) now go through a `uuidv4()`
+  helper that uses the native `crypto.randomUUID()` when available and
+  falls back to a `Math.random()`-based v4 UUID otherwise — these IDs are
+  only ever local DB primary keys, not security tokens, so the fallback's
+  weaker randomness is fine.
+- **Notify Service field showed the same value twice, simultaneously** — a
+  `<select>` (populated by Discover) and a plain text `<input>` right below
+  it were both bound to `devForm.service_target` at the same time, so once
+  a value was chosen it appeared in both widgets, one as a friendly label,
+  one as raw text — impossible to tell whether it was manually typed or
+  auto-filled. Only one of the two now renders, depending on whether
+  Discover has populated any targets yet.
+- **The Alias/Notify-Service placeholders looked like real pre-filled
+  data**, not hints — `placeholder="David's iPhone"` and
+  `placeholder="mobile_app_davids_iphone_15_pro"` are realistic enough
+  (a real name, a real-looking device id) that combined with the duplicate
+  field above, it was genuinely impossible to tell "is this an example or
+  did the form already fill something in?" Changed to unambiguous example
+  text (`e.g. My Phone` / `e.g. mobile_app_your_phone`).
+- **"Enabled" checkbox in the Add-Device flow was pointless** — a device
+  you're actively adding is obviously meant to be enabled; the checkbox
+  now only appears when editing an existing device (its real purpose:
+  disabling without deleting).
+
+### Verified
+- Isolated test simulating the exact reported failure (`crypto.randomUUID`
+  explicitly `undefined`, matching a non-secure-context browser): fallback
+  produces valid, unique v4-format UUIDs
+- Dev-container render: new generic placeholders present, old
+  realistic-looking ones gone, mutual-exclusivity markup for the
+  select/input pair present, Enabled checkbox now conditional on
+  `devForm.id`, zero console/log errors; Package 1 guards re-checked with
+  zero regressions
+
+---
+
 ## 1.1.7 — Solar forecast actually reflects your system (Package 2a)
 
 ### Fixed

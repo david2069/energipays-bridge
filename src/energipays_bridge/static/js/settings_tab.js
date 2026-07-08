@@ -1,3 +1,20 @@
+// crypto.randomUUID() only exists in secure contexts (HTTPS or localhost) —
+// it's undefined when the HA Ingress/add-on UI is reached over plain HTTP on
+// a LAN IP (e.g. http://192.168.x.x:8123), which is a normal, common setup.
+// Fall back to a Math.random()-based v4 UUID; these are only ever used as
+// local DB primary keys, not security tokens, so cryptographic strength
+// isn't required here.
+function uuidv4() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
 function settingsTab() {
   return {
     pollInterval: 60,
@@ -848,7 +865,7 @@ function notificationsCard() {
       this.instTestResult = ''
       this.instFormError = ''
       try {
-        const body = { ...this.instForm, id: this.instForm.id || crypto.randomUUID(), enabled: true }
+        const body = { ...this.instForm, id: this.instForm.id || uuidv4(), enabled: true }
         const r = await fetch('/api/ha/instances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         const d = await r.json()
         if (r.ok) {
@@ -881,7 +898,7 @@ function notificationsCard() {
       this.instSaving = true
       this.instFormError = ''
       try {
-        const body = { ...this.instForm, id: this.instForm.id || this.instForm._testId || crypto.randomUUID(), enabled: true }
+        const body = { ...this.instForm, id: this.instForm.id || this.instForm._testId || uuidv4(), enabled: true }
         delete body._testId
         const r = await fetch('/api/ha/instances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         if (r.ok) {
@@ -960,7 +977,7 @@ function notificationsCard() {
         const inst = this.instances.find(i => i.id === this.devForm.ha_instance_id)
         if (!inst) { this.devTestResult = '✗ HA instance not found'; this.devTestOk = false; this.devTesting = false; return }
         // Save device temporarily then trigger test, then we can reload
-        const tempId = this.devForm.id || ('tmp-' + crypto.randomUUID())
+        const tempId = this.devForm.id || ('tmp-' + uuidv4())
         const body = { ...this.devForm, id: tempId, enabled: true }
         const saveR = await fetch('/api/ha/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         if (!saveR.ok) { this.devTestResult = '✗ Could not register device for test'; this.devTestOk = false; this.devTesting = false; return }
@@ -999,7 +1016,7 @@ function notificationsCard() {
       this.devSaving = true
       this.devFormError = ''
       try {
-        const body = { ...this.devForm, id: this.devForm.id || crypto.randomUUID() }
+        const body = { ...this.devForm, id: this.devForm.id || uuidv4() }
         const r = await fetch('/api/ha/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         if (r.ok) {
           this.devFormOpen = false

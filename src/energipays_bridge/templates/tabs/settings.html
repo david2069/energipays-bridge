@@ -1211,7 +1211,7 @@
           <div class="space-y-3">
             <div>
               <label class="text-xs text-slate-500 mb-1 block">Alias</label>
-              <input type="text" x-model="devForm.alias" placeholder="David's iPhone"
+              <input type="text" x-model="devForm.alias" placeholder="e.g. My Phone"
                      class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand"/>
             </div>
             <div>
@@ -1237,21 +1237,29 @@
                   </span>
                 </button>
               </div>
+              <!-- Show ONE field at a time, not both bound to the same value:
+                   the select once Discover has populated options, otherwise
+                   the free-text fallback. -->
               <template x-if="devTargets.length > 0">
                 <select x-model="devForm.service_target"
-                        class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand mb-1">
+                        class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand">
                   <option value="">— select from discovered —</option>
                   <template x-for="t in devTargets" :key="t.service_target">
                     <option :value="t.service_target" x-text="t.service_target + ' — ' + t.friendly_name"></option>
                   </template>
                 </select>
               </template>
-              <input type="text" x-model="devForm.service_target"
-                     placeholder="mobile_app_davids_iphone_15_pro"
-                     class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand font-mono"/>
+              <template x-if="devTargets.length === 0">
+                <input type="text" x-model="devForm.service_target"
+                       placeholder="e.g. mobile_app_your_phone"
+                       class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand font-mono"/>
+              </template>
               <p class="text-[10px] text-slate-600 mt-1">Use Discover to populate automatically from your HA instance, or type manually</p>
             </div>
-            <label class="flex items-center gap-2 cursor-pointer">
+            <!-- Enabled is only meaningful when editing an existing device (to
+                 disable without deleting) — a device you're adding right now is
+                 obviously meant to be enabled, so don't ask. -->
+            <label x-show="devForm.id" class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" x-model="devForm.enabled" class="rounded"/>
               <span class="text-xs text-slate-400">Enabled</span>
             </label>

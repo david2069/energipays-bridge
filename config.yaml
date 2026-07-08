@@ -1,6 +1,6 @@
 name: "Energipays Bridge"
 description: "Unofficial self-hosted integration and dashboard for Powerdiverter solar PV diverters using the Energipays Cloud."
-version: "1.1.7"
+version: "1.1.8"
 slug: "energipays_bridge"
 url: "https://github.com/david2069/energipays-bridge"
 init: false
