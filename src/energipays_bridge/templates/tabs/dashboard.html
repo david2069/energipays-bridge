@@ -1279,11 +1279,17 @@
     <!-- No location -->
     <div x-show="!solarLoading && solarError"
          class="text-xs text-slate-500 text-center py-8">
-      Set your location in <strong>Settings → Location &amp; NEM Region</strong> to enable solar forecast.
+      Set your location in <strong>Settings → Location &amp; PV System</strong> to enable solar forecast.
+    </div>
+
+    <!-- No system size configured — the API can't estimate kW output without it -->
+    <div x-show="!solarLoading && !solarError && !solarKwpConfigured"
+         class="text-xs text-slate-500 text-center py-8">
+      Set your system size (kWp) in <strong>Settings → Location &amp; PV System</strong> to see estimated output.
     </div>
 
     <!-- Content -->
-    <div x-show="!solarLoading && !solarError && solar48Hours.today.length">
+    <div x-show="!solarLoading && !solarError && solarKwpConfigured && solar48Hours.today.length">
 
       <!-- Today + Tomorrow summary cards (compact) -->
       <div class="grid grid-cols-2 gap-2 mb-3">
@@ -1326,10 +1332,10 @@
       <!-- 48h bar chart: Today (amber) + Tomorrow (sky) -->
       <div class="relative mt-1" x-data="{tip:null, tipX:0, tipY:0}">
         <div class="flex gap-1 items-stretch">
-        <!-- Left Y-axis: kW/m² (irradiance) -->
+        <!-- Left Y-axis: estimated kW output -->
         <div class="flex flex-col justify-between text-right shrink-0" style="width:22px;padding:6px 0 2px">
-          <span class="text-[8px] text-amber-400/70 leading-none" x-text="solarMax48 ? (solarMax48/1000).toFixed(1) : ''"></span>
-          <span class="text-[8px] text-amber-400/40 leading-none" x-text="solarMax48 ? (solarMax48/2000).toFixed(1) : ''"></span>
+          <span class="text-[8px] text-amber-400/70 leading-none" x-text="solarMax48 ? solarMax48.toFixed(1) : ''"></span>
+          <span class="text-[8px] text-amber-400/40 leading-none" x-text="solarMax48 ? (solarMax48/2).toFixed(1) : ''"></span>
           <span class="text-[8px] text-amber-400/40 leading-none">0</span>
         </div>
         <!-- Chart area -->
@@ -1341,13 +1347,13 @@
           <!-- Today bars -->
           <template x-for="(h,i) in solar48Hours.today" :key="'t'+h.hour">
             <div class="flex-1 flex flex-col justify-end h-full relative group"
-                 @mouseenter="tip={time:h.hour.slice(11,16),rad:(h.radiation_wm2/1000).toFixed(2)+'kW',temp:h.temp_c!=null?h.temp_c+'°C':null}; tipX=((i+0.5)/24*50); tipY=Math.max(10,82-solarBarH(h.radiation_wm2,76))"
+                 @mouseenter="tip={time:h.hour.slice(11,16),rad:(h.estimated_kw||0).toFixed(2)+'kW',temp:h.temp_c!=null?h.temp_c+'°C':null}; tipX=((i+0.5)/24*50); tipY=Math.max(10,82-solarBarH(h.estimated_kw||0,76))"
                  @mouseleave="tip=null">
               <div class="w-full"
-                   :class="h.radiation_wm2 < 10
+                   :class="(h.estimated_kw||0) < 0.01
                      ? ($store.app.isDark ? 'bg-slate-700/40' : 'bg-slate-200/60')
                      : 'bg-amber-400'"
-                   :style="'height:' + solarBarH(h.radiation_wm2, 76) + 'px'">
+                   :style="'height:' + solarBarH(h.estimated_kw||0, 76) + 'px'">
               </div>
             </div>
           </template>
@@ -1359,13 +1365,13 @@
           <!-- Tomorrow bars -->
           <template x-for="(h,i) in solar48Hours.tomorrow" :key="'r'+h.hour">
             <div class="flex-1 flex flex-col justify-end h-full relative group"
-                 @mouseenter="tip={time:h.hour.slice(11,16),rad:(h.radiation_wm2/1000).toFixed(2)+'kW',temp:h.temp_c!=null?h.temp_c+'°C':null}; tipX=(50+(i+0.5)/24*50); tipY=Math.max(10,82-solarBarH(h.radiation_wm2,76))"
+                 @mouseenter="tip={time:h.hour.slice(11,16),rad:(h.estimated_kw||0).toFixed(2)+'kW',temp:h.temp_c!=null?h.temp_c+'°C':null}; tipX=(50+(i+0.5)/24*50); tipY=Math.max(10,82-solarBarH(h.estimated_kw||0,76))"
                  @mouseleave="tip=null">
               <div class="w-full"
-                   :class="h.radiation_wm2 < 10
+                   :class="(h.estimated_kw||0) < 0.01
                      ? ($store.app.isDark ? 'bg-slate-700/40' : 'bg-slate-200/60')
                      : 'bg-sky-400'"
-                   :style="'height:' + solarBarH(h.radiation_wm2, 76) + 'px'">
+                   :style="'height:' + solarBarH(h.estimated_kw||0, 76) + 'px'">
               </div>
             </div>
           </template>

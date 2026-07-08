@@ -154,9 +154,16 @@ function dashboardTab() {
       }
     },
 
+    // False until /api/solar/forecast reports a configured system size — the
+    // API returns estimated_kw: null for every hour when kwp is unset, since
+    // there is no honest number to compute (see BACKLOG.md Package 2a).
+    get solarKwpConfigured() {
+      return this.solarData?.kwp != null
+    },
+
     get solarMax48() {
       const { today, tomorrow } = this.solar48Hours
-      return Math.max(...[...today, ...tomorrow].map(h => h.radiation_wm2), 1)
+      return Math.max(...[...today, ...tomorrow].map(h => h.estimated_kw || 0), 0.1)
     },
 
     solarBarH(v, containerH) {
@@ -164,17 +171,16 @@ function dashboardTab() {
     },
 
     _solarSummarize(hours) {
-      if (!hours.length) return null
-      const total = hours.reduce((s, h) => s + h.radiation_wm2, 0)
-      const peak  = Math.max(...hours.map(h => h.radiation_wm2))
-      const ph    = hours.find(h => h.radiation_wm2 === peak)
+      if (!hours.length || !this.solarKwpConfigured) return null
+      const total = hours.reduce((s, h) => s + (h.estimated_kw || 0), 0)
+      const peak  = Math.max(...hours.map(h => h.estimated_kw || 0))
+      const ph    = hours.find(h => h.estimated_kw === peak)
       const t     = ph?.hour.slice(11,16) || '—'
-      const hh    = parseInt(t), mm = parseInt(t.slice(3))
       return {
-        total:    (total / 1000).toFixed(1),
-        peak:     (peak  / 1000).toFixed(2),
+        total:    total.toFixed(1),
+        peak:     peak.toFixed(2),
         peakTime: t,
-        slots:    hours.filter(h => h.radiation_wm2 >= 100).length,
+        slots:    hours.filter(h => (h.estimated_kw || 0) >= 0.1).length,
       }
     },
 

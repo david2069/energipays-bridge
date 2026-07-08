@@ -17,47 +17,8 @@ Issues; this file stays the release-packaging layer.)
 
 ## Package 2 — Solar forecast scaling + cloud-default charts + throttling leftovers
 
-**Status: approved, queued — priority: normal.** Package 3 (MQTT setup)
-shipped as v1.1.3 on 2026-07-04 — see Shipped below. This is now the next
-package to build.
-
-### 2a. [defect] Solar PV forecast is unscaled irradiance (confirmed too low)
-`api/solar.py` returns raw horizontal `shortwave_radiation` W/m²;
-`dashboard_tab.js` `_solarSummarize` (~167-176) shows W/m²÷1000 as "kW" — i.e.
-a 1 kWp horizontal array. No system size or orientation stored anywhere.
-- New config: `solar_kwp`, `solar_tilt_deg` (~22 default), `solar_azimuth_deg`
-  — app_config storage like weather_lat/lon; UI fields near weather settings.
-  Open-meteo azimuth convention: 0=south, −90=east, 90=west, ±180=north
-  (Sydney roofs typically north → 180)
-- `solar.py`: switch to `global_tilted_irradiance` with `&tilt=&azimuth=`
-  (consider api.open-meteo.com forecast API for today+7d);
-  estimated kW = GTI/1000 × kWp × ~0.85 performance ratio; keep temp_c for
-  future temperature derating
-- UI: display scaled kW/kWh; keep "Actual" overlay; if kWp unset show a
-  "Set system size in Settings" hint instead of silently-wrong numbers
-
-**UI plan (2026-07-04, inspired by a similar "PV System" panel in the
-FWHAI/franklinwh project, verified live via curl before writing this):**
-- Match FWHAI's field set and layout for cross-project consistency:
-  Latitude, Longitude, Azimuth°, Tilt°, Size (kWp) — same names/order.
-  **Do NOT copy FWHAI's azimuth helper text verbatim** — theirs reads
-  "0=N · 90=E · 180=S", which is the OPPOSITE convention to Open-Meteo
-  (0=south, −90=east, 90=west, ±180=north, already noted above). Write our
-  own accurate helper text for Open-Meteo's actual reference frame, or
-  users will enter a value expecting north and get south.
-- Skip FWHAI's "Home Load Assumption (kW)" field — that's for their
-  battery SoC-trajectory modeling; no equivalent concept here (hot-water
-  diverter, not a battery dispatch system).
-- **"Sync Location from Cloud" button** next to Lat/Lon — unlike FWHAI's
-  version (which needs a live API call), ours is free: `poller.py:194-195`
-  already populates `points["dev.latitude"]`/`["dev.longitude"]` from the
-  device profile, exposed as `device_lat`/`device_lon` in
-  `/api/points/latest` (`api/points.py:32-33`) and already read into
-  `$store.app.deviceLat`/`deviceLon` in `app.js`. The button just copies
-  those already-live store values into the form fields — no new backend
-  endpoint needed. Pre-fill the form from these values on first load;
-  the button re-syncs if the user has since entered custom coordinates
-  and wants to revert to the device's registered address.
+**Status: approved, queued — priority: normal.** 2a shipped as v1.1.7 on
+2026-07-08 — see Shipped below. 2b/2c remain.
 
 ### 2b. [enh] History charts: default to cloud, toggle for local
 `dashboard_tab.js` ~296-301: Hot Water 24h modal reads ONLY local SQLite
@@ -399,3 +360,23 @@ confirms.
   opening the editor on the active rule, and the everyday/single-day
   editor day-key mismatch (hypothesis 3) — tracked separately in the
   Defects section.
+- **v1.1.7 (2026-07-08) — Package 2a: solar forecast actually reflects your
+  system**: `api/solar.py` switched from raw horizontal `shortwave_radiation`
+  to `global_tilted_irradiance` with `&tilt=&azimuth=`, scaled by new
+  `solar_kwp`/`solar_tilt_deg`/`solar_azimuth_deg` config
+  (`estimated_kw = GTI/1000 × kWp × 0.85`); cache keyed on lat/lon/tilt/
+  azimuth only so changing just system size never re-fetches from
+  Open-Meteo. Settings card renamed "Location & PV System" with
+  Azimuth°/Tilt°/Size(kWp) fields (matching a similar FWHAI panel's layout,
+  with our own correct Open-Meteo-convention helper text) and a free "Sync
+  Location from Cloud" button (device lat/lon already live in the Alpine
+  store via the poller — no new API call). Dashboard shows a "set your
+  system size" hint instead of wrong numbers when kWp is unset. Verified
+  live: unset kWp → `estimated_kw: null` for every hour (hint shown); a
+  6.6 kWp/22°/180° config → ~3.7 kW midday / ~4.2 kW peak in Sydney winter
+  (66-75% of the 5.6 kW theoretical ceiling — physically sane, vs. the old
+  bug's flat ~0.5 kW regardless of system size); changing only kWp
+  (6.6→10.0) confirmed as a cache hit with an exactly-proportional peak
+  (0.6394 ratio both times). Dev-container render clean, `radiation_wm2`
+  fully gone codebase-wide, Package 1/3 guards re-checked with zero
+  regressions.

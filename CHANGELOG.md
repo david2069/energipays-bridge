@@ -1,3 +1,54 @@
+## 1.1.7 — Solar forecast actually reflects your system (Package 2a)
+
+### Fixed
+- **Solar PV forecast showed the same tiny numbers regardless of system
+  size.** `api/solar.py` was requesting raw horizontal `shortwave_radiation`
+  from Open-Meteo and the dashboard divided it by 1000 and labelled it "kW"
+  — i.e. every install saw the output of an imaginary 1 kWp flat-horizontal
+  panel, never their actual array. No system size, tilt, or orientation was
+  stored anywhere.
+
+### Added
+- **New config**: `solar_kwp`, `solar_tilt_deg` (default 22°),
+  `solar_azimuth_deg` (default 180° — Open-Meteo convention: 0=south,
+  −90=east, 90=west, ±180=north; most AU roofs facing the sun → 180).
+  New `GET`/`PUT /api/solar/settings`.
+- `api/solar.py` now requests `global_tilted_irradiance` with `&tilt=&azimuth=`
+  instead of flat horizontal irradiance, and computes
+  `estimated_kw = GTI/1000 × kWp × 0.85` (fixed, named performance-ratio
+  constant for inverter/wiring/soiling losses). The upstream cache key is
+  keyed on lat/lon/tilt/azimuth only — changing just the system size never
+  needs a re-fetch from Open-Meteo, it's rescaled from the cached raw
+  series on every read.
+- **Settings → Location & PV System** (renamed from "Location & NEM
+  Region"): added Azimuth°/Tilt°/Size(kWp) fields, our own accurate
+  Open-Meteo-convention helper text, and a **"Sync Location from Cloud"**
+  button — modelled on a similar panel in the FWHAI/franklinwh project, but
+  free here: the device's registered lat/lon already flows through the
+  poller into the Alpine store, so the button (and first-load pre-fill)
+  just copies already-live values, no new API call needed.
+- Dashboard: if no system size is configured, the Solar Forecast card shows
+  a "Set your system size (kWp) in Settings..." hint instead of silently
+  displaying wrong numbers.
+
+### Verified
+- Live against the real Open-Meteo API: before configuring a system size,
+  every hour returns `estimated_kw: null` (hint shown, no bogus number).
+  After setting 6.6 kWp/22°/180°, Sydney winter midday output ≈ 3.7 kW,
+  peak ≈ 4.2 kW — a physically sane fraction (66-75%) of the theoretical
+  5.6 kW ceiling for that system, a world away from the old bug's flat
+  ~0.5 kW regardless of system size.
+- Confirmed the cache design: changing only `kwp` (6.6 → 10.0 kWp) did not
+  trigger a new Open-Meteo request (call count unchanged), and the two
+  peak values are in the exact same ratio (4.22/6.6 = 6.394/10.0 =
+  0.6394) — the linear rescaling is mathematically correct.
+- Dev-container template render: new card heading/fields/button/hint all
+  present, old `radiation_wm2` references fully gone codebase-wide
+  (`grep` swept clean), zero console/log errors; Package 1 and Package 3
+  guards re-checked with zero regressions.
+
+---
+
 ## 1.1.6 — Rule-save write-back verification (P1: silent discard no longer silent)
 
 ### Fixed

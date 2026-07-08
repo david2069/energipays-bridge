@@ -918,17 +918,35 @@
     <div x-show="open" class="space-y-4">
 
       <!-- Location & NEM -->
-      <div class="card mb-4" x-data="{lat:'', lon:'', region:'NSW1', saving:false,
+      <div class="card mb-4" x-data="{lat:'', lon:'', region:'NSW1', kwp:'', tilt:22, azimuth:180, saving:false,
           async init(){
-            const r=await fetch('/api/weather-nem'); if(r.ok){const d=await r.json(); this.lat=d.settings?.lat||''; this.lon=d.settings?.lon||''; this.region=d.settings?.region||'NSW1'}
+            const [r1,r2]=await Promise.all([fetch('/api/weather-nem'), fetch('/api/solar/settings')]);
+            if(r1.ok){const d=await r1.json(); this.lat=d.settings?.lat||''; this.lon=d.settings?.lon||''; this.region=d.settings?.region||'NSW1'}
+            if(r2.ok){const d=await r2.json(); this.kwp=d.kwp??''; this.tilt=d.tilt_deg??22; this.azimuth=d.azimuth_deg??180}
+            // Pre-fill from the device's registered location on first load, same as the Sync button
+            if(!this.lat && !this.lon) this.syncFromCloud()
+          },
+          syncFromCloud(){
+            const {deviceLat, deviceLon} = Alpine.store('app');
+            if(deviceLat!=null) this.lat=deviceLat;
+            if(deviceLon!=null) this.lon=deviceLon;
           },
           async save(){
             this.saving=true;
-            await fetch('/api/weather-nem/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:parseFloat(this.lat),lon:parseFloat(this.lon),region:this.region})});
-            Alpine.store('app').addToast('Location saved');this.saving=false
+            await Promise.all([
+              fetch('/api/weather-nem/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:parseFloat(this.lat),lon:parseFloat(this.lon),region:this.region})}),
+              fetch('/api/solar/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({kwp:this.kwp?parseFloat(this.kwp):null,tilt_deg:parseFloat(this.tilt),azimuth_deg:parseFloat(this.azimuth)})}),
+            ]);
+            Alpine.store('app').addToast('Location & PV system saved');this.saving=false
           }}">
-        <div class="font-medium text-slate-200 mb-3 text-sm">Location &amp; NEM Region</div>
-        <div class="flex gap-2 items-end">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium text-slate-200 text-sm">Location &amp; PV System</div>
+          <button @click="syncFromCloud()" title="Fill from this device's registered address"
+                  class="text-[10px] px-2 py-1 rounded border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400 transition-colors">
+            ☁ Sync Location from Cloud
+          </button>
+        </div>
+        <div class="flex gap-2 items-end flex-wrap">
           <div>
             <label class="text-xs text-slate-500 block mb-1">Latitude</label>
             <input type="number" x-model="lat" step="0.0001" class="w-28 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
@@ -947,7 +965,27 @@
               <option value="TAS1">TAS</option>
             </select>
           </div>
-          <button @click="save()" :disabled="saving" class="text-xs px-3 py-1.5 rounded bg-brand text-white hover:bg-brand/80 disabled:opacity-50 transition-colors">Save</button>
+        </div>
+        <div class="border-t border-slate-700/50 mt-3 pt-3">
+          <div class="text-xs text-slate-500 mb-2">PV system — used to scale the Solar Forecast card to your actual array</div>
+          <div class="flex gap-2 items-end flex-wrap">
+            <div>
+              <label class="text-xs text-slate-500 block mb-1">Azimuth°</label>
+              <input type="number" x-model="azimuth" step="1" placeholder="e.g. 180" class="w-24 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500 block mb-1">Tilt°</label>
+              <input type="number" x-model="tilt" step="1" placeholder="e.g. 22" class="w-24 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500 block mb-1">Size (kWp)</label>
+              <input type="number" x-model="kwp" step="0.1" placeholder="e.g. 6.6" class="w-24 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
+            </div>
+            <button @click="save()" :disabled="saving" class="text-xs px-3 py-1.5 rounded bg-brand text-white hover:bg-brand/80 disabled:opacity-50 transition-colors">Save</button>
+          </div>
+          <div class="text-[10px] text-slate-600 mt-1.5">
+            Azimuth uses Open-Meteo's convention: 0=south · −90=east · 90=west · ±180=north (most AU roofs facing the sun → 180). Tilt is degrees from horizontal (a typical roof pitch is ~20-25°).
+          </div>
         </div>
       </div>
 
