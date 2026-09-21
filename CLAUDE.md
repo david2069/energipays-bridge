@@ -31,6 +31,7 @@ ENERGIPAYS_DEVICE_ID=              # auto-discovered if blank
 ADMIN_PORT=8080
 LOG_LEVEL=INFO
 DATA_DIR=./data
+READ_ONLY=false                    # true = refuse every device-modifying command
 ```
 
 ## Commands
@@ -104,10 +105,25 @@ Every write command is logged with source prefix:
 Failures are logged as `WARNING`. Both UI and MQTT commands publish to the
 `Last Command Result` and `Last Command Time` HA sensors for track & trace.
 
-## Safe Mode
+## READ_ONLY
 
-Default: ON (read-only). Toggle in Settings tab or:
-```
-PUT /api/config/safe_mode  {"value": "0"}   # enable writes
-```
-When off, boost / device-on/off / heater commands are live.
+Default: **off** — boost / device-on-off / heater commands are live out of the box.
+Set `READ_ONLY=true` to refuse every device-modifying command.
+
+This replaced the old Safe Mode toggle in v1.1.2. There is no
+`PUT /api/config/safe_mode` endpoint and no Settings-tab switch any more:
+`read_only` is **env-only, never DB-persisted** (`config/settings.py`), so
+changing it means changing the environment and restarting. HA add-on users set
+the `read_only` option in `config.yaml`, which `ha_options.py` maps to the same
+env var.
+
+Enforcement, when it is on:
+- **REST** — `_check_writable()` in `api/devices.py` logs
+  `READ_ONLY: blocked <description>` and raises `403`.
+- **MQTT** — `mqtt_publisher.py` logs the same prefix, skips the write, and
+  publishes `<cmd> → BLOCKED (bridge is read-only)` to Last Command Result.
+- **Startup** — `main.py` logs a `WARNING` that the mode is active.
+
+Both paths log the exact write they would have sent, which is the intended
+dry-run aid for this reverse-engineered API. Current state is exposed as
+`read_only` on `/api/health` and `/api/points/latest`.
