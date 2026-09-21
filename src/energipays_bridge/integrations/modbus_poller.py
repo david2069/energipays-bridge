@@ -147,10 +147,14 @@ class ModbusPoller(IntegrationPoller):
             if values:
                 result[m.target_metric] = values[0] * scale
 
-        # Derive battery_state from battery_power_w sign
+        # Derive battery_state from battery_power_w sign.
+        # SunSpec 714.DCW on FranklinWH is POSITIVE = DISCHARGE, negative = charge
+        # (~/dev/modbus/SUNSPEC_MODEL_REFERENCE.md M714 table; franklinwh-modbus-bridge
+        # gateway/aggregator.py uses the same 50 W deadband). This was inverted until
+        # v1.1.10 — do not "correct" it back.
         if "battery_power_w" in result and "battery_state" not in result:
             pw = result["battery_power_w"]
-            result["battery_state"] = "charging" if pw > 50 else "discharging" if pw < -50 else "idle"
+            result["battery_state"] = "discharging" if pw > 50 else "charging" if pw < -50 else "idle"
 
         # Decode SunSpec 701 enum / bitfield metrics to human-readable strings
         if "inverter_state" in result:

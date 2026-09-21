@@ -12,6 +12,11 @@ services:
       - ENERGIPAYS_POLL_INTERVAL=${ENERGIPAYS_POLL_INTERVAL:-60}
       - DATA_DIR=/app/data
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Read-only safety switch. Defaults to false (writes live), matching
+      # previous behaviour. Promote a new image with READ_ONLY=true for one
+      # poll cycle to observe before letting it actuate:
+      #   READ_ONLY=true docker compose up -d --build
+      - READ_ONLY=${READ_ONLY:-false}
       # MQTT — same broker as franklinwh-modbus-bridge (fwhbridge-mosquitto, host port 1886)
       - MQTT_ENABLED=true
       - MQTT_HOST=host.docker.internal

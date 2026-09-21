@@ -1,3 +1,57 @@
+## 1.1.10 — Battery card told the truth about five different things
+
+### Fixed
+- **Battery State read backwards.** SunSpec `714.DCW` on FranklinWH is
+  **positive = discharge**, documented in the `franklinwh-modbus` library's
+  own M714 table; `modbus_poller.py` had it inverted, so the Battery tab
+  said "Charging" while the battery was discharging. Confirmed live before
+  fixing: at one instant `franklinwh-modbus-bridge` published
+  `battery_soc 87.0 / battery_power_kw 0.200 / battery_state Discharging`
+  while this bridge reported the identical SoC and power as `charging`.
+  The Power Flow node was never wrong — it quietly recomputed the label
+  from the power sign instead of trusting the poller, which is why only one
+  of the two readings looked wrong.
+- **Connection State always read "Disconnected"**, in red, regardless of the
+  device. The poller decodes `701.ConnSt` to a string, but the template
+  still compared it numerically — `"Connected" > 0` is `NaN > 0`, i.e.
+  always false. Renders the decoded value now.
+- **Battery SoC ring drew ~25 percentage points short at every level.** A
+  leftover `stroke-dashoffset="31.4"` on top of `transform="rotate(-90)"`
+  shifted the dash pattern backwards along the path, so the first quarter
+  of the arc was never drawn: 100% rendered as 75%, 87% as 62%, 50% as 25%.
+  Below ~25% it degraded further, wrapping to a displaced fragment — and a
+  25% charge rendered as a completely empty ring. Offset removed and the
+  circumference corrected from 125.7 to the true 125.664.
+- **Inverter State enum map was off by one** against the official SunSpec
+  `model_701.json` (`0=OFF 1=SLEEPING 2=STARTING 3=RUNNING … 6=FAULT
+  7=STANDBY`), with Running/Starting additionally swapped — and the colour
+  binding painted STANDBY red while leaving **FAULT neutral grey**. Masked
+  in practice, because the poller decodes to a string before the template
+  sees it, but one numeric integration away from surfacing every wrong
+  label and colour at once. Template now renders the decoded string.
+- **Grid Mode was decoded twice, incompatibly** — as a bitfield in the
+  poller and as an enum in the template, the latter inventing
+  "Island"/"Microgrid" labels that appear nowhere in the SunSpec spec for
+  this point. Single decode at the poller now.
+
+### Known, not fixed
+- **Grid Mode's underlying register is certified non-functional.**
+  FranklinWH's own SunSpec conformance certificate (SM-000028) lists
+  `701.DERMode` — all three states — as `unimplemented`, and
+  `franklinwh-modbus-bridge` measured 12 of 13 "PV Clipped" events at zero
+  solar output. Whether to keep showing the row at all is a UI decision,
+  left alone here rather than removed without asking. See BACKLOG.md.
+
+### Verified
+- Live cross-check against `franklinwh-modbus-bridge` MQTT on the same
+  physical battery at the same instant (see Battery State above)
+- SoC ring geometry computed across the full 0-100% range, including the
+  sub-25% wrap case
+- Enum orderings checked against the vendored official SunSpec
+  `model_701.json` / `model_713.json`, not against memory
+
+---
+
 ## 1.1.9 — Restore the real HA logo on the auto-detected instance row
 
 ### Fixed

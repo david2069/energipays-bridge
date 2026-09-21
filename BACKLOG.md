@@ -267,19 +267,32 @@ Cause is arithmetic, in `templates/tabs/dashboard.html:568-575`. The arc is
 stroke-dashoffset="31.4"
 transform="rotate(-90)"
 ```
-The gap length equals the full circumference, so a non-zero `stroke-dashoffset`
-does not merely rotate the start — it pulls the trailing gap back into the
-visible path. With offset 31.4 (= a quarter of 125.7) the dash covers path
-positions `[0, 94.3]` only, i.e. **75% of the ring, hard-capped for any SoC
->= 75%**. `rotate(-90)` already moves the start to 12 o'clock, so the 31.4
-offset is a leftover double-rotation: visible arc runs 12 o'clock -> 9 o'clock
-clockwise, which is exactly where the observed gap is.
+`stroke-dashoffset` shifts the pattern *backwards along the path*, so the
+first 31.4 units of the dash (a quarter of the ring) fall off the start and
+are never drawn. Visible arc = `dash - 31.4`, i.e. **the ring renders SoC
+minus 25 percentage points, at every value** — measured:
+
+| SoC | ring renders |
+|----:|-------------:|
+| 100% | 75.0% |
+|  87% | 62.1% |
+|  75% | 50.1% |
+|  50% | 25.1% |
+
+Below ~25% it breaks down entirely rather than merely running short: the
+lit segment wraps past the end of the path, so the arc appears **displaced**
+and the wrong length — 20% renders 5%, 30% renders 5%, and **25% renders a
+completely empty ring**. That is the safety-relevant end of the scale.
+
+`rotate(-90)` already moves the start to 12 o'clock, so the 31.4 offset is a
+leftover double-rotation: the visible arc runs clockwise from 12 o'clock and
+ends a quarter-turn early, which is exactly where the reported gap is.
 
 **Fix shape:** drop `stroke-dashoffset` (or set it to `0`) and keep
-`transform="rotate(-90)"`. Optionally use 125.66 rather than 125.7 so a true
-100% cannot round short. Verify at 100% *and* at a mid value (the bug is
-invisible below 75%, which is why it survived this long) — the dev container
-can be forced with a fake `ext.battery_soc` point.
+`transform="rotate(-90)"`. Use 125.664 rather than 125.7 so a true 100%
+cannot round short. Verify across the range — 100%, ~50%, and especially
+below 25% where the wrap makes it erratic; the dev container can be forced
+with a fake `ext.battery_soc` point.
 
 Note the sibling ring above it (`temp-ring-fill`, line 82) computes its offset
 through `tempRingOffset()` and is NOT affected — do not "fix" that one to match.
