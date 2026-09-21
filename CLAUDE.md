@@ -61,6 +61,36 @@ FastAPI → Jinja2 SPA → Alpine.js + Chart.js (no build step)
 - If a change is needed beyond the stated task, describe it and wait for a yes before touching anything.
 - One increment at a time: propose → get approval → implement → deploy.
 - **After every JS/HTML change: check browser console errors before reporting done.** Use grep on templates and JS files for common Alpine pitfalls (`x-if` inside SVG, undefined store keys, missing methods) if a browser is not available.
+- **Never reverse-engineer a FranklinWH Modbus register. Look it up first** — see
+  FranklinWH Modbus reference below.
+
+## FranklinWH Modbus reference (read before touching any register)
+
+Anything under `integrations/sunspec_scanner.py`, `modbus_poller.py`, or a
+`ext.*` point in the Battery tab is FranklinWH SunSpec data. It is already
+documented in three places outside this repo. Check them **in this order**
+before writing code or guessing an enum:
+
+| Source | Path | What it settles |
+|--------|------|-----------------|
+| Official SunSpec model JSON | `~/dev/modbus/venv/lib/python3.*/site-packages/sunspec2/models/json/model_7*.json` | Ground truth for point types, scale factors, and **every enum/bitfield symbol** |
+| `franklinwh-modbus` library | `~/dev/modbus/SUNSPEC_MODEL_REFERENCE.md`, `docs/FRANKLINWH_MODBUS_EXTENSIONS.md`, `src/franklinwh_modbus/types.py:201` (`PICS_STATUS`) | Sign conventions, per-point compliance, the 15500+ proprietary zone, and which points are functional / cosmetic / blocked |
+| `franklinwh-modbus-bridge` | `~/dev/Claude/Projects/franklinwh-modbus-bridge/docs/vendor-issues.md` + `docs/reference/` | 12 catalogued vendor defects, the signed PICS certificate SM-000028, and 30-day field observations |
+
+Why this rule exists: the Battery tab shipped a "Grid Mode" row decoded from
+`701.DERMode`, a register FranklinWH's own signed certificate lists as
+**unimplemented** — the answer was one directory away the whole time. A single
+cross-reference pass in 2026-09 found four defects, three of them the same
+shape: one enum decoded in several places with mappings that disagree.
+
+Two conventions worth memorising, both already gotten wrong once:
+- **`714.DCW`: positive = DISCHARGE, negative = CHARGE.**
+- **Decode each enum exactly once, at the poller.** The UI renders the decoded
+  string — it must never re-map raw ints, and never compare a decoded string
+  numerically (`"Connected" > 0` is `NaN > 0`, i.e. always false).
+
+Record every cross-reference result in `BACKLOG.md` — clean ones too, so the
+next session does not repeat the sweep.
 
 ## Conventions
 
