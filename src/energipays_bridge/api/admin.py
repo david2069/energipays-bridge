@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import logging
+import time
 from typing import Any
 
 import aiosqlite
@@ -83,6 +84,12 @@ async def health(request: Request) -> dict:
             "polls_total": poller.polls_total if poller else 0,
             "last_poll_ts": poller.last_poll_ts if poller else 0,
             "last_error": poller.last_error if poller else "",
+            # Health surface — a stalled poller used to be invisible from here.
+            "stalled": poller.stalled if poller else False,
+            "consecutive_failures": poller.consecutive_failures if poller else 0,
+            "restarts": poller.restarts if poller else 0,
+            "stale_s": (round(time.time() - poller.last_poll_ts, 1)
+                        if poller and poller.last_poll_ts else None),
         },
         "read_only": request.app.state.settings.read_only,
         "device_id": request.app.state.device_id,

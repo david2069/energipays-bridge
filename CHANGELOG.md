@@ -1,3 +1,58 @@
+## 1.1.11 — The bridge can no longer fail in silence
+
+The HA add-on stopped polling Energipays on 24 Sep at 00:45 and said nothing
+for **3.4 days**. Everything else kept working perfectly — the UI served,
+weather and solar refreshed, on-demand API calls authenticated fine — while
+the one job that matters quietly stopped. The dashboard even knew ("Bridge
+offline"), but nothing acted on it and nothing told anyone.
+
+### Fixed
+- **The poll loop could die permanently, with no log line at all.** It ran as
+  a bare `asyncio.create_task()` that was never awaited and had no
+  done-callback, so an exception escaping `_loop()` killed polling forever
+  *silently* — a dead task produces no output. It now has a done-callback that
+  logs `CRITICAL` and respawns the loop.
+- **A single hung request could wedge polling indefinitely.** The vendor client
+  runs on threads via `asyncio.to_thread`, and a thread blocked in a socket
+  read cannot be cancelled. Each poll is now bounded by
+  `asyncio.wait_for` (2x the interval, min 30s) so the loop always moves on.
+- **Nothing noticed a stalled poller.** A watchdog task now checks for a
+  successful poll within 5x the interval (min 3 min); past that it logs
+  `CRITICAL`, raises a notification, and restarts the poll task. This catches
+  the case the done-callback cannot — a loop that is alive but stuck.
+- **Failures on different paths were counted inconsistently**, so a poll that
+  timed out incremented the counter without ever alerting. All three routes —
+  returned error, timeout, and escaped exception — now go through one
+  `_record_failure()` and alert on the same threshold.
+
+### Added
+- **Bridge-health push notifications to Home Assistant**, matching what the
+  local FranklinWH bridge already does:
+  `bridge_started`, `bridge_stopped`, `poller_stalled`, `poller_recovered`,
+  and `poll_failing` (after 3 consecutive failures — long enough to ride out
+  a transient Energipays blip without crying wolf). All five are toggleable
+  in Settings and respect the master notification switch.
+- **Health surface on `/api/health`**: `stalled`, `consecutive_failures`,
+  `restarts`, and `stale_s` (seconds since the last successful poll). A
+  stalled poller was previously invisible to any external monitor.
+- **Migration v7** opts existing installs in to the health alerts. A new
+  trigger key is absent from a stored triggers array, and absent means off —
+  so without this, the alerts added *because of* a silent failure would
+  themselves have been silent. Idempotent, and every existing choice is kept.
+
+### Verified
+- Both failure modes reproduced against the real `EnergipaysPoller`: a poll
+  hung for an hour, and a poll raising past its own handler. The loop survives
+  both, keeps retrying, and fires `poll_failing` at the threshold either way.
+- Recovery path: 3 failures then success emits `poll_failing` then
+  `poller_recovered`.
+- `bridge_started` and `bridge_stopped` delivered end-to-end to real companion
+  devices from the dev container (`sent=True`, 2 devices).
+- Migration v7 applied to a copy of the production database: schema v7, all 5
+  keys added, all 8 pre-existing triggers preserved.
+
+---
+
 ## 1.1.10 — Battery card told the truth about five different things
 
 ### Fixed

@@ -21,6 +21,15 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     "temp_threshold":   ("Temperature Alert",        "Water temp {temp}°C (T1:{t1} T2:{t2} T3:{t3}) reached threshold {threshold}°C"),
     "done_heating":     ("Heating Done",             "Water temperature reached setpoint ({temp}°C)"),
     "test":             ("Energipays Bridge Test",   "Notification routing is working ✓"),
+    # ── Bridge health ────────────────────────────────────────────────────────
+    # These exist because the HA add-on silently stopped polling for 3.4 days in
+    # Sep 2026 and nothing told anyone. Health alerts are on by default (see the
+    # v7 migration) — an alert you must opt into does not save you.
+    "bridge_started":   ("Energipays Bridge Started", "Bridge is up — polling every {interval}s"),
+    "bridge_stopped":   ("Energipays Bridge Stopped", "Bridge is shutting down — polling has stopped"),
+    "poller_stalled":   ("⚠️ Bridge Polling STALLED",  "No data from Energipays for {stale_min} min. Restarting the poller automatically."),
+    "poller_recovered": ("Bridge Polling Recovered",  "Energipays polling resumed after {failures} failed attempts"),
+    "poll_failing":     ("⚠️ Energipays Poll Errors",  "{count} consecutive poll failures — last error: {error}"),
 }
 
 

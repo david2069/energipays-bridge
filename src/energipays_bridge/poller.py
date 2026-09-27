@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+#: Consecutive poll failures before raising a notification. 3 x 60s ~= 3 min,
+#: long enough to ride out a transient Energipays blip without crying wolf.
+_FAILURES_BEFORE_ALERT = 3
+
 
 def _flatten(device_status: dict, statistics: dict, device_profile: dict | None = None) -> dict[str, object]:
     """Merge device_status and statistics into a flat points dict."""
@@ -216,27 +220,132 @@ class EnergipaysPoller:
         self._data_server = data_server
         self._interval = poll_interval
         self._task: asyncio.Task | None = None
+        self._watchdog: asyncio.Task | None = None
+        self._stopping = False
+
+        # Health-event callback: async fn(event_type: str, context: dict) -> None.
+        # Set by main.py so the poller can raise HA notifications without
+        # importing the DB/notification layer itself.
+        self.on_health_event = None
+
+        # A single poll must not be able to wedge the loop forever. The vendor
+        # client runs on threads via asyncio.to_thread, and a thread blocked in
+        # a socket read cannot be cancelled — wait_for at least lets the LOOP
+        # move on. This is what silently stalled the HA add-on for 3.4 days in
+        # Sep 2026: no exception, no log line, just a loop that never came back.
+        self._poll_timeout = max(30, poll_interval * 2)
+        # Declare a stall after this long with no SUCCESSFUL poll.
+        self._stall_after = max(180, poll_interval * 5)
 
         self.connected: bool = False
         self.last_poll_ts: float = 0.0
         self.last_error: str = ""
         self.polls_total: int = 0
+        self.consecutive_failures: int = 0
+        self.restarts: int = 0
+        self.stalled: bool = False
+
+    async def _emit(self, event: str, context: dict) -> None:
+        """Fire a health event, never letting a notification failure hurt polling."""
+        cb = self.on_health_event
+        if cb is None:
+            return
+        try:
+            await cb(event, context)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("health event %s not delivered: %s", event, exc)
 
     async def start(self) -> None:
+        self._stopping = False
+        self._spawn_loop()
+        self._watchdog = asyncio.create_task(self._watch(), name="energipays-poller-watchdog")
+
+    def _spawn_loop(self) -> None:
         self._task = asyncio.create_task(self._loop(), name="energipays-poller")
+        self._task.add_done_callback(self._on_task_done)
+
+    def _on_task_done(self, task: asyncio.Task) -> None:
+        """A poll task must never die quietly. Before this existed, an exception
+        escaping _loop() killed polling permanently with no log line at all."""
+        if self._stopping or task.cancelled():
+            return
+        exc = task.exception()
+        log.critical("Poller task exited unexpectedly (%s) — restarting", exc or "no exception")
+        self.connected = False
+        self.restarts += 1
+        self._spawn_loop()
 
     async def stop(self) -> None:
-        if self._task:
-            self._task.cancel()
+        self._stopping = True
+        for t in (self._watchdog, self._task):
+            if t:
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
+
+    async def _watch(self) -> None:
+        """Restart the poll loop if no successful poll lands within _stall_after.
+
+        Covers the case the done-callback cannot: a loop that is alive but wedged
+        inside a hung request.
+        """
+        while True:
             try:
-                await self._task
+                await asyncio.sleep(min(60, max(10, self._interval)))
+                if self._stopping or self.last_poll_ts == 0.0:
+                    continue
+                stale = time.time() - self.last_poll_ts
+                if stale > self._stall_after and not self.stalled:
+                    self.stalled = True
+                    log.critical(
+                        "Poller STALLED — no successful poll for %.0fs (limit %ss); restarting",
+                        stale, self._stall_after,
+                    )
+                    await self._emit("poller_stalled", {"stale_min": int(stale // 60)})
+                    if self._task and not self._task.done():
+                        self._task.cancel()
+                        try:
+                            await self._task
+                        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                            pass
+                    self.restarts += 1
+                    self._spawn_loop()
             except asyncio.CancelledError:
-                pass
+                raise
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Poller watchdog error: %s", exc)
+
+    async def _record_failure(self, error: str) -> None:
+        """One place to count a failed poll, whatever path it failed on.
+
+        A poll that times out or explodes past its own handler is just as
+        invisible to the user as one that returns an error — so all three
+        routes alert on the same threshold.
+        """
+        self.connected = False
+        self.last_error = error
+        self.consecutive_failures += 1
+        if self.consecutive_failures == _FAILURES_BEFORE_ALERT:
+            await self._emit("poll_failing",
+                             {"count": self.consecutive_failures, "error": error[:200]})
 
     async def _loop(self) -> None:
         log.info("Poller starting (device=%s, interval=%ss)", self._device_id, self._interval)
         while True:
-            await self._poll()
+            try:
+                await asyncio.wait_for(self._poll(), timeout=self._poll_timeout)
+            except asyncio.CancelledError:
+                raise
+            except asyncio.TimeoutError:
+                log.warning("Poll timed out after %ss", self._poll_timeout)
+                await self._record_failure(f"poll timed out after {self._poll_timeout}s")
+            except Exception as exc:  # noqa: BLE001
+                # _poll handles its own errors; this is the belt-and-braces layer
+                # that keeps the loop alive no matter what escapes.
+                log.warning("Poll raised past its own handler: %s", exc)
+                await self._record_failure(str(exc))
             await asyncio.sleep(self._interval)
 
     async def _poll(self) -> None:
@@ -247,18 +356,24 @@ class EnergipaysPoller:
                 asyncio.to_thread(self._client.device, self._device_id),
             )
             points = _flatten(device_status, statistics, device_profile)
+            was_stalled, failures = self.stalled, self.consecutive_failures
             self.connected = True
             self.last_poll_ts = time.time()
             self.last_error = ""
             self.polls_total += 1
+            self.consecutive_failures = 0
+            self.stalled = False
+            if was_stalled or failures >= _FAILURES_BEFORE_ALERT:
+                log.info("Poller recovered after %d consecutive failures", failures)
+                await self._emit("poller_recovered", {"failures": failures})
             sample = Sample(device_id=self._device_id, ts=self.last_poll_ts,
                             points=points, quality="ok")
             await self._bus.publish(sample)
             log.debug("Poll OK: %d points", len(points))
         except Exception as exc:
-            self.connected = False
-            self.last_error = str(exc)
-            log.warning("Poll failed: %s", exc)
+            # Alerts once on the way down, not every 60s forever.
+            await self._record_failure(str(exc))
+            log.warning("Poll failed (%d in a row): %s", self.consecutive_failures, exc)
             sample = Sample(device_id=self._device_id, ts=time.time(),
                             points={}, quality="error")
             await self._bus.publish(sample)

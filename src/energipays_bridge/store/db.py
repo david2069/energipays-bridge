@@ -8,6 +8,12 @@ import aiosqlite
 
 log = logging.getLogger(__name__)
 
+#: Bridge-health events, enabled by default for new and existing installs.
+DEFAULT_HEALTH_TRIGGERS = (
+    "bridge_started", "bridge_stopped",
+    "poller_stalled", "poller_recovered", "poll_failing",
+)
+
 _MIGRATIONS = [
     # v1 — initial schema
     """
@@ -109,6 +115,26 @@ _MIGRATIONS = [
     # v6 — distinguish auto-detected HA instances (Supervisor) from user-added ones
     """
     ALTER TABLE ha_instances ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+    """,
+    # v7 — opt EXISTING installs in to the bridge-health notifications. A brand
+    # new trigger key is absent from a stored triggers array, and
+    # send_notification() treats absent as off — so without this, the alerts
+    # added after the Sep-2026 silent-stall incident would never fire for
+    # anyone who had already configured notifications. UNION keeps it
+    # idempotent and preserves every existing choice.
+    """
+    UPDATE notification_settings
+    SET triggers = (
+        SELECT json_group_array(value) FROM (
+            SELECT value FROM json_each(notification_settings.triggers)
+            UNION SELECT 'bridge_started'
+            UNION SELECT 'bridge_stopped'
+            UNION SELECT 'poller_stalled'
+            UNION SELECT 'poller_recovered'
+            UNION SELECT 'poll_failing'
+        )
+    )
+    WHERE id = 1;
     """,
 ]
 
@@ -281,7 +307,8 @@ async def get_notification_settings(db: aiosqlite.Connection) -> dict:
         "SELECT * FROM notification_settings WHERE id=1"
     )).fetchone()
     if not row:
-        return {"id": 1, "enabled": 0, "triggers": [], "temp_threshold": 40.0}
+        return {"id": 1, "enabled": 0, "triggers": list(DEFAULT_HEALTH_TRIGGERS),
+                "temp_threshold": 40.0}
     d = dict(row)
     d["triggers"] = json.loads(d["triggers"])
     return d

@@ -832,6 +832,11 @@ function notificationsCard() {
       ['boost_ended',     'Boost ended',            'Enable/disable boost completion notifications'],
       ['done_heating',    'Done status',            'Enable/disable heating-done push notifications'],
       ['temp_threshold',  'Device temperature threshold status', 'Enable/disable temperature threshold notifications (works if T-data is available)'],
+      ['bridge_started',   'Bridge started',        'Notify when the bridge starts up (including after an update or restart)'],
+      ['bridge_stopped',   'Bridge stopped',        'Notify when the bridge shuts down'],
+      ['poller_stalled',   'Polling stalled',       'Notify when polling stops producing data and the poller is auto-restarted'],
+      ['poller_recovered', 'Polling recovered',     'Notify when polling resumes after a stall or repeated failures'],
+      ['poll_failing',     'Repeated poll errors',  'Notify after 3 consecutive failed polls of the Energipays API'],
     ],
 
     async init() {

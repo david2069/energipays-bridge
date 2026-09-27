@@ -155,6 +155,15 @@ async def lifespan(app: FastAPI):
                     client, bus, device_id, data_server,
                     poll_interval=settings.poll_interval,
                 )
+                # Let the poller raise HA push notifications for stalls,
+                # sustained failures and recovery, without it having to know
+                # anything about the DB or the notification layer.
+                from .notifications.dispatcher import send_notification
+
+                async def _health_event(event: str, context: dict) -> None:
+                    await send_notification(db, event, context)
+
+                poller.on_health_event = _health_event
                 await poller.start()
             else:
                 log.warning("No device_id — poller not started")
@@ -215,9 +224,30 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(_cleanup_logs(), name="log-cleanup")
 
     log.info("energipays-bridge ready on port %d", settings.admin_port)
+
+    # Announce the bridge is up. Fire-and-forget: a notification problem must
+    # never delay or block startup.
+    async def _announce_start() -> None:
+        from .notifications.dispatcher import send_notification
+        try:
+            await send_notification(db, "bridge_started",
+                                    {"interval": settings.poll_interval})
+        except Exception as exc:  # noqa: BLE001
+            log.warning("bridge_started notification failed: %s", exc)
+
+    asyncio.create_task(_announce_start(), name="announce-start")
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
+    # Send this FIRST — it needs the DB, which is closed further down, and a
+    # clean shutdown is exactly when the user wants to be told.
+    try:
+        from .notifications.dispatcher import send_notification
+        await asyncio.wait_for(send_notification(db, "bridge_stopped", {}), timeout=10)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("bridge_stopped notification failed: %s", exc)
+
     archival_task.cancel()
     cleanup_task.cancel()
     await integration_registry.stop_all()
