@@ -5,6 +5,9 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from ..boost import PERIOD_LABEL, VALID_PERIODS
+from ..cloud_result import label, outcome
+
 log = logging.getLogger("energipays_bridge.api.devices")
 router = APIRouter()
 
@@ -52,9 +55,11 @@ async def set_device_status(body: DeviceStatusBody, request: Request) -> dict:
     _check_writable(request, f"POST /api/device/set {body.fields or {'rule_id': body.rule_id}}")
     device_id = request.app.state.device_id
     if body.rule_id is not None:
-        # Quick-set or clear active rule for a circuit (no status_data needed)
-        result = await _thread(client.set_rule, device_id, body.rule_id, body.rule_type)
-        circuit = {"command": "PD", "offpeak": "Off-Peak", "heater2": "Heater 2"}.get(body.rule_type, body.rule_type)
+        # Same body as energipays.com: the device's current status_data with only
+        # this circuit's rule field changed (energipays-client activate_rule, #2).
+        rule_type = _rule_type(body.rule_type)
+        result = await _thread(client.activate_rule, device_id, body.rule_id, rule_type)
+        circuit = {"command": "PD", "offpeak": "Off-Peak", "heater2": "Heater 2"}.get(rule_type, rule_type)
         action = "cleared" if body.rule_id == "0" else f"→ {body.rule_id}"
         description = f"{circuit} rule {action}"
     elif "boost_power" in body.fields:
@@ -70,10 +75,7 @@ async def set_device_status(body: DeviceStatusBody, request: Request) -> dict:
     # Log AFTER checking the result — the previous version logged "OK" here
     # unconditionally, before the error check below, so a rejected command
     # was misreported in the log as having succeeded.
-    if isinstance(result, dict) and "error" in result:
-        log.error("cmd (UI): %s: FAILED (%s)", description, result.get('body') or result['error'])
-        raise HTTPException(502, f"Command failed: {result.get('body') or result['error']}")
-    log.info("cmd (UI): %s: OK", description)
+    _raise_unless_ok("cmd (UI)", description, result)
     return result
 
 
@@ -85,16 +87,17 @@ async def list_rules(request: Request) -> dict:
 
 class CreateRuleBody(BaseModel):
     name: str
-    type: str = "command"   # "command" (PD), "off_peak", "heater2"
+    type: str = "command"   # "command" (PD), "offpeak", "heater2"
 
 
 @router.post("/api/rules")
 async def create_rule(body: CreateRuleBody, request: Request) -> dict:
     import logging as _log
     client = _get_client(request)
-    _check_writable(request, f"POST /api/rules name={body.name!r} type={body.type!r}")
-    result = await _thread(client.create_rule, body.name, body.type)
-    _log.getLogger(__name__).info("rules: created rule '%s' (type=%s)", body.name, body.type)
+    rule_type = _rule_type(body.type)
+    _check_writable(request, f"POST /api/rules name={body.name!r} type={rule_type!r}")
+    result = await _thread(client.create_rule, body.name, rule_type)
+    _raise_unless_ok("rules", f"create rule '{body.name}' (type={rule_type})", result)
     return result
 
 
@@ -151,7 +154,7 @@ async def delete_rule(rule_id: str, request: Request) -> dict:
     client = _get_client(request)
     _check_writable(request, f"DELETE /api/rules/{rule_id}")
     result = await _thread(client.delete_rule, rule_id)
-    _log.getLogger(__name__).info("rules: deleted rule %s", rule_id)
+    _raise_unless_ok("rules", f"delete rule {rule_id}", result)
     return result
 
 
@@ -185,6 +188,13 @@ async def switch_device(body: DeviceSwitchBody, request: Request) -> dict:
 
     request.app.state.device_id = body.device_id
     request.app.state.data_server = dev.get("server", current_data_server)
+    # MQTT commands must follow the switch too (#8): before this, HA kept
+    # commanding the previous device.
+    request.app.state._mqtt_device_id = body.device_id
+    request.app.state._mqtt_data_server = request.app.state.data_server
+    pub = getattr(request.app.state, "mqtt_publisher", None)
+    if pub is not None:
+        pub.set_device(body.device_id, request.app.state.data_server)
 
     from ..poller import EnergipaysPoller
     settings = request.app.state.settings
@@ -194,6 +204,7 @@ async def switch_device(body: DeviceSwitchBody, request: Request) -> dict:
         body.device_id,
         request.app.state.data_server,
         poll_interval=settings.poll_interval,
+        tz=getattr(settings, "timezone", "Australia/Sydney"),
     )
     await new_poller.start()
     request.app.state.poller = new_poller
@@ -205,7 +216,7 @@ async def switch_device(body: DeviceSwitchBody, request: Request) -> dict:
 
 
 class BoostBody(BaseModel):
-    period: int = 1          # 1=1h, 2=2h, 3=3h
+    period: int = 2          # 2=1h, 3=2h, 4=3h (as energipays.com sends; 1 cancels)
     clear_rule: bool = False  # clear the active PD rule first (Energipays now
                                # refuses to boost while a rule is active — the
                                # cloud reports this as a misleading generic
@@ -215,8 +226,10 @@ class BoostBody(BaseModel):
 
 @router.post("/api/boost")
 async def boost(body: BoostBody, request: Request):
-    if body.period not in (1, 2, 3):
-        raise HTTPException(400, "period must be 1, 2, or 3")
+    if body.period not in VALID_PERIODS:
+        raise HTTPException(
+            400, "period must be 2 (1 h), 3 (2 h) or 4 (3 h); "
+                 "period 1 is what energipays.com sends to cancel — use /api/boost/cancel")
     client = _get_client(request)
     _check_writable(request, f"POST /api/boost period={body.period} clear_rule={body.clear_rule}")
     device_id = request.app.state.device_id
@@ -226,19 +239,11 @@ async def boost(body: BoostBody, request: Request):
         # Note: this LEAVES the rule cleared — Energipays has no "temporary
         # override, restore after" concept, so the user must re-enable it
         # manually from Rules once the boost is done.
-        clear_result = await _thread(client.set_rule, device_id, "0", "command")
-        if isinstance(clear_result, dict) and "error" in clear_result:
-            log.error("cmd (UI): clear rule before boost: FAILED (%s)",
-                      clear_result.get('body') or clear_result['error'])
-            raise HTTPException(502, f"Could not clear the active rule: {clear_result.get('body') or clear_result['error']}")
-        log.info("cmd (UI): PD rule cleared (pre-boost)")
+        clear_result = await _thread(client.activate_rule, device_id, "0", "command")
+        _raise_unless_ok("cmd (UI)", "PD rule cleared (pre-boost)", clear_result)
 
     result = await _thread(client.boost_device, device_id, data_server, period=body.period)
-    hours = {1: "30 min", 2: "1 hour", 3: "2 hours"}.get(body.period, f"{body.period}h")
-    if isinstance(result, dict) and "error" in result:
-        log.error("cmd (UI): Boost → %s: FAILED (%s)", hours, result.get('body') or result['error'])
-        raise HTTPException(502, f"Boost failed: {result.get('body') or result['error']}")
-    log.info("cmd (UI): Boost → %s: OK", hours)
+    _raise_unless_ok("cmd (UI)", f"Boost → {PERIOD_LABEL[body.period]}", result)
     # Data server returns [] on success; normalise so callers always get a dict
     if isinstance(result, list):
         return {"ok": True, "period": body.period}
@@ -252,10 +257,7 @@ async def cancel_boost(request: Request):
     device_id = request.app.state.device_id
     data_server = request.app.state.data_server
     result = await _thread(client.cancel_boost, device_id, data_server)
-    if isinstance(result, dict) and "error" in result:
-        log.error("cmd (UI): Boost cancel: FAILED (%s)", result.get('body') or result['error'])
-        raise HTTPException(502, f"Cancel boost failed: {result.get('body') or result['error']}")
-    log.info("cmd (UI): Boost cancelled")
+    _raise_unless_ok("cmd (UI)", "Boost cancel", result)
     if isinstance(result, list):
         return {"ok": True}
     return result
@@ -268,6 +270,30 @@ import asyncio
 
 async def _thread(fn, *args, **kwargs):
     return await asyncio.to_thread(fn, *args, **kwargs)
+
+
+_RULE_TYPES = ("command", "offpeak", "heater2")
+
+
+def _rule_type(value: str) -> str:
+    """Rule circuit as energipays.com spells it; ``off_peak`` was the bridge's typo (#6)."""
+    v = "offpeak" if value == "off_peak" else value
+    if v not in _RULE_TYPES:
+        raise HTTPException(400, f"rule type must be one of {', '.join(_RULE_TYPES)}")
+    return v
+
+
+def _raise_unless_ok(source: str, description: str, result: object) -> None:
+    """Log the real outcome of a cloud call and turn failures into HTTP errors (#8)."""
+    kind, detail = outcome(result)
+    msg = f"{source}: {description}: {label(kind, detail)}"
+    if kind == "error":
+        log.error(msg)
+        raise HTTPException(502, f"{description} failed: {detail}")
+    if kind == "skipped":
+        log.warning(msg)
+        raise HTTPException(409, f"{description} not sent: {detail}")
+    log.info(msg)
 
 
 def _get_client(request: Request):

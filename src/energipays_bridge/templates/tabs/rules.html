@@ -799,7 +799,7 @@
         <div>
           <label class="block text-xs text-slate-500 mb-2">Type</label>
           <div class="flex gap-2">
-            <template x-for="[val, label, desc] in [['command','PD','Power Diverter'],['off_peak','Off-Peak','Off-Peak tariff'],['heater2','Heater 2','Second heater circuit']]" :key="val">
+            <template x-for="[val, label, desc] in [['command','PD','Power Diverter'],['offpeak','Off-Peak','Off-Peak tariff'],['heater2','Heater 2','Second heater circuit']]" :key="val">
               <button @click="newRuleType = val"
                       :class="newRuleType === val ? 'bg-brand/20 text-brand border-brand/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
                       class="flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors"

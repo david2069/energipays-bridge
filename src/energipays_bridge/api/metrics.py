@@ -8,9 +8,12 @@ from ..store.metrics import query_metrics
 
 router = APIRouter()
 
+# Every range the Analytics tab offers must be here, or it silently falls back to
+# 24 h (#4: 8h, 18h, 3d and 14d did).
 _RANGE_SECONDS = {
-    "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600,
-    "12h": 43200, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400,
+    "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 8 * 3600,
+    "12h": 43200, "18h": 18 * 3600, "24h": 86400, "3d": 3 * 86400,
+    "7d": 7 * 86400, "14d": 14 * 86400, "30d": 30 * 86400,
 }
 _BUCKET_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}
 
@@ -19,7 +22,7 @@ _BUCKET_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}
 async def metrics_history(
     request: Request,
     point: str = Query(..., description="point_id, e.g. phasePower"),
-    range: str = Query("24h", description="preset range: 1h,2h,4h,6h,12h,24h,7d,30d"),
+    range: str = Query("24h", description="preset range: 1h,2h,4h,6h,8h,12h,18h,24h,3d,7d,14d,30d"),
     bucket: str = Query("5m", description="bucket size: 1m,5m,15m,1h"),
     from_ts: float = Query(None, alias="from", description="unix timestamp — overrides range"),
     to_ts: float = Query(None, alias="to", description="unix timestamp — overrides range"),

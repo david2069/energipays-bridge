@@ -21,6 +21,8 @@ from Crypto.Cipher import AES
 
 from .db import get_config, set_config
 
+from ..privacy import mask_email
+
 log = logging.getLogger(__name__)
 
 _KEY_FILENAME = ".secret_key"
@@ -68,7 +70,7 @@ def _decrypt(key: bytes, encoded: str) -> str:
 
 async def save_credentials(db: aiosqlite.Connection, data_dir: pathlib.Path,
                             email: str, password: str) -> None:
-    log.info("credentials: saving credentials for %s", email)
+    log.info("credentials: saving credentials for %s", mask_email(email))
     key = _load_or_create_key(data_dir)
     await set_config(db, "cred_email", email)
     await set_config(db, "cred_password_enc", _encrypt(key, password))
@@ -92,7 +94,7 @@ async def load_credentials(db: aiosqlite.Connection,
     try:
         key = _load_or_create_key(data_dir)
         password = _decrypt(key, enc_pw)
-        log.info("credentials: loaded from DB for %s (password decrypted successfully)", email)
+        log.info("credentials: loaded from DB for %s (password decrypted successfully)", mask_email(email))
         return email, password
     except Exception as exc:
         log.error("credentials: decryption failed — stored credentials may be corrupt: %s", exc)

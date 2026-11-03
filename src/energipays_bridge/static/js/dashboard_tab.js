@@ -554,7 +554,10 @@ function dashboardTab() {
     async toggleDevice(field, currentVal) {
       if (this.toggling) return
       const newVal = currentVal == 1 ? 0 : 1
-      const label = field === 'customer' ? 'Power Diverter' : field === 'heaterStatus' ? 'Heater' : field
+      // The PD switch is written as {status} (as energipays.com does) and read back
+      // from status_data.customer (#6).
+      const label = field === 'status' ? 'Power Diverter' : field === 'heaterStatus' ? 'Heater' : field
+      const readKey = field === 'status' ? 'customer' : field
       this.toggling = field
       try {
         const r = await fetch('/api/device/set', {
@@ -567,7 +570,7 @@ function dashboardTab() {
           Alpine.store('app').addToast((d.detail || `${label} toggle failed`), 'error')
         } else {
           Alpine.store('app').addToast(`${label} turned ${newVal ? 'ON' : 'OFF'}`, 'info')
-          Alpine.store('app').points[`sd.${field}`] = newVal
+          Alpine.store('app').points[`sd.${readKey}`] = newVal
         }
       } catch (e) {
         Alpine.store('app').addToast('Network error', 'error')

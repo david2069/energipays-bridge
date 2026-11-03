@@ -2,17 +2,22 @@
 
 let _chartData = []   // latest fetched data for export
 
-// Cloud stats field definitions — mirrors energipays.com chart legend
-// Keys match raw analytics API field names confirmed from HAR capture 2026-06-25
+// Cloud stats field definitions — mirrors the energipays.com power-view legend
+// (energipays-client docs/API.md; energipays-mobile checked it live 2026-11-01, #5).
+// EIP is signed: below 0 is import, above 0 export. The site plots the two halves
+// as "Home import" and "Home export"; `derive` splits them here.
 const CLOUD_SERIES = [
-  { key: 'EIP',  label: 'Home import',        color: '#22d3ee', type: 'bar', abs: true },
+  { key: 'EIP_I', label: 'Home import',       color: '#22d3ee', type: 'bar', abs: true,
+    derive: r => { const v = parseFloat(r.EIP); return isNaN(v) ? null : (v < 0 ? -v : 0) } },
+  { key: 'EIP_E', label: 'Home export',       color: '#8b7a2b', type: 'bar', abs: true,
+    derive: r => { const v = parseFloat(r.EIP); return isNaN(v) ? null : (v > 0 ? -v : 0) } },
   { key: 'SP',   label: 'Solar gen.',         color: '#4ade80', type: 'bar', abs: true },
-  { key: 'GLPH', label: 'Diverted heater',    color: '#0891b2', type: 'bar', abs: true },
-  { key: 'GLPE', label: 'Diverted extra',     color: '#059669', type: 'bar', abs: true },
-  { key: 'OLPH', label: 'Heater',             color: '#ec4899', type: 'bar', abs: true },
-  { key: 'OLPE', label: 'Extra plug',         color: '#8b5cf6', type: 'bar', abs: true },
-  { key: 'WHD',  label: 'Off-Peak heater',    color: '#f97316', type: 'bar', abs: true },
-  { key: 'EPD',  label: 'Off-Peak extra plug',color: '#a78bfa', type: 'bar', abs: true },
+  { key: 'WHD',  label: 'Diverted heater',    color: '#0891b2', type: 'bar', abs: true },
+  { key: 'EPD',  label: 'Diverted extra',     color: '#059669', type: 'bar', abs: true },
+  { key: 'GLPH', label: 'Heater',             color: '#ec4899', type: 'bar', abs: true },
+  { key: 'GLPE', label: 'Extra plug',         color: '#8b5cf6', type: 'bar', abs: true },
+  { key: 'OLPH', label: 'Off-Peak heater',    color: '#f97316', type: 'bar', abs: true },
+  { key: 'OLPE', label: 'Off-Peak extra',     color: '#a78bfa', type: 'bar', abs: true },
   { key: 'SoC',  label: 'SOC (%)',            color: '#84cc16', type: 'line', yAxis: 'right' },
   { key: 't3',   label: 'T3 Top (°C)',        color: '#f43f5e', type: 'line', yAxis: 'right' },
   { key: 't2',   label: 'T2 Mid (°C)',        color: '#fb923c', type: 'line', yAxis: 'right' },
@@ -33,7 +38,9 @@ function analyticsTab() {
       { key: 'today.IEct',          label: 'Import (kWh)',    color: '#ef4444', type: 'bar' },
       { key: 'today.EEct',          label: 'Export (kWh)',    color: '#22c55e', type: 'bar' },
       { key: 'today.DE_h',          label: 'Diverted (kWh)',  color: '#3b82f6', type: 'bar' },
-      { key: 'solarPower',          label: 'Solar (kW)',      color: '#fbbf24', type: 'line', scale: 0.001 },
+      // solarPower is the sum of solarStreamA-C, which the dashboard shows as kW;
+      // the old ×0.001 drew it near zero (#5). Unverified against a live reading.
+      { key: 'solarPower',          label: 'Solar (kW)',      color: '#fbbf24', type: 'line' },
       { key: 'ext.solar_power_w',   label: 'Solar FWH (kW)',  color: '#f59e0b', type: 'line', device_id: 'ext', scale: 0.001 },
       { key: 'waterTemperatureAvg', label: 'Avg Temp (°C)',   color: '#f97316', type: 'line', yAxis: 'right' },
       { key: 'waterTemperature3',   label: 'T3 Top (°C)',     color: '#a78bfa', type: 'line', yAxis: 'right' },
@@ -44,7 +51,15 @@ function analyticsTab() {
     range: '24h',
     bucket: '15m',
     activeSeries: JSON.parse(localStorage.getItem('analyticsLocalSeries') || 'null') || ['phasePower', 'today.IEct', 'today.EEct', 'today.DE_h'],
-    activeCloudSeries: (() => { const s = JSON.parse(localStorage.getItem('analyticsCloudSeries') || 'null'); return s ? s.filter(k => k !== 't3' && k !== 't' && k !== 'EEP') : ['EIP', 'SP', 'GLPH', 'OLPH', '_tAvg']; })(),
+    // Saved selections keep every series that still exists; the old 'EIP' becomes
+    // import + export (#5). They used to drop 't3' and 'EEP' silently.
+    activeCloudSeries: (() => {
+      const known = new Set(CLOUD_SERIES.map(c => c.key))
+      let s = null
+      try { s = JSON.parse(localStorage.getItem('analyticsCloudSeries') || 'null') } catch (e) { s = null }
+      if (!Array.isArray(s)) return ['EIP_I', 'EIP_E', 'SP', 'WHD', 'GLPH', '_tAvg']
+      return [...new Set(s.flatMap(k => k === 'EIP' ? ['EIP_I', 'EIP_E'] : [k]))].filter(k => known.has(k))
+    })(),
     loading: false,
     signedMode: localStorage.getItem('analyticsSignedMode') === '1',  // false = energipays flat, true = signed
     chartStyle: localStorage.getItem('analyticsChartStyle') || 'area',   // 'bars' | 'area'
@@ -56,7 +71,7 @@ function analyticsTab() {
     // ── cloud mode ────────────────────────────────────────────────────────
     cloudDate: '',          // YYYY-MM-DD — end date for cloud view
     cloudSpan: '1d',        // '1d' | '7d' | '30d'
-    cloudPhase: 'sum',      // 'sum' | 'l1' | 'l2' | 'l3'
+    cloudPhase: 'sum',      // 'sum' | 'a' | 'b' | 'c' (as energipays.com sends)
     cloudFlat: localStorage.getItem('analyticsCloudFlat') !== '0',  // true = suppress negatives (energipays.com style)
     cloudDataType: localStorage.getItem('analyticsDataType') || 'power',   // 'power' | 'energy'
     cloudGranularity: localStorage.getItem('analyticsGranularity') || '15m', // '15m' | '1h'
@@ -245,14 +260,15 @@ function analyticsTab() {
       m.rows = []
       m.date = this.cloudDate
       try {
-        const url = `/api/cloud/stats?date_from=${this.cloudDate}&date_to=${this.cloudDate}&data_type=energy&phase=${this.cloudPhase}`
+        const url = `/api/cloud/stats?date_from=${this.cloudDate}&date_to=${this.cloudDate}&data_type=consumption&phase=${this.cloudPhase}`
         const r = await fetch(url)
         if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`) }
         const json = await r.json()
         // Parse totals — API returns { raw: { analytics: { ... } | { data: [...] } } }
         const raw = json.raw || json
-        const LABELS = { EIP:'Home import', EEP:'Home export', SP:'Solar gen.', GLPH:'Diverted heater', GLPE:'Diverted extra', OLPH:'Heater', OLPE:'Extra plug', WHD:'Off-Peak heater', EPD:'Off-Peak extra', t1:'T1 Bot (°C)', t2:'T2 Mid (°C)', t3:'T3 Top (°C)', _tAvg:'Avg T (°C)' }
-        const COLORS = { EIP:'#22d3ee', EEP:'#f59e0b', SP:'#4ade80', GLPH:'#0891b2', GLPE:'#059669', OLPH:'#ec4899', OLPE:'#8b5cf6', WHD:'#f97316', EPD:'#a78bfa', t1:'#60a5fa', t2:'#fb923c', t3:'#f43f5e', _tAvg:'#e879f9' }
+        // energipays.com energy-view keys (docs/API.md in energipays-client, #5)
+        const LABELS = { IEct:'Home import', EEct:'Home export', Einv:'Solar gen.', DE_h:'Diverted heater', DE_e:'Diverted extra', IE_h:'Heater', IE_e:'Extra plug', OIE_h:'Off-Peak heater', OIE_e:'Off-Peak extra' }
+        const COLORS = { IEct:'#22d3ee', EEct:'#8b7a2b', Einv:'#4ade80', DE_h:'#0891b2', DE_e:'#059669', IE_h:'#ec4899', IE_e:'#8b5cf6', OIE_h:'#f97316', OIE_e:'#a78bfa' }
         // Build totals from time-series data
         const totals = {}
         let rows
@@ -523,6 +539,8 @@ function analyticsTab() {
             const vals = [t1, t2, t3].filter(v => !isNaN(v) && v !== 0)
             return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
           })
+        } else if (cs.derive) {
+          values = rows.map(r => cs.derive(r))
         } else if (rows.length && rows[0]?._key !== undefined) {
           // column-oriented rows
           const col = rows.find(r => r._key === cs.key)

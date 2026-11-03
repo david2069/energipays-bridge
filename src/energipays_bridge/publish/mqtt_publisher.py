@@ -9,8 +9,9 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from energipays_bridge.boost import DEFAULT_DURATION, DURATIONS
+from energipays_bridge.cloud_result import label, outcome
 from energipays_bridge.publish.entities import (
-    BOOST_DURATION_OPTIONS,
     BOOST_POWER_MAP,
     BOOST_POWER_OPTIONS,
     BOOST_POWER_REVERSE,
@@ -74,7 +75,7 @@ class MqttPublisher:
         self._rule_name_to_id: dict[str, str] = {}
 
         # local state for entities with no API-readable state
-        self._boost_duration_sel: str = BOOST_DURATION_OPTIONS[1]  # "1 hour" (period=2)
+        self._boost_duration_sel: str = DEFAULT_DURATION  # "1 hour" (period=2)
 
         # last command result feedback
         self._last_cmd_result: str = ""
@@ -108,6 +109,29 @@ class MqttPublisher:
         if self._connected and self._client:
             self._client.subscribe(f"energipays/{device_id}/cmd/#")
             log.info("MQTT: subscribed to cmd topics for device %s", device_id)
+
+    def set_device(self, device_id: str, data_server: str) -> None:
+        """Point commands at another device after a device switch (#8)."""
+        old = self._device_id
+        self._data_server = data_server
+        if old == device_id:
+            return
+        self._device_id = device_id
+        self._device_info = None        # rebuilt from the new device's next sample
+        self._discovery_sent = False
+        if self._client and self._connected:
+            if old:
+                self._client.unsubscribe(f"energipays/{old}/cmd/#")
+            self._client.subscribe(f"energipays/{device_id}/cmd/#")
+        log.info("MQTT: command target switched %s -> %s", old, device_id)
+
+    async def _report(self, description: str, result: object) -> bool:
+        """Publish the real outcome of a cloud call; True only when it was accepted."""
+        kind, detail = outcome(result)
+        msg = f"{description}: {label(kind, detail)}"
+        (log.warning if kind in ("error", "skipped") else log.info)("cmd (MQTT): %s", msg)
+        await self._publish_cmd_result(msg)
+        return kind in ("ok", "queued")
 
     async def set_rules(self, rules: list[dict]) -> None:
         """Update rule options and re-send discovery for active_rule select."""
@@ -286,31 +310,27 @@ class MqttPublisher:
         try:
             if slug == "power_diverter_sw":
                 val = 1 if payload == "ON" else 0
-                await asyncio.to_thread(
+                res = await asyncio.to_thread(
                     self._ep_client.set_device_status,
                     self._device_id, status=val
                 )
-                await self._enqueue(
-                    ENTITY_BY_SLUG["power_diverter_sw"].state_topic(self._device_id),
-                    payload, retain=True
-                )
-                await self._publish_cmd_result(
-                    f"Power diverter → {'ON' if val else 'OFF'}: OK"
-                )
+                if await self._report(f"Power diverter → {'ON' if val else 'OFF'}", res):
+                    await self._enqueue(
+                        ENTITY_BY_SLUG["power_diverter_sw"].state_topic(self._device_id),
+                        payload, retain=True
+                    )
 
             elif slug == "heater_sw":
                 val = 1 if payload == "ON" else 0
-                await asyncio.to_thread(
+                res = await asyncio.to_thread(
                     self._ep_client.set_device_status,
                     self._device_id, heaterStatus=val
                 )
-                await self._enqueue(
-                    ENTITY_BY_SLUG["heater_sw"].state_topic(self._device_id),
-                    payload, retain=True
-                )
-                await self._publish_cmd_result(
-                    f"Immersion heater → {'ON' if val else 'OFF'}: OK"
-                )
+                if await self._report(f"Immersion heater → {'ON' if val else 'OFF'}", res):
+                    await self._enqueue(
+                        ENTITY_BY_SLUG["heater_sw"].state_topic(self._device_id),
+                        payload, retain=True
+                    )
 
             elif slug in ("offpeak_switcher", "weather_switcher",
                           "solar_restriction", "priority_mode"):
@@ -322,46 +342,41 @@ class MqttPublisher:
                 }
                 api_field = _field_map[slug]
                 val = 1 if payload == "ON" else 0
-                await asyncio.to_thread(
+                res = await asyncio.to_thread(
                     self._ep_client.set_device_status,
                     self._device_id, **{api_field: val}
                 )
-                await self._enqueue(
-                    ENTITY_BY_SLUG[slug].state_topic(self._device_id),
-                    payload, retain=True
-                )
-                await self._publish_cmd_result(
-                    f"{ENTITY_BY_SLUG[slug].name} → {'ON' if val else 'OFF'}: OK"
-                )
+                if await self._report(f"{ENTITY_BY_SLUG[slug].name} → {'ON' if val else 'OFF'}", res):
+                    await self._enqueue(
+                        ENTITY_BY_SLUG[slug].state_topic(self._device_id),
+                        payload, retain=True
+                    )
 
             elif slug == "boost_active":
                 if payload == "On":
-                    period_map = {"30 min": 1, "1 hour": 2, "2 hours": 3}
-                    period = period_map.get(self._boost_duration_sel, 2)
-                    await asyncio.to_thread(
+                    period = DURATIONS.get(self._boost_duration_sel, DURATIONS[DEFAULT_DURATION])
+                    res = await asyncio.to_thread(
                         self._ep_client.boost_device,
                         self._device_id, self._data_server, period
                     )
-                    await self._enqueue(
-                        ENTITY_BY_SLUG["boost_active"].state_topic(self._device_id),
-                        "On", retain=True
-                    )
-                    await self._publish_cmd_result(
-                        f"Boost started: {self._boost_duration_sel}: OK"
-                    )
+                    if await self._report(f"Boost started: {self._boost_duration_sel} (period={period})", res):
+                        await self._enqueue(
+                            ENTITY_BY_SLUG["boost_active"].state_topic(self._device_id),
+                            "On", retain=True
+                        )
                 elif payload == "Off":
-                    await asyncio.to_thread(
+                    res = await asyncio.to_thread(
                         self._ep_client.cancel_boost,
                         self._device_id, self._data_server
                     )
-                    await self._enqueue(
-                        ENTITY_BY_SLUG["boost_active"].state_topic(self._device_id),
-                        "Off", retain=True
-                    )
-                    await self._publish_cmd_result("Boost cancelled: OK")
+                    if await self._report("Boost cancelled", res):
+                        await self._enqueue(
+                            ENTITY_BY_SLUG["boost_active"].state_topic(self._device_id),
+                            "Off", retain=True
+                        )
 
             elif slug == "boost_duration":
-                if payload in BOOST_DURATION_OPTIONS:
+                if payload in DURATIONS:
                     self._boost_duration_sel = payload
                     await self._enqueue(
                         ENTITY_BY_SLUG["boost_duration"].state_topic(self._device_id),
@@ -372,29 +387,23 @@ class MqttPublisher:
             elif slug == "boost_power_sel":
                 if payload in BOOST_POWER_OPTIONS:
                     idx = BOOST_POWER_REVERSE[payload]
-                    await asyncio.to_thread(
+                    res = await asyncio.to_thread(
                         self._ep_client.set_boost_power,
                         self._device_id, idx
                     )
-                    await self._enqueue(
-                        ENTITY_BY_SLUG["boost_power_sel"].state_topic(self._device_id),
-                        payload, retain=True
-                    )
-                    await self._publish_cmd_result(
-                        f"Boost Power → {payload} (idx={idx}): OK"
-                    )
+                    if await self._report(f"Boost Power → {payload} (idx={idx})", res):
+                        await self._enqueue(
+                            ENTITY_BY_SLUG["boost_power_sel"].state_topic(self._device_id),
+                            payload, retain=True
+                        )
 
             elif slug == "boost_start":
-                period_map = {"30 min": 1, "1 hour": 2, "2 hours": 3}
-                period = period_map.get(self._boost_duration_sel, 1)
-                await asyncio.to_thread(
+                period = DURATIONS.get(self._boost_duration_sel, DURATIONS[DEFAULT_DURATION])
+                res = await asyncio.to_thread(
                     self._ep_client.boost_device,
                     self._device_id, self._data_server, period
                 )
-                log.info("cmd (MQTT): Boost → %s (period=%d): OK", self._boost_duration_sel, period)
-                await self._publish_cmd_result(
-                    f"Boost started: {self._boost_duration_sel} (period={period}): OK"
-                )
+                await self._report(f"Boost started: {self._boost_duration_sel} (period={period})", res)
 
             elif slug == "active_rule":
                 if payload in ("No Rule Set", "None"):
@@ -407,33 +416,18 @@ class MqttPublisher:
                             f"Active rule → {payload!r}: FAILED (unknown rule)"
                         )
                         return
-                # Build status_data from latest points
-                sd_fields = {
-                    "admin": 1, "customer": 1, "retailer": 1,
-                    "heaterStatus":              int(self._latest_points.get("sd.heaterStatus", 0)),
-                    "offpeakSwitcherStatus":      int(self._latest_points.get("sd.offpeakSwitcherStatus", 0)),
-                    "weatherSwitcherStatus":      int(self._latest_points.get("sd.weatherSwitcherStatus", 0)),
-                    "solarRestrictionSwitcherStatus": int(self._latest_points.get("sd.solarRestrictionSwitcherStatus", 0)),
-                    "priorityModeSwitcherStatus": int(self._latest_points.get("sd.priorityModeSwitcherStatus", 0)),
-                    "smartWeatherSwitcherStatus": int(self._latest_points.get("sd.smartWeatherSwitcherStatus", 0)),
-                    "offpeakTemperatureSwitcherStatus": int(self._latest_points.get("sd.offpeakTemperatureSwitcherStatus", 0)),
-                    "heater2SwitcherStatus":      int(self._latest_points.get("sd.heater2SwitcherStatus", 0)),
-                    "heaterPumpStatus":           int(self._latest_points.get("sd.heaterPumpStatus", 0)),
-                    "evStatus": 0,
-                }
-                await asyncio.to_thread(
-                    self._ep_client.update_device,
-                    self._device_id, sd_fields, rule_id
+                # energipays.com body: the device's current status_data with only
+                # rule_customer changed. Never forces admin/customer/retailer (#2).
+                res = await asyncio.to_thread(
+                    self._ep_client.activate_rule,
+                    self._device_id, rule_id, "command"
                 )
-                log.info("cmd (MQTT): Active rule → %r (%s): OK", payload, rule_id)
-                # Reflect immediately; confirmed state will arrive in next sample
-                await self._enqueue(
-                    ENTITY_BY_SLUG["active_rule"].state_topic(self._device_id),
-                    payload, retain=True
-                )
-                await self._publish_cmd_result(
-                    f"Active rule → {payload!r}: OK"
-                )
+                if await self._report(f"Active rule → {payload!r}", res):
+                    # Reflect immediately; confirmed state arrives with the next sample
+                    await self._enqueue(
+                        ENTITY_BY_SLUG["active_rule"].state_topic(self._device_id),
+                        payload, retain=True
+                    )
 
         except Exception as exc:
             log.error("Command handler error [%s]: %s", slug, exc)

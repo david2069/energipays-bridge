@@ -28,6 +28,7 @@ from .api.http_metrics import HttpMetrics, attach_metrics_hook
 from .api import http_metrics as http_metrics_api
 from .config.settings import BridgeSettings
 from .ha_supervisor import sync_supervisor_ha_instance
+from .device_lookup import resolve_device
 from .mqtt_lifecycle import reconfigure_mqtt
 from .poller import EnergipaysPoller
 from .sample import SampleBus
@@ -128,16 +129,16 @@ async def lifespan(app: FastAPI):
             log.info("Login OK")
             app.state.client = client
 
-            if not device_id:
-                try:
-                    resp = await asyncio.to_thread(client.devices)
-                    devs = resp if isinstance(resp, list) else resp.get("data", [])
-                    if devs:
-                        device_id = devs[0]["id"]
-                        data_server = devs[0].get("server", data_server)
-                        log.info("Auto-discovered device: %s", device_id)
-                except Exception as exc:
-                    log.warning("Device discovery failed: %s", exc)
+            # Look the device up even when its id is configured: its data server
+            # comes from the device list, not a hard-coded data-au-1 (#8).
+            try:
+                resp = await asyncio.to_thread(client.devices)
+                configured = device_id
+                device_id, data_server = resolve_device(resp, device_id, data_server)
+                if device_id and not configured:
+                    log.info("Auto-discovered device: %s", device_id)
+            except Exception as exc:
+                log.warning("Device discovery failed: %s", exc)
             app.state.device_id = device_id
             app.state.data_server = data_server
 
@@ -154,6 +155,7 @@ async def lifespan(app: FastAPI):
                 poller = EnergipaysPoller(
                     client, bus, device_id, data_server,
                     poll_interval=settings.poll_interval,
+                    tz=getattr(settings, "timezone", "Australia/Sydney"),
                 )
                 # Let the poller raise HA push notifications for stalls,
                 # sustained failures and recovery, without it having to know

@@ -111,7 +111,9 @@ def _btn(slug, name, icon="") -> EntityDef:
                      writable=True, icon=icon)
 
 
-BOOST_DURATION_OPTIONS = ["30 min", "1 hour", "2 hours"]
+# 1 h / 2 h / 3 h, as energipays.com offers them; the period values live in boost.py.
+from energipays_bridge.boost import DURATIONS as _DURATIONS
+BOOST_DURATION_OPTIONS = list(_DURATIONS)
 BOOST_POWER_MAP = {1: "25%", 2: "50%", 3: "75%", 4: "100%"}
 BOOST_POWER_OPTIONS = list(BOOST_POWER_MAP.values())
 BOOST_POWER_REVERSE = {v: k for k, v in BOOST_POWER_MAP.items()}

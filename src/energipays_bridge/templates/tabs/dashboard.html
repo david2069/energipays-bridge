@@ -187,8 +187,8 @@
             <img src="static/icons/devices/power-diverter.svg" class="w-4 h-4" alt="pd" style="filter:invert(1) opacity(0.7)"/>
             <span class="text-xs text-slate-300 dark:text-slate-300 switch-label">Power Diverter</span>
           </div>
-          <button @click="toggleDevice('customer', $store.app.points['sd.customer'])"
-                  :disabled="toggling === 'customer'"
+          <button @click="toggleDevice('status', $store.app.points['sd.customer'])"
+                  :disabled="toggling === 'status'"
                   class="relative w-10 h-5 rounded-full transition-colors duration-200 disabled:opacity-40 focus:outline-none shrink-0"
                   :class="$store.app.points['sd.customer'] == 1 ? 'bg-green-500' : 'bg-slate-600'">
             <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"
@@ -819,8 +819,8 @@
         <thead>
           <tr class="text-[10px] text-slate-500 border-b border-slate-700">
             <th class="text-left pb-1 font-normal">Period</th>
-            <th class="text-right pb-1 font-normal">Diverted kWh</th>
-            <th class="text-right pb-1 font-normal">Solar kWh</th>
+            <th class="text-right pb-1 font-normal">Diverted heater kWh</th>
+            <th class="text-right pb-1 font-normal">Diverted plug kWh</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800">
@@ -913,8 +913,8 @@
               <div class="text-[10px] text-slate-500"
                    x-text="$store.app.points['sd.customer'] == 1 ? 'Enabled' : 'Disabled'"></div>
             </div>
-            <button @click="toggleDevice('customer', $store.app.points['sd.customer'])"
-                    :disabled="toggling === 'customer'"
+            <button @click="toggleDevice('status', $store.app.points['sd.customer'])"
+                    :disabled="toggling === 'status'"
                     class="relative w-10 h-5 rounded-full transition-colors duration-200 disabled:opacity-40 focus:outline-none shrink-0"
                     :class="$store.app.points['sd.customer'] == 1 ? 'bg-green-500' : 'bg-slate-600'">
               <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"

@@ -92,7 +92,7 @@ def _die(msg: str) -> None:
 
 BOOST_POWER_MAP = {25: 1, 50: 2, 75: 3, 100: 4}   # % → API index
 BOOST_POWER_LABEL = {1: "25%", 2: "50%", 3: "75%", 4: "100%"}
-BOOST_PERIOD_LABEL = {1: "30 min", 2: "1 hour", 3: "2 hours"}
+from .boost import PERIOD_LABEL as BOOST_PERIOD_LABEL  # 2=1h 3=2h 4=3h
 
 
 # ── subcommands ───────────────────────────────────────────────────────────────
@@ -246,9 +246,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # boost start
     bs_p = b_sub.add_parser("start", help="trigger a manual boost")
-    bs_p.add_argument("--period", "-p", type=int, choices=[1, 2, 3], default=2,
-                      metavar="{1,2,3}",
-                      help="duration: 1=30min, 2=1h (default), 3=2h")
+    bs_p.add_argument("--period", "-p", type=int, choices=[2, 3, 4], default=2,
+                      metavar="{2,3,4}",
+                      help="period as energipays.com sends it: 2=1h (default), 3=2h, 4=3h")
     bs_p.add_argument("--power", "-w", type=int, choices=[25, 50, 75, 100],
                       default=None, metavar="{25,50,75,100}",
                       help="power %% — sets device setting before boosting; "
