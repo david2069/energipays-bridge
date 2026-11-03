@@ -38,6 +38,11 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
     elif isinstance(device_status, list) and device_status:
         status = device_status[0] if isinstance(device_status[0], dict) else {}
 
+    # is_online is top-level on the device-status entry (per the response shape
+    # above); fall back to the telemetry dict only if it is not there (#8).
+    if status.get("is_online") is not None:
+        points["is_online"] = status.get("is_online")
+
     # Live telemetry sits under status["status"] (a dict), NOT status itself
     # which may also have status=1 (int) for device on/off.
     _s = status.get("status")
@@ -58,7 +63,7 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
         "is_online", "boostAntibacterialTime", "boost_power", "errors",
     ):
         val = td.get(key)
-        if val is not None:
+        if val is not None and key not in points:
             points[key] = val
 
     # Normalise LoRa signal — API uses signalLoRa, signalLora, or signalloRa across firmwares
@@ -103,11 +108,14 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
 
     # --- statistics fields ---
     if isinstance(statistics, dict):
-        for period_key in ("today", "yesterday", "week", "last7days", "last14days"):
+        # energipays.com's "Last 14 days" is the ``fortnight`` bucket (#4); the
+        # point prefix stays last14days so stored history and the UI keep working.
+        for period_key, prefix in (("today", "today"), ("yesterday", "yesterday"),
+                                   ("week", "week"), ("last7days", "last7days"),
+                                   ("fortnight", "last14days")):
             period = statistics.get(period_key) or {}
             if not isinstance(period, dict):
                 continue
-            prefix = period_key
             for stat_key in ("EEct", "IEct", "DE_h", "DE_e", "OIE_h",
                               "IEct_max", "IEct_min", "IEct_avg"):
                 val = period.get(stat_key)
@@ -198,23 +206,31 @@ def _flatten(device_status: dict, statistics: dict, device_profile: dict | None 
                 points["dev.latitude"] = lat
                 points["dev.longitude"] = lng
 
-        # User identity + location (stable, logged-in user)
+        # Logged-in user: only the name and email the profile menu shows. The
+        # address, city, state, country, postcode and phone are never stored:
+        # points end up in logs, exports and bug reports (#7).
         user = prof.get("user") or {}
         if isinstance(user, dict) and user.get("email"):
             points["user.email"] = user["email"]
             points["user.name"] = f"{user.get('name','')} {user.get('last_name','')}".strip()
-            for field in ("address", "city", "state", "country", "zip", "phone_number"):
-                val = user.get(field)
-                if val is not None:
-                    points[f"user.{field}"] = val
 
     return points
 
 
+def _cloud_error(result: object) -> str:
+    """The error text if an energipays-client call returned an error dict, else ''."""
+    if isinstance(result, dict) and ("error" in result or "error_decrypted" in result):
+        return str(result.get("error_decrypted") or result.get("body")
+                   or result.get("error"))[:200]
+    return ""
+
+
 class EnergipaysPoller:
     def __init__(self, client: "EnergipaysClient", bus: SampleBus,
-                 device_id: str, data_server: str, poll_interval: int = 60) -> None:
+                 device_id: str, data_server: str, poll_interval: int = 60,
+                 tz: str = "Australia/Sydney") -> None:
         self._client = client
+        self._tz = tz
         self._bus = bus
         self._device_id = device_id
         self._data_server = data_server
@@ -352,9 +368,22 @@ class EnergipaysPoller:
         try:
             device_status, statistics, device_profile = await asyncio.gather(
                 asyncio.to_thread(self._client.device_status, [self._device_id]),
-                asyncio.to_thread(self._client.statistics, self._device_id, self._data_server),
+                asyncio.to_thread(self._client.statistics, self._device_id,
+                                  self._data_server, self._tz),
                 asyncio.to_thread(self._client.device, self._device_id),
             )
+            # The client returns an error dict rather than raising. A failed status
+            # read is a failed poll; a failed statistics or profile read is logged
+            # and left out, so it can't be counted as fresh data (#8).
+            err = _cloud_error(device_status)
+            if err:
+                raise RuntimeError(f"device status: {err}")
+            for name, part in (("statistics", statistics), ("profile", device_profile)):
+                perr = _cloud_error(part)
+                if perr:
+                    log.warning("Poll: %s read failed (%s); left out of this sample", name, perr)
+            statistics = None if _cloud_error(statistics) else statistics
+            device_profile = None if _cloud_error(device_profile) else device_profile
             points = _flatten(device_status, statistics, device_profile)
             was_stalled, failures = self.stalled, self.consecutive_failures
             self.connected = True

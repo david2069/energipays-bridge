@@ -23,7 +23,7 @@ COPY src/ src/
 # Bump the SHA whenever energipays-client main moves.
 RUN pip install --no-cache-dir -e . \
  && pip install --no-cache-dir requests pycryptodome \
- && pip install --no-cache-dir git+https://github.com/david2069/energipays-client.git@27dcc2322543c4067607fcb98107ccfd85557a8b
+ && pip install --no-cache-dir git+https://github.com/david2069/energipays-client.git@adb08c070426f0646dd724a1ffea7b6a5d3c9a03
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

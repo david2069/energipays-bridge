@@ -24,6 +24,7 @@ class IntegrationRegistry:
         self.bus = bus
         self._pollers: dict[str, object] = {}   # id → poller instance
         self.latest: dict[str, object] = {}      # merged ext.* points
+        self._keys: dict[str, set[str]] = {}     # id → ext.* keys it produced (#10)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -59,6 +60,11 @@ class IntegrationRegistry:
         return row
 
     async def update(self, row_id: str, data: dict) -> dict | None:
+        # A body without "enabled" keeps the stored state; it used to re-enable a
+        # disabled integration (#10).
+        if "enabled" not in data or data.get("enabled") is None:
+            current = await self._fetch_one(row_id)
+            data = {**data, "enabled": bool(current and current["enabled"])}
         await self._stop_one(row_id)
         await self.db.execute(
             """UPDATE integrations SET name=?, type=?, protocol=?, config=?, mappings=?, enabled=?
@@ -128,7 +134,11 @@ class IntegrationRegistry:
 
     async def _start_one(self, row: dict) -> None:
         await self._stop_one(row["id"])
-        poller = _build_poller(row, self.bus, self._on_sample)
+        rid = row["id"]
+
+        async def on_sample(sample, rid=rid):
+            await self._on_sample(rid, sample)
+        poller = _build_poller(row, self.bus, on_sample)
         if poller is None:
             return
         self._pollers[row["id"]] = poller
@@ -138,8 +148,15 @@ class IntegrationRegistry:
         poller = self._pollers.pop(row_id, None)
         if poller:
             await _stop_poller(poller)
+        # A stopped integration's last values must not keep being served as live
+        # (#10): drop the keys only it produced.
+        keys = self._keys.pop(row_id, set())
+        still_live = set().union(*self._keys.values()) if self._keys else set()
+        for k in keys - still_live:
+            self.latest.pop(k, None)
 
-    async def _on_sample(self, sample) -> None:
+    async def _on_sample(self, row_id: str, sample) -> None:
+        self._keys.setdefault(row_id, set()).update(sample.points)
         self.latest.update(sample.points)
 
 

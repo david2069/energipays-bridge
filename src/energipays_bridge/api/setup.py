@@ -16,6 +16,8 @@ from pydantic import BaseModel
 
 from ..store.credentials import has_credentials, load_credentials, save_credentials
 
+from ..privacy import mask_email
+
 log = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -31,7 +33,7 @@ class AesKeyBody(BaseModel):
 
 async def _test_login(email: str, password: str) -> dict:
     """Try to log in; return {"ok": True, "user": {...}} or {"ok": False, "error": "..."}."""
-    log.info("auth: attempting login for %s", email)
+    log.info("auth: attempting login for %s", mask_email(email))
     try:
         from energipays import EnergipaysClient
         client = EnergipaysClient(email=email, password=password, auto_login=False)
@@ -43,17 +45,17 @@ async def _test_login(email: str, password: str) -> dict:
         token = resp.get("access_token") or resp.get("token") or resp.get("accessToken")
         if not token:
             msg = resp.get("message") or resp.get("error") or "Login failed — check your credentials"
-            log.warning("auth: login rejected for %s — %s", email, msg)
+            log.warning("auth: login rejected for %s — %s", mask_email(email), msg)
             return {"ok": False, "error": str(msg)}
         log.info("auth: Bearer token acquired (expires in ~300s)")
         log.debug("auth: fetching user profile to confirm identity")
         me = await asyncio.to_thread(client.me)
         name = me.get("name", "")
         confirmed_email = me.get("email", email)
-        log.info("auth: login confirmed — user=%s <%s>", name, confirmed_email)
+        log.info("auth: login confirmed — <%s>", mask_email(confirmed_email))
         return {"ok": True, "user": {"name": name, "email": confirmed_email}}
     except Exception as exc:
-        log.error("auth: login error for %s — %s", email, exc)
+        log.error("auth: login error for %s — %s", mask_email(email), exc)
         return {"ok": False, "error": str(exc)}
 
 
@@ -265,12 +267,12 @@ async def setup_save(body: CredentialsBody, request: Request) -> dict:
 
     db = request.app.state.db
     settings = request.app.state.settings
-    log.info("setup: login verified — saving encrypted credentials for %s", body.email)
+    log.info("setup: login verified — saving encrypted credentials for %s", mask_email(body.email))
     await save_credentials(db, settings.data_path, body.email, body.password)
 
     # Start the poller if it isn't running yet
     if not request.app.state.poller:
-        log.info("setup: starting poller for %s", body.email)
+        log.info("setup: starting poller for %s", mask_email(body.email))
         await _start_poller(request, body.email, body.password)
 
     return result
@@ -283,28 +285,22 @@ async def _start_poller(request: Request, email: str, password: str) -> None:
     from ..store.metrics import MetricsRecorder
 
     settings = request.app.state.settings
-    log.debug("poller-init: creating EnergipaysClient for %s", email)
+    log.debug("poller-init: creating EnergipaysClient for %s", mask_email(email))
     client = EnergipaysClient(email=email, password=password, auto_login=False)
     log.info("poller-init: re-authenticating to obtain fresh Bearer token")
     await asyncio.to_thread(client.login)
     log.info("poller-init: authentication OK")
 
-    # Auto-discover device
+    # Find the device and its data server (also for a configured device id, #8)
+    from ..device_lookup import resolve_device
     device_id = settings.energipays_device_id
     data_server = "https://data-au-1.energipays.com"
-    if not device_id:
-        log.info("poller-init: no device_id configured — auto-discovering from account")
-        try:
-            resp = await asyncio.to_thread(client.devices)
-            devs = resp if isinstance(resp, list) else resp.get("data", [])
-            if devs:
-                device_id = devs[0]["id"]
-                data_server = devs[0].get("server", data_server)
-                log.info("poller-init: discovered device_id=%s data_server=%s", device_id, data_server)
-            else:
-                log.warning("poller-init: no devices returned from account")
-        except Exception as exc:
-            log.warning("poller-init: device discovery failed — %s", exc)
+    try:
+        resp = await asyncio.to_thread(client.devices)
+        device_id, data_server = resolve_device(resp, device_id, data_server)
+        log.info("poller-init: device_id=%s data_server=%s", device_id, data_server)
+    except Exception as exc:
+        log.warning("poller-init: device discovery failed — %s", exc)
 
     if not device_id:
         log.warning("poller-init: cannot start poller — no device found")
@@ -322,6 +318,7 @@ async def _start_poller(request: Request, email: str, password: str) -> None:
     poller = EnergipaysPoller(
         client, bus, device_id, data_server,
         poll_interval=settings.poll_interval,
+        tz=getattr(settings, "timezone", "Australia/Sydney"),
     )
     await poller.start()
     request.app.state.poller = poller

@@ -31,8 +31,4 @@ async def latest_points(request: Request) -> dict:
         "device_timezone": pts.get("dev.timezone", ""),
         "device_lat": pts.get("dev.latitude"),
         "device_lon": pts.get("dev.longitude"),
-        "user_address": pts.get("user.address", ""),
-        "user_city": pts.get("user.city", ""),
-        "user_state": pts.get("user.state", ""),
-        "user_country": pts.get("user.country", ""),
     }

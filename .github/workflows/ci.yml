@@ -24,7 +24,7 @@ jobs:
       - name: Install  # client pin: keep in step with the Dockerfile
         run: |
           python -m pip install --upgrade pip
-          pip install "git+https://github.com/david2069/energipays-client.git@27dcc2322543c4067607fcb98107ccfd85557a8b" && pip install -e .
+          pip install "git+https://github.com/david2069/energipays-client.git@adb08c070426f0646dd724a1ffea7b6a5d3c9a03" && pip install -e ".[test]"
       - name: Import smoke (offline)
         run: python -c "import energipays_bridge.main; print(\"import OK\")"
       - name: Tests
