@@ -1,3 +1,17 @@
+## [Unreleased]
+
+### Changed
+- The sign-in step of the setup wizard and Settings → Account now say the bridge is
+  unofficial and link to the Energipays privacy policy, since it signs in to
+  energipays.com as you.
+- Licensed under MIT with Additional Terms (`LICENSE`): unofficial, not affiliated with
+  Power Diverter Pty Ltd (Energipays), and the Energipays API or service may change or end
+  at any time.
+
+### Security
+- The add-on metadata (`build.yaml`, `repository.json`) names the maintainer by GitHub
+  handle, and example addresses in the UI use documentation IPs (`192.0.2.x`).
+
 ## 1.1.11 — The bridge can no longer fail in silence
 
 The HA add-on stopped polling Energipays on 24 Sep at 00:45 and said nothing
