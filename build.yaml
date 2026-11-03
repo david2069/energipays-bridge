@@ -11,7 +11,7 @@ labels:
   io.hass.arch: "{arch}"
   io.hass.type: "addon"
   io.hass.version: "{version}"
-  maintainer: "David Hona <david.hona@gmail.com>"
+  maintainer: "david2069 <david2069@users.noreply.github.com>"
   org.opencontainers.image.title: "Energipays Bridge"
   org.opencontainers.image.description: "Energipays Sunamp hot water device bridge for Home Assistant"
   org.opencontainers.image.source: "https://github.com/david2069/energipays-bridge"

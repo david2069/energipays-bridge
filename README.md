@@ -2,9 +2,20 @@
 
 An **unofficial** locally self-hosted integration for [Energipays](https://energipays.com) PowerDiverter - a Solar PV panel power diverter for hot water devices.
 
-NOTE: This software package is **NOT affilated with Energipays and is provided "as is" with NO warranty, NO support nor is acknowledged or endorsed nor is it any way approved for use by the vendor**. Any use is at your own risk and without any support by the author(s) nor Engeripays.
-
-This software was developed by reverse engineering the web portal and as such my cease to work at any time. This may be due to changes imposed by Energipays and/or should the Cloud service no longer be available in it's current form. 
+> **Unofficial — not affiliated with Energipays.** This software is not affiliated with,
+> endorsed by, approved by, or supported by Power Diverter Pty Ltd, the operator of
+> [Energipays](https://energipays.com). It is provided "as is", with no warranty and no
+> support from the author(s) or from Energipays. Use it at your own risk.
+>
+> It uses the private, undocumented API behind the energipays.com website, worked out by
+> reverse-engineering that site. Power Diverter Pty Ltd may change or block that API, or
+> change or terminate the Energipays service, at any time and without notice, and this
+> software may then stop working.
+>
+> It signs in with your own Energipays account, so your use remains subject to their terms
+> and their [privacy policy](https://energipays.com/privacy-policy). Do not contact
+> Energipays support about this software; raise issues on
+> [GitHub](https://github.com/david2069/energipays-bridge/issues). See [LICENSE](LICENSE).
 
 Connects to the Energipays cloud API, stores metrics locally in SQLite, and serves a responsive web UI with live data, historical analytics, automation rule management, device controls, and push notifications via Home Assistant.
 
@@ -91,7 +102,7 @@ LOG_LEVEL=INFO
 
 # Optional: MQTT Discovery (remove # to enable)
 # MQTT_ENABLED=true
-# MQTT_HOST=192.168.0.1
+# MQTT_HOST=192.0.2.1
 # MQTT_PORT=1883
 # MQTT_USERNAME=
 # MQTT_PASSWORD=
