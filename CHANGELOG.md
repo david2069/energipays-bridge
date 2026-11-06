@@ -1,11 +1,15 @@
 ## [Unreleased]
 
+## 1.2.0 — Cloud parity: boost, rules, statistics and labels match energipays.com
+
 ### Fixed
-- **Activating a rule works again, and no longer switches the diverter on.** The web UI
-  sent a body the cloud rejects (HTTP 500); MQTT sent the full device state but forced
-  `admin`, `customer` and `retailer` to 1. Both now send what energipays.com sends: the
-  device's current state with only that circuit's rule changed. A device in a group is
-  refused with a clear message (#2).
+- **Activating a rule sends what energipays.com sends, and no longer switches the
+  diverter on.** The web UI sent a short body; MQTT sent the full device state but forced
+  `admin`, `customer` and `retailer` to 1. Both now send the device's current state with
+  only that circuit's rule changed. A device in a group is refused with a clear message (#2).
+  **Known cloud fault (2026-11-07):** the cloud answers this request with "Server Error",
+  for energipays.com too, after saving the choice. The bridge reports the error; the rule
+  may still show as selected.
 - **3 h boost works.** The 3 h button sends period 4, as energipays.com does; the bridge
   refused it. UI, REST, MQTT and CLI share one table (1 h = 2, 2 h = 3, 3 h = 4). The HA
   "Boost Duration" select now offers 1 / 2 / 3 hours; its old "30 min" sent the value
