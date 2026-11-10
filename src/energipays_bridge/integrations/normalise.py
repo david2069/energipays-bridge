@@ -83,7 +83,8 @@ _ALIASES: dict[str, dict[str, str]] = {
     "battery_state": {"idle": "standby", "standby": "standby",
                       "charge": "charging", "discharge": "discharging"},
     "operating_mode": {"tou": "time_of_use", "time of use": "time_of_use",
-                       "self consumption": "self_consumption", "backup": "emergency_backup"},
+                       "self consumption": "self_consumption", "backup": "emergency_backup",
+                       "self": "self_consumption"},   # DC bridge mode keys tou/self/backup
 }
 
 

@@ -3,24 +3,15 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from ..sample import SampleBus
 from .base import publish_points
 from .models import FieldMapping
 from .normalise import convert
+from .rest_poller import _dotpath   # one path syntax for every protocol
 from .secret_store import scrub_own
 
 log = logging.getLogger(__name__)
-
-
-def _dotpath(obj: Any, path: str) -> Any:
-    for key in path.split("."):
-        if isinstance(obj, dict):
-            obj = obj.get(key)
-        else:
-            return None
-    return obj
 
 
 class MqttSubscriber:

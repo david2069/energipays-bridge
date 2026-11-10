@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- **Presets for known sources.** When adding an integration you can start from the
+  FranklinWH Modbus Bridge (MQTT), the FranklinWH Direct Connect Bridge (MQTT or REST) or
+  the Modbus Bridge (SunSpec, MQTT or REST). Fill in the gateway, serial or device id, and
+  the keys, units, signs and state names are set for you. The form asks you to confirm
+  them with Test. The FranklinWH Modbus Bridge has no REST preset: its REST API needs a
+  login session this bridge can't keep (#15).
+- REST and MQTT paths can reach keys that contain dots, such as `points.714.DCW.value` (#15).
 - **Mapping editor: sign and value map per mapping.** Battery and grid power mappings
   have a "Positive value at the source means" choice (Discharge/Charge, Import/Export),
   with a hint on how to check it. State mappings have a "Source value → state" table,

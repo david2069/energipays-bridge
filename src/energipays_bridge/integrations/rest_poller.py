@@ -15,15 +15,29 @@ log = logging.getLogger(__name__)
 
 
 def _dotpath(obj: Any, path: str) -> Any:
-    """Traverse a nested dict using a dot-separated path. Returns None if missing."""
-    for key in path.split("."):
+    """Traverse nested dicts/lists by a dot-separated path. Returns None if missing.
+
+    Keys may themselves contain dots (modbus-bridge points are keyed "714.DCW",
+    "label.home_load_power"): at each level the longest run of segments that is a key
+    wins, so "points.714.DCW.value" finds points["714.DCW"]["value"] (#15).
+    """
+    parts = path.split(".")
+    i = 0
+    while i < len(parts):
         if isinstance(obj, dict):
-            obj = obj.get(key)
+            for j in range(len(parts), i, -1):
+                key = ".".join(parts[i:j])
+                if key in obj:
+                    obj, i = obj[key], j
+                    break
+            else:
+                return None
         elif isinstance(obj, list):
             try:
-                obj = obj[int(key)]
+                obj = obj[int(parts[i])]
             except (ValueError, IndexError):
                 return None
+            i += 1
         else:
             return None
     return obj

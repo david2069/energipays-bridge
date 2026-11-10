@@ -12,6 +12,7 @@ from ..integrations.modbus_poller import _parse_source, read_registers, _REG_COU
 from ..integrations.rest_poller import RestPoller, _extract_mappings, _dotpath
 from ..integrations.normalise import SIGNED_METRICS, STATE_LABELS, convert
 from ..integrations.secret_store import scrub
+from ..integrations.presets import apply as apply_preset_values, list_presets
 
 router = APIRouter(prefix="/api/integrations")
 log = logging.getLogger(__name__)
@@ -32,6 +33,23 @@ async def labels() -> dict:
     """The internal convention, for the UI: signed metrics and state labels (#15)."""
     return {"signed": {k: list(v) for k, v in SIGNED_METRICS.items()},
             "states": STATE_LABELS}
+
+
+@router.get("/presets")
+async def presets() -> list[dict]:
+    """Known sources with their reported keys, signs and value maps (#15)."""
+    return list_presets()
+
+
+@router.post("/presets/{preset_id}/apply")
+async def apply_preset(preset_id: str, values: dict[str, str]) -> dict:
+    """The preset with placeholders filled — for the form; nothing is saved."""
+    try:
+        return apply_preset_values(preset_id, values)
+    except KeyError:
+        raise HTTPException(404, "Unknown preset")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
 
 
 def _registry(request: Request):
