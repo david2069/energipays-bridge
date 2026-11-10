@@ -1,11 +1,22 @@
 ## [Unreleased]
 
+### Added
+- **SunSpec discovery offers the aGate's FranklinWH registers:** operating mode, Self
+  and TOU reserve, total solar and home load. These are the Battery-tab rows that had
+  no source over Modbus. Hover over a model to see each point. On firmware
+  V10R01B04D00 the TOU reserve register repeats the Self reserve (#15).
+- **The FranklinWH Modbus Bridge MQTT preset also maps** the Self and TOU reserve,
+  capacity, inverter state and temperatures (#15).
+
 ### Fixed
 - **Battery State no longer shows a raw number such as `-3`.** When an integration's
   source sends a state value the bridge doesn't recognise, the dashboard no longer shows
   it. Battery State then comes from battery power (charging, discharging or standby).
   The integration's card says "Unmapped battery_state value -3: add a value map", and
   Test marks the value as unmapped (#30).
+- **SunSpec discovery on a FranklinWH aGate suggests M701 W as grid power** (+ import /
+  − export), as the franklinwh-modbus library documents. It suggested it as solar power.
+  Other devices are unchanged (#15).
 
 ## 1.3.0 — One sign and state mapping for every integration; secrets encrypted
 

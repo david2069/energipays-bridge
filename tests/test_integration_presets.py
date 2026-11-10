@@ -91,6 +91,17 @@ def test_fwh_modbus_bridge_mqtt_kw_text_states():
                    "battery_grid_status": "off_grid"}
 
 
+def test_fwh_modbus_bridge_mqtt_battery_tab_fields():
+    # values as published by that bridge's Demo gateway, seen live 2026-11-10
+    t = "fwh_mb/abcd1234/"
+    out = _mqtt("fwh-modbus-bridge-mqtt", {
+        t + "control/self_reserve_pct": "20", t + "control/tou_reserve_pct": "30",
+        t + "capacity/total_capacity_kwh": "13.600", t + "status/inverter_state": "Running",
+        t + "status/ambient_temp_c": "25.5", t + "status/cabinet_temp_c": "32.4"})
+    assert out == {"self_reserve_soc": 20, "tou_reserve_soc": 30, "battery_capacity_kwh": 13.6,
+                   "inverter_state": "running", "ambient_temp_c": 25.5, "cabinet_temp_c": 32.4}
+
+
 def test_dc_bridge_mqtt_flat_json_payload():
     payload = json.dumps({"battery_w": 1800, "grid_w": -250, "soc": 71, "mode": "Self-Consumption",
                           "battery_status": "discharging", "status_grid_status": "Outage"})

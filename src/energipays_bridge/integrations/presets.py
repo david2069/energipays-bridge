@@ -54,6 +54,13 @@ PRESETS: list[dict[str, Any]] = [
             {"source": "{prefix}/{short_id}/status/operating_mode_sensor", "target_metric": "operating_mode"},
             {"source": "{prefix}/{short_id}/status/grid_connection_state", "target_metric": "battery_grid_status",
              "value_map": _MB_GRID},
+            # Topics seen live on that bridge's Demo gateway, 2026-11-10 (#15 phase D)
+            {"source": "{prefix}/{short_id}/control/self_reserve_pct", "target_metric": "self_reserve_soc"},
+            {"source": "{prefix}/{short_id}/control/tou_reserve_pct", "target_metric": "tou_reserve_soc"},
+            {"source": "{prefix}/{short_id}/capacity/total_capacity_kwh", "target_metric": "battery_capacity_kwh"},
+            {"source": "{prefix}/{short_id}/status/inverter_state", "target_metric": "inverter_state"},
+            {"source": "{prefix}/{short_id}/status/ambient_temp_c", "target_metric": "ambient_temp_c"},
+            {"source": "{prefix}/{short_id}/status/cabinet_temp_c", "target_metric": "cabinet_temp_c"},
         ],
     },
     {
