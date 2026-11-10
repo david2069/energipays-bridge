@@ -104,11 +104,13 @@ def test_fwh_modbus_bridge_mqtt_battery_tab_fields():
 
 def test_dc_bridge_mqtt_flat_json_payload():
     payload = json.dumps({"battery_w": 1800, "grid_w": -250, "soc": 71, "mode": "Self-Consumption",
-                          "battery_status": "discharging", "status_grid_status": "Outage"})
+                          "battery_status": "discharging", "status_grid_status": "Outage",
+                          "reserve_self_pct": 20, "reserve_tou_pct": 30})
     out = _mqtt("dc-bridge-mqtt", {"franklinwh-local/fwh00000000/state": payload})
+    # battery_status (sign only, no deadband) is left to this bridge's 50 W derivation
     assert out == {"battery_power_w": 1800, "grid_power_w": -250, "battery_soc": 71,
-                   "operating_mode": "self_consumption", "battery_state": "discharging",
-                   "battery_grid_status": "off_grid"}
+                   "operating_mode": "self_consumption", "battery_grid_status": "off_grid",
+                   "self_reserve_soc": 20, "tou_reserve_soc": 30}
 
 
 def test_dc_bridge_simulated_off_grid_is_not_reported_as_off_grid():
@@ -123,6 +125,45 @@ def test_dc_bridge_rest_summary_and_mode_keys():
     out = _extract_mappings(data, maps)
     assert out == {"battery_power_w": -600, "grid_power_w": 1200, "battery_soc": 40,
                    "operating_mode": "self_consumption"}
+
+
+@pytest.mark.parametrize("off_grid,kind,want", [
+    (False, None, "on_grid"),
+    (True, "outage", "off_grid"),
+    (True, "simulated", "simulated"),     # unmapped on purpose: never shown as off grid
+    (True, None, True),                   # islanded, kind unread: unmapped, not shown
+])
+def test_dc_bridge_rest_grid_connection(off_grid, kind, want):
+    from energipays_bridge.integrations.normalise import is_unmapped
+    data = {"power": {"off_grid": off_grid, "off_grid_kind": kind}}
+    maps = [FieldMapping(**m) for m in filled("dc-bridge-rest")["mappings"]]
+    got = _extract_mappings(data, maps)["battery_grid_status"]
+    assert got == want
+    assert is_unmapped("battery_grid_status", got) == (want not in ("on_grid", "off_grid"))
+
+
+def test_modbus_bridge_rest_battery_tab_fields():
+    pts = {"701.W": -812, "label.battery_reserve_self": 20, "label.battery_reserve_tou": 30,
+           "713.SoH": 96, "713.WHRtg": 13600, "713.WHAvail": 7000, "701.InvSt": 3,
+           "701.TmpAmb": 25.5, "701.TmpCab": 32.4, "label.grid_connection_status": "on_grid"}
+    data = {"points": {k: {"value": v} for k, v in pts.items()}}
+    maps = [FieldMapping(**m) for m in filled("modbus-bridge-rest")["mappings"]]
+    out = _extract_mappings(data, maps)
+    assert {k: out[k] for k in ("grid_power_w", "self_reserve_soc", "tou_reserve_soc", "battery_soh",
+                                "battery_capacity_kwh", "energy_available_kwh", "inverter_state",
+                                "ambient_temp_c", "cabinet_temp_c", "battery_grid_status")} == {
+        "grid_power_w": -812, "self_reserve_soc": 20, "tou_reserve_soc": 30, "battery_soh": 96,
+        "battery_capacity_kwh": 13.6, "energy_available_kwh": 7.0, "inverter_state": "running",
+        "ambient_temp_c": 25.5, "cabinet_temp_c": 32.4, "battery_grid_status": "on_grid"}
+
+
+def test_modbus_bridge_mqtt_name_text_and_codes():
+    s = "modbus_bridge/sn0001/"
+    out = _mqtt("modbus-bridge-mqtt", {s + "m701_invst/state": "SHUTTING_DOWN",
+                                       s + "label_grid_connection_status/state": "3",
+                                       s + "m713_whrtg/state": "13600"})
+    assert out == {"inverter_state": "shutting_down", "battery_grid_status": "off_grid",
+                   "battery_capacity_kwh": 13.6}
 
 
 def test_modbus_bridge_rest_dotted_point_keys():

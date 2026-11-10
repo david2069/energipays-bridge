@@ -7,6 +7,13 @@
   V10R01B04D00 the TOU reserve register repeats the Self reserve (#15).
 - **The FranklinWH Modbus Bridge MQTT preset also maps** the Self and TOU reserve,
   capacity, inverter state and temperatures (#15).
+- **The FranklinWH Direct Connect Bridge presets map grid connection and reserves.**
+  REST: on grid or off grid (an outage). MQTT: the Self and TOU reserve. A simulated
+  off-grid test is never shown as off grid. Battery state for MQTT now uses the same 50 W
+  standby band as every other source (#15).
+- **The Modbus Bridge (SunSpec) presets map** grid power, Self and TOU reserve, SoH,
+  capacity, energy available, inverter state, temperatures and grid connection. Grid
+  power's sign is not yet measured on that source, so check it with Test (#15).
 
 ### Fixed
 - **Battery State no longer shows a raw number such as `-3`.** When an integration's

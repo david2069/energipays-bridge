@@ -15,6 +15,18 @@ Sources (claims by the sibling sessions, 2026-11-10, recorded on #15):
   status_grid_status Connected/SimulatedOffGrid/Outage/OffGrid.
 - modbus-bridge (generic SunSpec, unpublished): REST points.{key}.value, 714.DCW +discharge,
   label.battery_operating_mode 1/2/3, label.battery_inverter_state.
+
+Battery-tab coverage (plan F2, claims by the same sessions, 2026-11-11, from their code):
+- DC bridge 0.5.39: off_grid is true for any island, including SimulatedOffGrid
+  (client.py:897-929); off_grid_kind is "simulated" | "outage" | null (client.py:940-960).
+  MQTT reserve_self_pct / reserve_tou_pct (entities.py:308-314). Its MQTT battery_status is
+  the sign of battery_w with no deadband (entities.py:322-326), so the presets leave battery
+  state to this bridge's 50 W derivation. SoH, capacity and energy available are not in its
+  summary or state payload; REST reserves sit in a list (mode.modes[]) a path can't select.
+- modbus-bridge: label.battery_reserve_self/tou, 713.SoH/WHRtg/WHAvail, 701.InvSt
+  (REST number, MQTT name text), 701.TmpAmb/TmpCab, label.grid_connection_status
+  (franklinwh.json:138). 701.W as grid power + import follows franklinwh-modbus
+  docs/API_COOKBOOK.md; modbus-bridge has no measurement of its sign, so confirm with Test.
 """
 from __future__ import annotations
 
@@ -23,6 +35,13 @@ from typing import Any
 # DC bridge grid status → bridge grid connection. SimulatedOffGrid is a test mode the
 # DC bridge reports while the grid is in fact present, so it is not mapped to off_grid.
 _DC_GRID = {"Connected": "on_grid", "OffGrid": "off_grid", "Outage": "off_grid"}
+# REST: off_grid false → on grid; off_grid_kind "outage" → off grid (a later mapping wins).
+# "simulated" is left unmapped on purpose.
+_DC_OFF_GRID = {"false": "on_grid"}
+_DC_OFF_GRID_KIND = {"outage": "off_grid"}
+
+# modbus-bridge label.grid_connection_status: text ids, or the 15016 codes behind them
+_MB2_GRID = {"1": "restarting", "2": "on_grid", "3": "off_grid", "6": "dispatch_active"}
 
 # franklinwh-modbus-bridge grid connection text → bridge state
 _MB_GRID = {"Connected": "on_grid", "Disconnected": "off_grid"}
@@ -79,10 +98,11 @@ PRESETS: list[dict[str, Any]] = [
             {"source": "franklinwh-local/{node}/state:load_w", "target_metric": "home_load_w"},
             {"source": "franklinwh-local/{node}/state:generator_w", "target_metric": "extra_load_w"},
             {"source": "franklinwh-local/{node}/state:soc", "target_metric": "battery_soc"},
-            {"source": "franklinwh-local/{node}/state:battery_status", "target_metric": "battery_state"},
             {"source": "franklinwh-local/{node}/state:mode", "target_metric": "operating_mode"},
             {"source": "franklinwh-local/{node}/state:status_grid_status", "target_metric": "battery_grid_status",
              "value_map": _DC_GRID},
+            {"source": "franklinwh-local/{node}/state:reserve_self_pct", "target_metric": "self_reserve_soc"},
+            {"source": "franklinwh-local/{node}/state:reserve_tou_pct", "target_metric": "tou_reserve_soc"},
         ],
     },
     {
@@ -103,6 +123,9 @@ PRESETS: list[dict[str, Any]] = [
             {"source": "power.generator_w", "target_metric": "extra_load_w"},
             {"source": "power.soc", "target_metric": "battery_soc"},
             {"source": "power.mode", "target_metric": "operating_mode"},
+            {"source": "power.off_grid", "target_metric": "battery_grid_status", "value_map": _DC_OFF_GRID},
+            {"source": "power.off_grid_kind", "target_metric": "battery_grid_status",
+             "value_map": _DC_OFF_GRID_KIND},
         ],
     },
     {
@@ -120,6 +143,17 @@ PRESETS: list[dict[str, Any]] = [
             {"source": "points.label.solar_total_power.value", "target_metric": "solar_power_w"},
             {"source": "points.label.battery_operating_mode.value", "target_metric": "operating_mode",
              "value_map": {"1": "emergency_backup", "2": "self_consumption", "3": "time_of_use"}},
+            {"source": "points.701.W.value", "target_metric": "grid_power_w", "positive": "import"},
+            {"source": "points.label.battery_reserve_self.value", "target_metric": "self_reserve_soc"},
+            {"source": "points.label.battery_reserve_tou.value", "target_metric": "tou_reserve_soc"},
+            {"source": "points.713.SoH.value", "target_metric": "battery_soh"},
+            {"source": "points.713.WHRtg.value", "target_metric": "battery_capacity_kwh", "scale": 0.001},
+            {"source": "points.713.WHAvail.value", "target_metric": "energy_available_kwh", "scale": 0.001},
+            {"source": "points.701.InvSt.value", "target_metric": "inverter_state"},
+            {"source": "points.701.TmpAmb.value", "target_metric": "ambient_temp_c"},
+            {"source": "points.701.TmpCab.value", "target_metric": "cabinet_temp_c"},
+            {"source": "points.label.grid_connection_status.value", "target_metric": "battery_grid_status",
+             "value_map": _MB2_GRID},
         ],
     },
     {
@@ -138,6 +172,19 @@ PRESETS: list[dict[str, Any]] = [
             {"source": "modbus_bridge/{serial}/label_solar_total_power/state", "target_metric": "solar_power_w"},
             {"source": "modbus_bridge/{serial}/label_battery_operating_mode/state", "target_metric": "operating_mode",
              "value_map": {"1": "emergency_backup", "2": "self_consumption", "3": "time_of_use"}},
+            {"source": "modbus_bridge/{serial}/m701_w/state", "target_metric": "grid_power_w", "positive": "import"},
+            {"source": "modbus_bridge/{serial}/label_battery_reserve_self/state", "target_metric": "self_reserve_soc"},
+            {"source": "modbus_bridge/{serial}/label_battery_reserve_tou/state", "target_metric": "tou_reserve_soc"},
+            {"source": "modbus_bridge/{serial}/m713_soh/state", "target_metric": "battery_soh"},
+            {"source": "modbus_bridge/{serial}/m713_whrtg/state", "target_metric": "battery_capacity_kwh",
+             "scale": 0.001},
+            {"source": "modbus_bridge/{serial}/m713_whavail/state", "target_metric": "energy_available_kwh",
+             "scale": 0.001},
+            {"source": "modbus_bridge/{serial}/m701_invst/state", "target_metric": "inverter_state"},
+            {"source": "modbus_bridge/{serial}/m701_tmpamb/state", "target_metric": "ambient_temp_c"},
+            {"source": "modbus_bridge/{serial}/m701_tmpcab/state", "target_metric": "cabinet_temp_c"},
+            {"source": "modbus_bridge/{serial}/label_grid_connection_status/state",
+             "target_metric": "battery_grid_status", "value_map": _MB2_GRID},
         ],
     },
 ]
