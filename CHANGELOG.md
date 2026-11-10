@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Changed
+- **External integrations read signs and states the same way for every protocol** (REST,
+  MQTT, HA WebSocket, Modbus TCP, SunSpec). Battery power means **+ discharge / − charge**
+  and grid power **+ import / − export** inside the bridge. Each mapping can now say what
+  a positive value means at its source, and can map source codes or text to the bridge's
+  states. For example, `Idle` becomes Standby, and operating mode `1` or `TOU` is recognised.
+  Before this, only Modbus decoded states, the mapping screen labelled battery power the
+  wrong way round (+charge), and the dashboard read battery state and grid status with its
+  own, different tables (#15).
+- A mapping with `scale: -1` keeps its effect and now shows as a sign choice (#15).
+
+### Added
+- New mapping targets: grid power, solar inverter AC power, extra load (generator /
+  smart circuits) (#15).
+- Integration states (battery state, operating mode, inverter state, …) are kept in
+  history (#15).
+
 ## 1.2.0 — Cloud parity: boost, rules, statistics and labels match energipays.com
 
 ### Fixed

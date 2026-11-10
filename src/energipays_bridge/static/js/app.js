@@ -63,6 +63,11 @@ document.addEventListener('alpine:init', () => {
   Alpine.store('app', {
     activeTab: 'dashboard',
     points: {},
+    stateLabels: {},      // integration state id → label, from /api/integrations/labels (#15)
+    stateLabel(metric, v) {
+      if (v == null || v === '') return ''
+      return this.stateLabels[metric]?.[v] ?? String(v)
+    },
     _boostPendingTs: 0,   // ms timestamp when boost was sent; 0 = not pending
     connected: false,
     isDark: false,
@@ -119,6 +124,8 @@ document.addEventListener('alpine:init', () => {
     userCountry: '',
 
     init() {
+      fetch('/api/integrations/labels').then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) this.stateLabels = d.states || {} }).catch(() => {})
       // Restore tab from URL hash on load
       const validTabs = this.tabs.map(t => t.id)
       const hash = location.hash.slice(1)

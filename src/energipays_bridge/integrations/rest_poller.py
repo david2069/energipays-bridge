@@ -9,6 +9,7 @@ import httpx
 from ..sample import SampleBus
 from .base import IntegrationPoller
 from .models import FieldMapping
+from .normalise import convert
 
 log = logging.getLogger(__name__)
 
@@ -72,8 +73,5 @@ def _extract_mappings(data: Any, mappings: list[FieldMapping]) -> dict[str, obje
             continue
         raw = _dotpath(data, m.source)
         if raw is not None:
-            try:
-                result[m.target_metric] = float(raw) * m.scale
-            except (TypeError, ValueError):
-                result[m.target_metric] = raw
+            result[m.target_metric] = convert(m, raw)
     return result

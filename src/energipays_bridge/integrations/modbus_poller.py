@@ -9,6 +9,7 @@ from typing import Literal
 from ..sample import SampleBus
 from .base import IntegrationPoller
 from .models import FieldMapping
+from .normalise import convert
 
 log = logging.getLogger(__name__)
 
@@ -145,36 +146,7 @@ class ModbusPoller(IntegrationPoller):
             count = _REG_COUNT[reg_type]
             values = await read_registers(self.host, self.port, self.unit_id, fc, address, count, reg_type)
             if values:
-                result[m.target_metric] = values[0] * scale
-
-        # Derive battery_state from battery_power_w sign.
-        # SunSpec 714.DCW on FranklinWH is POSITIVE = DISCHARGE, negative = charge
-        # (~/dev/modbus/SUNSPEC_MODEL_REFERENCE.md M714 table; franklinwh-modbus-bridge
-        # gateway/aggregator.py uses the same 50 W deadband). This was inverted until
-        # v1.1.10 — do not "correct" it back.
-        if "battery_power_w" in result and "battery_state" not in result:
-            pw = result["battery_power_w"]
-            result["battery_state"] = "discharging" if pw > 50 else "charging" if pw < -50 else "idle"
-
-        # Decode SunSpec 701 enum / bitfield metrics to human-readable strings
-        if "inverter_state" in result:
-            _INV_ST = {0:"Off",1:"Sleeping",2:"Starting",3:"Running",4:"Throttled",5:"Shutting Down",6:"Fault",7:"Standby"}
-            v = int(result["inverter_state"])
-            result["inverter_state"] = _INV_ST.get(v, str(v))
-        if "connection_state" in result:
-            v = int(result["connection_state"])
-            result["connection_state"] = "Connected" if v == 1 else "Disconnected"
-        if "grid_status" in result:
-            v = int(result["grid_status"])
-            _MODES = {0:"Grid Following", 1:"Grid Forming", 2:"PV Clipped"}
-            # DERMode is a bitfield: check bits in priority order
-            if v & 2:
-                result["grid_status"] = "Grid Forming"
-            elif v & 1:
-                result["grid_status"] = "Grid Following"
-            elif v & 4:
-                result["grid_status"] = "PV Clipped"
-            else:
-                result["grid_status"] = _MODES.get(v, f"Mode {v}")
+                # Sign, state codes and labels: one conversion for every protocol (#15)
+                result[m.target_metric] = convert(m, values[0], scale=scale)
 
         return result
