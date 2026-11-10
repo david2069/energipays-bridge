@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+## 1.3.0 — One sign and state mapping for every integration; secrets encrypted
+
+### Changed
+- **External integrations read signs and states the same way for every protocol** (REST,
+  MQTT, HA WebSocket, Modbus TCP, SunSpec). Battery power means **+ discharge / − charge**
+  and grid power **+ import / − export** inside the bridge. Each mapping can now say what
+  a positive value means at its source, and can map source codes or text to the bridge's
+  states. For example, `Idle` becomes Standby, and operating mode `1` or `TOU` is recognised.
+  Before this, only Modbus decoded states, the mapping screen labelled battery power the
+  wrong way round (+charge), and the dashboard read battery state and grid status with its
+  own, different tables (#15).
+- A mapping with `scale: -1` keeps its effect and now shows as a sign choice (#15).
+
 ### Added
 - **Presets for known sources.** When adding an integration you can start from the
   FranklinWH Modbus Bridge (MQTT), the FranklinWH Direct Connect Bridge (MQTT or REST) or
@@ -13,6 +26,10 @@
   with a hint on how to check it. State mappings have a "Source value → state" table,
   for example `Idle` → Standby. Test shows each value as raw → bridge value, with
   charging/discharging or importing/exporting (#15).
+- New mapping targets: grid power, solar inverter AC power, extra load (generator /
+  smart circuits) (#15).
+- Integration states (battery state, operating mode, inverter state, …) are kept in
+  history (#15).
 
 ### Fixed
 - **MQTT integrations work in the add-on.** Every MQTT integration failed with
@@ -32,22 +49,18 @@
   start, shown as "Saved — leave blank to keep", and removed from error messages and logs.
   The HA entity browser uses a saved token only for the URL it was saved with (#17).
 
-### Changed
-- **External integrations read signs and states the same way for every protocol** (REST,
-  MQTT, HA WebSocket, Modbus TCP, SunSpec). Battery power means **+ discharge / − charge**
-  and grid power **+ import / − export** inside the bridge. Each mapping can now say what
-  a positive value means at its source, and can map source codes or text to the bridge's
-  states. For example, `Idle` becomes Standby, and operating mode `1` or `TOU` is recognised.
-  Before this, only Modbus decoded states, the mapping screen labelled battery power the
-  wrong way round (+charge), and the dashboard read battery state and grid status with its
-  own, different tables (#15).
-- A mapping with `scale: -1` keeps its effect and now shows as a sign choice (#15).
-
-### Added
-- New mapping targets: grid power, solar inverter AC power, extra load (generator /
-  smart circuits) (#15).
-- Integration states (battery state, operating mode, inverter state, …) are kept in
-  history (#15).
+### Verified
+- Live, read-only, 2026-11-10. **FranklinWH Direct Connect Bridge REST** (test instance,
+  Security on, self-signed HTTPS): with the preset and "Trust a self-signed certificate",
+  all 7 mapped values were read. Battery −44 W (charging), grid −32 W (export), solar
+  300 W and home 224 W balance. Without the option, the request fails on the certificate;
+  without the token, it gets 401.
+- Live, read-only, 2026-11-10. **FranklinWH Modbus Bridge MQTT** (its built-in Demo
+  gateway: simulated values, real topics): 8 of 9 mapped values were read, with signs and
+  states right. Solar power is not published by the Demo gateway, so that mapping is
+  untested.
+- Not tested live: HA WebSocket, Modbus TCP and SunSpec sources, and the Modbus Bridge
+  (SunSpec) presets. They take the same conversion path, which the unit tests cover.
 
 ## 1.2.0 — Cloud parity: boost, rules, statistics and labels match energipays.com
 
