@@ -69,6 +69,27 @@ document.addEventListener('alpine:init', () => {
       if (v == null || v === '') return ''
       return this.stateLabels[metric]?.[v] ?? String(v)
     },
+    // Which ext.* metrics an enabled integration maps, so an empty Battery row can say
+    // "Not mapped" rather than "—" (#15, plan F3)
+    mappedMetrics: [],
+    mappedLoaded: false,
+    batteryIntegrationId: null,
+    mapIntent: null,      // {id, metric}: the Settings tab opens that integration's editor
+    notMapped(metric) {
+      return this.mappedLoaded && this.points['ext.' + metric] == null && !this.mappedMetrics.includes(metric)
+    },
+    mapMetric(metric) {
+      this.mapIntent = { id: this.batteryIntegrationId, metric }
+      this.activeTab = 'settings'
+    },
+    applyIntegrations(list) {
+      const on = (list || []).filter(i => i.enabled)
+      this.mappedMetrics = on.flatMap(i => (i.mappings || []).filter(m => m.enabled !== false).map(m => m.target_metric))
+      const batt = on.find(i => i.type === 'battery')
+      this.batteryIntegrationId = batt ? batt.id : null
+      if (batt) this.batteryLabel = batt.name
+      this.mappedLoaded = true
+    },
     _boostPendingTs: 0,   // ms timestamp when boost was sent; 0 = not pending
     connected: false,
     isDark: false,
@@ -152,8 +173,7 @@ document.addEventListener('alpine:init', () => {
       setInterval(() => this._fetchPoints(), 10000)
       // Load battery integration name for SVG label
       fetch('/api/integrations').then(r => r.ok ? r.json() : null).then(d => {
-        const batt = (d || []).find(i => i.type === 'battery' && i.enabled)
-        if (batt) this.batteryLabel = batt.name
+        if (d) this.applyIntegrations(d)
       }).catch(() => {})
       // Load MQTT enabled state to show/hide MQTT tab
       fetch('/api/mqtt/config').then(r => r.ok ? r.json() : null).then(d => {

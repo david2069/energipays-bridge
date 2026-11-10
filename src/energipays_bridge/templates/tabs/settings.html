@@ -435,6 +435,8 @@
               <button @click="addMapping()"
                       class="text-[10px] text-brand hover:text-brand/80 transition-colors">+ Add row</button>
             </div>
+            <div x-show="mapHint" class="mb-2 text-[11px] rounded px-2 py-1.5 bg-sky-900/20 border border-sky-700/30 text-sky-300"
+                 x-text="mapHint"></div>
             <div class="space-y-2">
               <template x-for="(m, idx) in form.mappings" :key="idx">
                 <div class="bg-slate-800 rounded-lg p-2 space-y-2">
