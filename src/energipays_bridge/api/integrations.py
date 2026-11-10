@@ -11,6 +11,7 @@ from ..integrations.sunspec_scanner import scan_sunspec
 from ..integrations.modbus_poller import _parse_source, read_registers, _REG_COUNT
 from ..integrations.rest_poller import RestPoller, _extract_mappings, _dotpath
 from ..integrations.normalise import SIGNED_METRICS, STATE_LABELS, convert
+from ..integrations.secret_store import scrub
 
 router = APIRouter(prefix="/api/integrations")
 log = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ async def toggle_enable(request: Request, row_id: str, body: dict) -> dict:
 @router.post("/{row_id}/test")
 async def test_integration(request: Request, row_id: str) -> dict:
     reg = _registry(request)
-    row = await reg.get(row_id)
+    row = await reg.get_with_secrets(row_id)
     if row is None:
         raise HTTPException(404, "Integration not found")
 
@@ -137,7 +138,7 @@ async def test_integration(request: Request, row_id: str) -> dict:
             return {"ok": False, "error": "MQTT test not supported via this endpoint — use Probe or Discover instead"}
 
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": scrub(str(exc), cfg)}
 
     return {"ok": False, "error": f"Unknown protocol: {proto}"}
 
@@ -173,19 +174,28 @@ async def sunspec_discover(body: SunSpecDiscoverRequest) -> dict:
 
 
 @router.post("/ha-entities")
-async def ha_entities(body: HaEntitiesRequest) -> dict:
+async def ha_entities(body: HaEntitiesRequest, request: Request) -> dict:
     """Fetch all HA entity states for the entity browser."""
     base = body.url.replace("ws://", "http://").replace("wss://", "https://").rstrip("/")
+    token = body.token
+    if not token and body.integration_id:
+        # Editing a saved integration: the UI never holds its token (#17). Use the
+        # stored one, but only for the URL it was saved with, so it can't be sent
+        # to another host.
+        row = await _registry(request).get_with_secrets(body.integration_id)
+        if row is None or row["config"].get("url", "").rstrip("/") != body.url.rstrip("/"):
+            raise HTTPException(400, "Enter the token, or keep the saved URL to use the saved token")
+        token = row["config"].get("token", "")
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(
                 f"{base}/api/states",
-                headers={"Authorization": f"Bearer {body.token}"},
+                headers={"Authorization": f"Bearer {token}"},
             )
             r.raise_for_status()
             all_states = r.json()
     except Exception as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, scrub(str(exc), {"token": token}))
 
     entities = []
     for s in all_states:

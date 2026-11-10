@@ -582,6 +582,7 @@ function integrationsCard() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: this.form.config.url, token: this.form.config.token,
+            integration_id: this.editingId || '',
             domain: this.ebDomain, search: this.ebSearch,
             page: this.ebPage, page_size: 50,
           }),

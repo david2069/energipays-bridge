@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 
 from ..sample import Sample, SampleBus
 from .normalise import derive
+from .secret_store import scrub_own
 
 log = logging.getLogger(__name__)
 
@@ -62,8 +63,8 @@ class IntegrationPoller(ABC):
                     self.last_error = ""
             except Exception as exc:
                 self.status = "offline"
-                self.last_error = str(exc)
-                log.warning("Integration %r poll error: %s", self.name, exc)
+                self.last_error = scrub_own(self, str(exc))   # no secrets in errors (#17)
+                log.warning("Integration %r poll error: %s", self.name, self.last_error)
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval)
             except asyncio.TimeoutError:

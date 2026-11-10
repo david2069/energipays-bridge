@@ -77,7 +77,8 @@ class SunSpecDiscoverRequest(BaseModel):
 
 class HaEntitiesRequest(BaseModel):
     url: str             # http://homeassistant.local:8123
-    token: str
+    token: str = ""      # blank = the saved integration's token (integration_id), same URL only
+    integration_id: str = ""
     domain: str = ""     # filter by domain, empty = all
     search: str = ""     # substring filter
     page: int = 1

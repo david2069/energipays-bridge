@@ -189,7 +189,8 @@ async def lifespan(app: FastAPI):
     await reconfigure_mqtt(app)
 
     # ── 7. Integration registry ───────────────────────────────────────────────
-    integration_registry = IntegrationRegistry(db, bus)
+    from .store.credentials import _load_or_create_key
+    integration_registry = IntegrationRegistry(db, bus, _load_or_create_key(settings.data_path))
     await integration_registry.start_all()
     app.state.integration_registry = integration_registry
     log.info("Integration registry started")

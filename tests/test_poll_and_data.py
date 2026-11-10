@@ -131,7 +131,7 @@ def _registry(tmp_path):
 
     async def make():
         db = await init_db(tmp_path / "t.db")
-        return IntegrationRegistry(db, SampleBus())
+        return IntegrationRegistry(db, SampleBus(), b"k" * 32)
     return make
 
 

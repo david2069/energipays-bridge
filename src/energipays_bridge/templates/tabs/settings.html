@@ -244,8 +244,8 @@
                   <option value="bearer">Bearer token</option>
                   <option value="basic">Basic auth</option>
                 </select>
-                <input x-show="form.config.auth_type !== 'none'" type="text" x-model="form.config.auth_token"
-                       placeholder="token"
+                <input x-show="form.config.auth_type !== 'none'" type="password" autocomplete="off" x-model="form.config.auth_token"
+                       :placeholder="form.secrets_set?.auth_token ? 'Saved — leave blank to keep' : 'token'"
                        class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand font-mono"/>
               </div>
               <div class="flex items-center gap-2">
@@ -360,7 +360,7 @@
               <div class="text-xs text-slate-500 uppercase tracking-wide">Connection</div>
               <input type="text" x-model="form.config.url" placeholder="http://homeassistant.local:8123"
                      class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand font-mono"/>
-              <input type="text" x-model="form.config.token" placeholder="Long-lived access token"
+              <input type="password" autocomplete="off" x-model="form.config.token" :placeholder="form.secrets_set?.token ? 'Saved — leave blank to keep' : 'Long-lived access token'"
                      class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand font-mono"/>
             </div>
           </template>
@@ -378,7 +378,7 @@
               <div class="flex gap-2">
                 <input type="text" x-model="form.config.username" placeholder="username (optional)"
                        class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand"/>
-                <input type="password" x-model="form.config.password" placeholder="password"
+                <input type="password" autocomplete="off" x-model="form.config.password" :placeholder="form.secrets_set?.password ? 'Saved — leave blank to keep' : 'password'"
                        class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand"/>
               </div>
             </div>

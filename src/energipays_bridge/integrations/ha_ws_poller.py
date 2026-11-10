@@ -9,6 +9,7 @@ from ..sample import SampleBus
 from .base import publish_points
 from .models import FieldMapping
 from .normalise import convert
+from .secret_store import scrub_own
 
 log = logging.getLogger(__name__)
 
@@ -68,8 +69,8 @@ class HaWsPoller:
                 raise
             except Exception as exc:
                 self.status = "offline"
-                self.last_error = str(exc)
-                log.warning("HA WS %r disconnected: %s — retry in %.0fs", self.name, exc, backoff)
+                self.last_error = scrub_own(self, str(exc))   # no secrets in errors (#17)
+                log.warning("HA WS %r disconnected: %s — retry in %.0fs", self.name, self.last_error, backoff)
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
                 except asyncio.TimeoutError:
