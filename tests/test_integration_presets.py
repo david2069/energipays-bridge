@@ -135,3 +135,34 @@ def test_preset_api_list_apply_and_errors():
     assert r.status_code == 200 and r.json()["config"]["endpoint"] == "/api/gateways/g1/summary"
     assert c.post("/api/integrations/presets/dc-bridge-rest/apply", json={}).status_code == 400
     assert c.post("/api/integrations/presets/nope/apply", json={}).status_code == 404
+
+
+# ── self-signed HTTPS sources (#25) ─────────────────────────────────────────
+
+def test_rest_poller_verify_tls_follows_config(monkeypatch):
+    import asyncio
+    import httpx
+    from energipays_bridge.integrations.registry import _build_poller
+    from energipays_bridge.sample import SampleBus
+
+    seen = []
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            seen.append(k.get("verify", True))
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, headers=None):
+            return httpx.Response(200, json={"power": {"battery_w": 1}}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    for cfg, want in (({}, True), ({"verify_tls": False}, False), ({"verify_tls": True}, True)):
+        row = {"id": "r", "name": "n", "protocol": "rest", "enabled": True,
+               "config": {"base_url": "https://192.0.2.7:18791", "endpoint": "/x", **cfg},
+               "mappings": [{"source": "power.battery_w", "target_metric": "battery_power_w"}]}
+        asyncio.run(_build_poller(row, SampleBus())._poll())
+        assert seen[-1] is want
