@@ -128,8 +128,9 @@ class IntegrationRegistry:
         if last_error:
             last_error = scrub(last_error, unseal(self._key, row["config"]))
         config, secrets_set = redact(row["config"])
+        unmapped = {k: _plain(v) for k, v in (getattr(poller, "unmapped", None) or {}).items()}
         return {**row, "config": config, "secrets_set": secrets_set,
-                "status": status, "last_error": last_error}
+                "status": status, "last_error": last_error, "unmapped": unmapped}
 
     async def _seal_plaintext_rows(self) -> None:
         """Encrypt secrets saved in plain text before #17 (runs once per row)."""
@@ -185,6 +186,11 @@ class IntegrationRegistry:
     async def _on_sample(self, row_id: str, sample) -> None:
         self._keys.setdefault(row_id, set()).update(sample.points)
         self.latest.update(sample.points)
+
+
+def _plain(v: object) -> object:
+    """-3.0 → -3, for display."""
+    return int(v) if isinstance(v, float) and v.is_integer() else v
 
 
 def _row_to_dict(row) -> dict:

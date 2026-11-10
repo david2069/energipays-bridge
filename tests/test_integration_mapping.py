@@ -210,3 +210,58 @@ def test_probe_converts_like_polling(monkeypatch):
         "host": "192.0.2.10", "address": 1, "count": 1, "target_metric": "battery_power_w",
         "positive": "charge"}).json()
     assert d["value"] == -3 and d["label"] is None
+
+
+# ── State values with no known meaning (#30) ────────────────────────────────
+
+def test_unmapped_battery_state_falls_back_to_power():
+    # owner's screen: Battery State "-3" while discharging 0.20 kW
+    raw = convert(fm("battery_state"), "-3")
+
+    class Owner:
+        unmapped = {}
+    owner = Owner()
+    bus = SampleBus()
+    seen = []
+
+    async def go():
+        async def sub(s):
+            seen.append(s.points)
+        bus.subscribe(sub)
+        await publish_points(bus, {"battery_power_w": 200.0, "battery_state": raw}, owner)
+    asyncio.run(go())
+    assert seen[-1]["ext.battery_state"] == "discharging"
+    assert owner.unmapped == {"battery_state": -3.0}
+
+
+def test_unmapped_state_without_power_is_not_published():
+    pts = _collect({"operating_mode": 7.0, "inverter_state": "unknown_42", "battery_soc": 50})
+    assert pts == {"ext.battery_soc": 50}
+
+
+def test_known_states_and_plain_metrics_are_not_unmapped():
+    from energipays_bridge.integrations.normalise import is_unmapped
+    assert not is_unmapped("battery_state", "standby")
+    assert not is_unmapped("battery_power_w", -3)
+    assert not is_unmapped("battery_state", None)
+    assert is_unmapped("battery_grid_status", 2)
+
+
+def test_test_preview_flags_unmapped(monkeypatch):
+    from energipays_bridge.api.integrations import _reading
+    assert _reading(fm("battery_state"), -3)["unmapped"] is True
+    assert _reading(fm("battery_state", value_map={"-3": "charging"}), -3)["unmapped"] is False
+    assert _reading(fm("battery_power_w"), -3)["unmapped"] is False
+
+
+def test_integration_card_lists_unmapped_values():
+    from energipays_bridge.integrations.registry import IntegrationRegistry
+
+    class Poller:
+        status, last_error, unmapped = "live", "", {"battery_state": -3.0}
+    reg = IntegrationRegistry.__new__(IntegrationRegistry)
+    reg._pollers, reg._key = {"i": Poller()}, b"k" * 32
+    row = {"id": "i", "enabled": True, "config": {}}
+    assert reg._enrich(row)["unmapped"] == {"battery_state": -3}
+    reg._pollers = {}
+    assert reg._enrich(row)["unmapped"] == {}

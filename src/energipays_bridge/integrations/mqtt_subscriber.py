@@ -128,4 +128,4 @@ class MqttSubscriber:
                     if raw is not None:
                         self._latest[m.target_metric] = convert(m, raw)
 
-                await publish_points(self.bus, self._latest)
+                await publish_points(self.bus, self._latest, self)

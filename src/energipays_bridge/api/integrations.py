@@ -10,7 +10,7 @@ from ..integrations.models import HaEntitiesRequest, IntegrationIn, ProbeRequest
 from ..integrations.sunspec_scanner import scan_sunspec
 from ..integrations.modbus_poller import _parse_source, read_registers, _REG_COUNT
 from ..integrations.rest_poller import RestPoller, _extract_mappings, _dotpath
-from ..integrations.normalise import SIGNED_METRICS, STATE_LABELS, convert
+from ..integrations.normalise import SIGNED_METRICS, STATE_LABELS, convert, is_unmapped
 from ..integrations.secret_store import scrub
 from ..integrations.presets import apply as apply_preset_values, list_presets
 
@@ -25,7 +25,9 @@ def _reading(m, raw, scale: float | None = None) -> dict:
     value = convert(m, raw, scale=scale)
     label = STATE_LABELS.get(m.target_metric, {}).get(value) if isinstance(value, str) else None
     return {"source": m.source, "target_metric": m.target_metric,
-            "raw": raw, "scaled": value, "label": label}
+            "raw": raw, "scaled": value, "label": label,
+            # a state with no known meaning: not shown or stored; needs a value map (#30)
+            "unmapped": is_unmapped(m.target_metric, value)}
 
 
 @router.get("/labels")

@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Fixed
+- **Battery State no longer shows a raw number such as `-3`.** When an integration's
+  source sends a state value the bridge doesn't recognise, the dashboard no longer shows
+  it. Battery State then comes from battery power (charging, discharging or standby).
+  The integration's card says "Unmapped battery_state value -3: add a value map", and
+  Test marks the value as unmapped (#30).
+
 ## 1.3.0 — One sign and state mapping for every integration; secrets encrypted
 
 ### Changed
