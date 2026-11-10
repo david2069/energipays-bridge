@@ -64,6 +64,7 @@ document.addEventListener('alpine:init', () => {
     activeTab: 'dashboard',
     points: {},
     stateLabels: {},      // integration state id → label, from /api/integrations/labels (#15)
+    signedMetrics: {},    // metric → [internal positive meaning, alternative] (#15)
     stateLabel(metric, v) {
       if (v == null || v === '') return ''
       return this.stateLabels[metric]?.[v] ?? String(v)
@@ -125,7 +126,7 @@ document.addEventListener('alpine:init', () => {
 
     init() {
       fetch('/api/integrations/labels').then(r => r.ok ? r.json() : null)
-        .then(d => { if (d) this.stateLabels = d.states || {} }).catch(() => {})
+        .then(d => { if (d) { this.stateLabels = d.states || {}; this.signedMetrics = d.signed || {} } }).catch(() => {})
       // Restore tab from URL hash on load
       const validTabs = this.tabs.map(t => t.id)
       const hash = location.hash.slice(1)
