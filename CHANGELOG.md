@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## 1.4.0 — Every Battery-tab field can be mapped from your battery's integration
+
 ### Added
 - **Battery tab: an empty row says "Not mapped · Map it"** when no enabled integration
   maps it (Home Load, Operating Mode, Self/TOU Reserve, State of Health, Capacity).
@@ -30,6 +32,15 @@
   Other devices are unchanged (#15).
 - **Battery tab Grid Status shows "On grid" / "Off grid"** instead of the internal id
   `on_grid` (#15).
+
+### Verified
+- Unit tests: 124 pass. Each change was disabled in turn to check that a test fails.
+- Headless browser, against a fake REST source: an unrecognised Battery State (`-3`)
+  shows as Discharging from power, and the integration card lists it as unmapped.
+  The Not mapped rows open the right editor. Grid Status reads "On grid".
+- Not tested live: SunSpec discovery on a real aGate; the new DC Bridge and Modbus
+  Bridge preset fields. Their keys come from those projects' maintainers and the
+  franklinwh-modbus docs, so confirm each with Test.
 
 ## 1.3.0 — One sign and state mapping for every integration; secrets encrypted
 
