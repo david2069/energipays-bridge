@@ -15,6 +15,9 @@
   charging/discharging or importing/exporting (#15).
 
 ### Fixed
+- **MQTT integrations work in the add-on.** Every MQTT integration failed with
+  "No module named 'aiomqtt'", because the library it uses wasn't installed. It is now a
+  dependency, and a test checks that every library the bridge imports is installed.
 - **REST integrations can reach HTTPS sources with a self-signed certificate**, such as
   a Direct Connect Bridge with Security on. Turn on "Trust a self-signed certificate" for
   that integration; certificates are still checked for every other integration (#25).
