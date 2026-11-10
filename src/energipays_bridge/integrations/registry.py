@@ -224,6 +224,7 @@ def _build_poller(row: dict, bus: SampleBus, on_sample=None) -> object | None:
             auth_type=cfg.get("auth_type", "none"),
             auth_token=cfg.get("auth_token", ""),
             poll_interval=int(cfg.get("poll_interval", 30)),
+            verify_tls=cfg.get("verify_tls", True) is not False,
         )
     if proto in ("modbus_tcp", "sunspec_tcp"):
         return ModbusPoller(

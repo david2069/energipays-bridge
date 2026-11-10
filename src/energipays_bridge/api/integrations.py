@@ -117,7 +117,7 @@ async def test_integration(request: Request, row_id: str) -> dict:
             headers = {}
             if cfg.get("auth_type") == "bearer":
                 headers["Authorization"] = f"Bearer {cfg.get('auth_token', '')}"
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=10, verify=cfg.get("verify_tls", True) is not False) as client:
                 r = await client.get(url, headers=headers)
                 r.raise_for_status()
                 data = r.json()

@@ -55,6 +55,7 @@ class RestPoller(IntegrationPoller):
         auth_type: str = "none",
         auth_token: str = "",
         poll_interval: int = 30,
+        verify_tls: bool = True,
     ) -> None:
         super().__init__(integration_id, name, bus, poll_interval)
         self.base_url = base_url.rstrip("/")
@@ -62,6 +63,9 @@ class RestPoller(IntegrationPoller):
         self.mappings = mappings
         self.auth_type = auth_type
         self.auth_token = auth_token
+        # False only when the user opted in for this integration: a source with a
+        # self-signed certificate, such as a DC Bridge with Security on (#25).
+        self.verify_tls = verify_tls
 
     def _build_headers(self) -> dict:
         if self.auth_type == "bearer" and self.auth_token:
@@ -72,7 +76,7 @@ class RestPoller(IntegrationPoller):
 
     async def _poll(self) -> dict[str, object]:
         url = self.base_url + self.endpoint
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, verify=self.verify_tls) as client:
             r = await client.get(url, headers=self._build_headers())
             r.raise_for_status()
             data = r.json()

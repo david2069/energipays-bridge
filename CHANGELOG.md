@@ -15,6 +15,9 @@
   charging/discharging or importing/exporting (#15).
 
 ### Fixed
+- **REST integrations can reach HTTPS sources with a self-signed certificate**, such as
+  a Direct Connect Bridge with Security on. Turn on "Trust a self-signed certificate" for
+  that integration; certificates are still checked for every other integration (#25).
 - When editing an integration, its saved token now shows "Saved — leave blank to keep"
   instead of an empty field. Leaving it blank already kept the token (#17).
 
