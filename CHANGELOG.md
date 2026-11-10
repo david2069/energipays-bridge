@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Security
+- **Integration secrets are encrypted and never sent back to the browser.** The Home
+  Assistant long-lived token, the REST bearer token and the MQTT password of an external
+  integration were stored in plain text and returned by the integrations API. They are
+  now encrypted with the same key as the Energipays password, migrated automatically on
+  start, shown as "Saved — leave blank to keep", and removed from error messages and logs.
+  The HA entity browser uses a saved token only for the URL it was saved with (#17).
+
 ### Changed
 - **External integrations read signs and states the same way for every protocol** (REST,
   MQTT, HA WebSocket, Modbus TCP, SunSpec). Battery power means **+ discharge / − charge**
