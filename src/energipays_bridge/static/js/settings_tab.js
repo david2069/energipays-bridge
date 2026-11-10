@@ -343,14 +343,54 @@ function integrationsCard() {
       this.loading = false
     },
 
+    presets: [],
+    presetId: '',
+    presetValues: {},
+    presetError: '',
+    presetNote: '',
+
+    async loadPresets() {
+      if (this.presets.length) return
+      try {
+        const r = await fetch('/api/integrations/presets')
+        if (r.ok) this.presets = await r.json()
+      } catch (_) {}
+    },
+
+    async applyPreset() {
+      this.presetError = ''
+      const r = await fetch(`/api/integrations/presets/${this.presetId}/apply`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.presetValues),
+      })
+      const d = await r.json()
+      if (!r.ok) { this.presetError = d.detail || 'Could not fill in'; return }
+      const pr = this.presets.find(x => x.id === this.presetId)
+      this.onProtocolChange(d.protocol)
+      this.form.type = d.type
+      this.form.name = this.form.name || d.name
+      this.form.config = { ...this.form.config, ...d.config }
+      this.form.mappings = d.mappings.map(m => ({
+        ..._blankMapping(), ...m,
+        _vm: Object.entries(m.value_map || {}).map(([from, to]) => ({ from, to })),
+        _fc: m.source.split(':')[0] || 'fc3', _addr: parseInt(m.source.split(':')[1]) || '',
+        _rtype: m.source.split(':')[2] || 'uint16', _scale: parseFloat(m.source.split(':')[3]) || 1.0,
+      }))
+      // One report from the source's maintainers is a claim: say so (#15)
+      this.presetNote = `Filled in from ${pr?.source || 'the preset'}. Please confirm: run Test and check each sign and state against what the system is doing.`
+    },
+
     openAdd() {
       this.editingId = null
+      this.presetId = ''; this.presetValues = {}; this.presetError = ''; this.presetNote = ''
+      this.loadPresets()
       this.form = _blankForm()
       this.testResult = null
       this.wizardOpen = true
     },
 
     openEdit(intg) {
+      this.presetNote = ''
       this.editingId = intg.id
       this.form = {
         type: intg.type,
