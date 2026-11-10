@@ -1099,37 +1099,55 @@
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">Home Load</span>
             <span class="font-semibold text-slate-700 dark:text-slate-200"
-                  x-text="$store.app.points['ext.home_load_w'] != null ? fmt(($store.app.points['ext.home_load_w']||0)/1000,'kW',2) : '—'"></span>
+                  x-text="$store.app.points['ext.home_load_w'] != null ? fmt(($store.app.points['ext.home_load_w']||0)/1000,'kW',2) : '—'"
+                  x-show="!$store.app.notMapped('home_load_w')"></span>
+            <button x-show="$store.app.notMapped('home_load_w')" @click="$store.app.mapMetric('home_load_w')"
+                    class="text-xs text-slate-400 hover:text-brand underline decoration-dotted">Not mapped · Map it</button>
           </div>
           <!-- Operating Mode -->
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">Operating Mode</span>
             <span class="font-medium text-sky-600 dark:text-sky-300"
-                  x-text="$store.app.stateLabel('operating_mode', $store.app.points['ext.operating_mode']) || '—'"></span>
+                  x-text="$store.app.stateLabel('operating_mode', $store.app.points['ext.operating_mode']) || '—'"
+                  x-show="!$store.app.notMapped('operating_mode')"></span>
+            <button x-show="$store.app.notMapped('operating_mode')" @click="$store.app.mapMetric('operating_mode')"
+                    class="text-xs text-slate-400 hover:text-brand underline decoration-dotted">Not mapped · Map it</button>
           </div>
           <!-- Self Reserve SOC -->
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">Self Reserve SOC</span>
             <span class="font-semibold text-slate-700 dark:text-slate-300"
-                  x-text="$store.app.points['ext.self_reserve_soc'] != null ? fmt($store.app.points['ext.self_reserve_soc'],'%',0) : '—'"></span>
+                  x-text="$store.app.points['ext.self_reserve_soc'] != null ? fmt($store.app.points['ext.self_reserve_soc'],'%',0) : '—'"
+                  x-show="!$store.app.notMapped('self_reserve_soc')"></span>
+            <button x-show="$store.app.notMapped('self_reserve_soc')" @click="$store.app.mapMetric('self_reserve_soc')"
+                    class="text-xs text-slate-400 hover:text-brand underline decoration-dotted">Not mapped · Map it</button>
           </div>
           <!-- TOU Reserve SOC -->
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">TOU Reserve SOC</span>
             <span class="font-semibold text-slate-700 dark:text-slate-300"
-                  x-text="$store.app.points['ext.tou_reserve_soc'] != null ? fmt($store.app.points['ext.tou_reserve_soc'],'%',0) : '—'"></span>
+                  x-text="$store.app.points['ext.tou_reserve_soc'] != null ? fmt($store.app.points['ext.tou_reserve_soc'],'%',0) : '—'"
+                  x-show="!$store.app.notMapped('tou_reserve_soc')"></span>
+            <button x-show="$store.app.notMapped('tou_reserve_soc')" @click="$store.app.mapMetric('tou_reserve_soc')"
+                    class="text-xs text-slate-400 hover:text-brand underline decoration-dotted">Not mapped · Map it</button>
           </div>
           <!-- SoH -->
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">State of Health</span>
             <span class="font-semibold text-slate-700 dark:text-slate-300"
-                  x-text="$store.app.points['ext.battery_soh'] != null ? fmt($store.app.points['ext.battery_soh'],'%',1) : '—'"></span>
+                  x-text="$store.app.points['ext.battery_soh'] != null ? fmt($store.app.points['ext.battery_soh'],'%',1) : '—'"
+                  x-show="!$store.app.notMapped('battery_soh')"></span>
+            <button x-show="$store.app.notMapped('battery_soh')" @click="$store.app.mapMetric('battery_soh')"
+                    class="text-xs text-slate-400 hover:text-brand underline decoration-dotted">Not mapped · Map it</button>
           </div>
           <!-- Capacity -->
           <div class="flex items-center justify-between py-1.5">
             <span class="text-slate-500">Capacity</span>
             <span class="font-semibold text-slate-700 dark:text-slate-300"
-                  x-text="$store.app.points['ext.battery_capacity_kwh'] != null ? fmt($store.app.points['ext.battery_capacity_kwh'],'kWh',1) : '—'"></span>
+                  x-text="$store.app.points['ext.battery_capacity_kwh'] != null ? fmt($store.app.points['ext.battery_capacity_kwh'],'kWh',1) : '—'"
+                  x-show="!$store.app.notMapped('battery_capacity_kwh')"></span>
+            <button x-show="$store.app.notMapped('battery_capacity_kwh')" @click="$store.app.mapMetric('battery_capacity_kwh')"
+                    class="text-xs text-slate-400 hover:text-brand underline decoration-dotted">Not mapped · Map it</button>
           </div>
           <!-- Energy Available (conditional) -->
           <template x-if="$store.app.points['ext.energy_available_kwh'] != null">
@@ -1153,7 +1171,7 @@
             <div class="flex items-center justify-between py-1.5">
               <span class="text-slate-500">Grid Status</span>
               <span class="font-medium text-slate-700 dark:text-slate-300"
-                    x-text="$store.app.points['ext.battery_grid_status']"></span>
+                    x-text="$store.app.stateLabel('battery_grid_status', $store.app.points['ext.battery_grid_status'])"></span>
             </div>
           </template>
           <!-- Inverter State — SunSpec 701.InvSt -->

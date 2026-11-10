@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- **Battery tab: an empty row says "Not mapped · Map it"** when no enabled integration
+  maps it (Home Load, Operating Mode, Self/TOU Reserve, State of Health, Capacity).
+  Clicking it opens your battery integration's mapping editor, with a hint for that
+  field. A row that is mapped but has no value yet still shows "—" (#15).
 - **SunSpec discovery offers the aGate's FranklinWH registers:** operating mode, Self
   and TOU reserve, total solar and home load. These are the Battery-tab rows that had
   no source over Modbus. Hover over a model to see each point. On firmware
@@ -24,6 +28,8 @@
 - **SunSpec discovery on a FranklinWH aGate suggests M701 W as grid power** (+ import /
   − export), as the franklinwh-modbus library documents. It suggested it as solar power.
   Other devices are unchanged (#15).
+- **Battery tab Grid Status shows "On grid" / "Off grid"** instead of the internal id
+  `on_grid` (#15).
 
 ## 1.3.0 — One sign and state mapping for every integration; secrets encrypted
 

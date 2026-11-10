@@ -330,17 +330,36 @@ function integrationsCard() {
     ebDomains: [],
     ebLoading: false,
 
+    mapHint: '',
+
     async init() {
       await this.load()
+      // "Map it" on an empty Battery row (#15, plan F3): open that integration's editor
+      Alpine.effect(() => {
+        const intent = Alpine.store('app').mapIntent
+        if (intent) this.openForMetric(intent)
+      })
     },
 
     async load() {
       this.loading = true
       try {
         const r = await fetch('/api/integrations')
-        if (r.ok) this.integrations = await r.json()
+        if (r.ok) {
+          this.integrations = await r.json()
+          Alpine.store('app').applyIntegrations(this.integrations)
+        }
       } catch (_) {}
       this.loading = false
+    },
+
+    openForMetric(intent) {
+      Alpine.store('app').mapIntent = null
+      const label = (METRIC_KEYS.find(k => k.key === intent.metric) || {}).label || intent.metric
+      const intg = this.integrations.find(i => i.id === intent.id)
+      if (intg) this.openEdit(intg)
+      else { this.openAdd(); this.form.type = 'battery' }
+      this.mapHint = `Add a row for "${label}" with this source's key, topic, entity or register, then Test.`
     },
 
     presets: [],
@@ -381,6 +400,7 @@ function integrationsCard() {
     },
 
     openAdd() {
+      this.mapHint = ''
       this.editingId = null
       this.presetId = ''; this.presetValues = {}; this.presetError = ''; this.presetNote = ''
       this.loadPresets()
@@ -390,6 +410,7 @@ function integrationsCard() {
     },
 
     openEdit(intg) {
+      this.mapHint = ''
       this.presetNote = ''
       this.editingId = intg.id
       this.form = {
