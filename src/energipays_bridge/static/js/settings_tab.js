@@ -264,8 +264,8 @@ function integrationsCard() {
     // Battery
     { key: 'battery_soc',           label: 'Battery SoC %' },
     { key: 'battery_soh',           label: 'Battery SoH %' },
-    { key: 'battery_power_w',       label: 'Battery Power W (+charge/−discharge)' },
-    { key: 'battery_state',         label: 'Battery State (charging/discharging/idle)' },
+    { key: 'battery_power_w',       label: 'Battery Power W (+discharge/−charge)' },
+    { key: 'battery_state',         label: 'Battery State (charging/discharging/standby)' },
     { key: 'battery_capacity_kwh',  label: 'Battery Capacity kWh' },
     { key: 'energy_available_kwh',  label: 'Energy Available kWh' },
     // Solar / Inverter
@@ -277,10 +277,13 @@ function integrationsCard() {
     { key: 'cabinet_temp_c',        label: 'Cabinet Temperature °C (701.TmpCab)' },
     // System
     { key: 'home_load_w',           label: 'Home Load W' },
+    { key: 'grid_power_w',          label: 'Grid Power W (+import/−export)' },
+    { key: 'solar_inverter_power_w', label: 'Solar Inverter AC Power W' },
+    { key: 'extra_load_w',          label: 'Extra Load W (generator / smart circuits)' },
     { key: 'operating_mode',        label: 'Operating Mode (1=Backup 2=Self 3=TOU)' },
     { key: 'self_reserve_soc',      label: 'Self Reserve SOC %' },
     { key: 'tou_reserve_soc',       label: 'TOU Reserve SOC %' },
-    { key: 'battery_grid_status',   label: 'Battery Grid Status' },
+    { key: 'battery_grid_status',   label: 'Grid Connection (on/off grid)' },
     { key: 'battery_inverter_state',label: 'Battery Inverter State' },
   ]
 
@@ -472,10 +475,13 @@ function integrationsCard() {
         .filter(m => m.target_metric)
         .map(m => {
           const enabled = m.enabled !== false  // default true
+          // Sign and value map travel with the mapping (#15); without them a save would
+          // silently reset the source's convention to the bridge's.
+          const extra = { positive: m.positive || null, value_map: m.value_map || {} }
           if (this.form.protocol === 'modbus_tcp' || this.form.protocol === 'sunspec_tcp') {
-            return { target_metric: m.target_metric, source: `${m._fc}:${m._addr}:${m._rtype}:${m._scale}`, scale: 1, enabled }
+            return { target_metric: m.target_metric, source: `${m._fc}:${m._addr}:${m._rtype}:${m._scale}`, scale: 1, enabled, ...extra }
           }
-          return { target_metric: m.target_metric, source: m.source, scale: m.scale || 1, enabled }
+          return { target_metric: m.target_metric, source: m.source, scale: m.scale || 1, enabled, ...extra }
         })
     },
 
@@ -528,21 +534,6 @@ function integrationsCard() {
       }
     },
 
-    _decodeLabel(metric, value) {
-      if (value == null) return null
-      const v = parseInt(value)
-      const INV_ST = {0:'Off',1:'Sleeping',2:'Starting',3:'Running',4:'Throttled',5:'Shutting Down',6:'Fault',7:'Standby'}
-      if (metric === 'inverter_state') return INV_ST[v] ?? null
-      if (metric === 'connection_state') return v === 1 ? 'Connected' : 'Disconnected'
-      if (metric === 'grid_status') {
-        if (v & 2) return 'Grid Forming'
-        if (v & 1) return 'Grid Following'
-        if (v & 4) return 'PV Clipped'
-        return `Mode ${v}`
-      }
-      return null
-    },
-
     async probeRegister(m, idx) {
       m._probing = true; m._probeResult = null; m._probeScaled = null; m._probeLabel = null
       try {
@@ -554,13 +545,16 @@ function integrationsCard() {
             fc: parseInt(m._fc.replace('fc', '')),
             address: parseInt(m._addr) - (this.form.config.base_address_offset || 0),
             count: 1, type: m._rtype,
+            target_metric: m.target_metric || null, scale: m._scale || 1,
+            positive: m.positive || null, value_map: m.value_map || {},
           }),
         })
         const d = await r.json()
         if (d.ok && d.registers?.length) {
           m._probeResult = d.registers[0]
-          m._probeScaled = +(d.registers[0] * (m._scale || 1)).toFixed(4)
-          m._probeLabel = this._decodeLabel(m.target_metric, m._probeScaled)
+          // Converted by the server exactly as polling will (#15)
+          m._probeScaled = typeof d.value === 'number' ? +d.value.toFixed(4) : d.value
+          m._probeLabel = d.label ?? null
         } else {
           m._probeResult = d.error || 'error'
         }

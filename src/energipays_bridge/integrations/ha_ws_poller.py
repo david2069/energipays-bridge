@@ -4,11 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 
-from ..sample import Sample, SampleBus
-from .base import EXT_DEVICE_ID
+from ..sample import SampleBus
+from .base import publish_points
 from .models import FieldMapping
+from .normalise import convert
 
 log = logging.getLogger(__name__)
 
@@ -116,12 +116,7 @@ class HaWsPoller:
                     new_state = data.get("new_state") or {}
                     state_val = new_state.get("state")
                     m = self.mappings[entity_id]
-                    try:
-                        value = float(state_val) * m.scale
-                    except (TypeError, ValueError):
-                        value = state_val
-                    self._latest[m.target_metric] = value
+                    self._latest[m.target_metric] = convert(m, state_val)
 
                     # Publish a sample with all currently known ext metrics
-                    pts = {f"ext.{k}": v for k, v in self._latest.items()}
-                    await self.bus.publish(Sample(device_id=EXT_DEVICE_ID, ts=time.time(), points=pts))
+                    await publish_points(self.bus, self._latest)

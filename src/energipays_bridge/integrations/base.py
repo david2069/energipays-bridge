@@ -7,10 +7,21 @@ import time
 from abc import ABC, abstractmethod
 
 from ..sample import Sample, SampleBus
+from .normalise import derive
 
 log = logging.getLogger(__name__)
 
 EXT_DEVICE_ID = "ext"
+
+
+async def publish_points(bus: SampleBus, points: dict[str, object]) -> None:
+    """Fill derived values (#15), prefix with ``ext.`` and publish one sample.
+
+    Every protocol publishes through here, so all get the same derivation.
+    """
+    derived = derive(dict(points))
+    prefixed = {f"ext.{k}": v for k, v in derived.items()}
+    await bus.publish(Sample(device_id=EXT_DEVICE_ID, ts=time.time(), points=prefixed))
 
 
 class IntegrationPoller(ABC):
@@ -46,9 +57,7 @@ class IntegrationPoller(ABC):
             try:
                 points = await self._poll()
                 if points:
-                    prefixed = {f"ext.{k}": v for k, v in points.items()}
-                    sample = Sample(device_id=EXT_DEVICE_ID, ts=time.time(), points=prefixed)
-                    await self.bus.publish(sample)
+                    await publish_points(self.bus, points)
                     self.status = "live"
                     self.last_error = ""
             except Exception as exc:

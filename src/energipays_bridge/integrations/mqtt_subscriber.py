@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Any
 
-from ..sample import Sample, SampleBus
-from .base import EXT_DEVICE_ID
+from ..sample import SampleBus
+from .base import publish_points
 from .models import FieldMapping
+from .normalise import convert
 
 log = logging.getLogger(__name__)
 
@@ -134,11 +134,6 @@ class MqttSubscriber:
                         raw = payload_str
 
                     if raw is not None:
-                        try:
-                            value = float(raw) * m.scale
-                        except (TypeError, ValueError):
-                            value = raw
-                        self._latest[m.target_metric] = value
+                        self._latest[m.target_metric] = convert(m, raw)
 
-                pts = {f"ext.{k}": v for k, v in self._latest.items()}
-                await self.bus.publish(Sample(device_id=EXT_DEVICE_ID, ts=time.time(), points=pts))
+                await publish_points(self.bus, self._latest)

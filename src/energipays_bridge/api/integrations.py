@@ -10,30 +10,27 @@ from ..integrations.models import HaEntitiesRequest, IntegrationIn, ProbeRequest
 from ..integrations.sunspec_scanner import scan_sunspec
 from ..integrations.modbus_poller import _parse_source, read_registers, _REG_COUNT
 from ..integrations.rest_poller import RestPoller, _extract_mappings, _dotpath
+from ..integrations.normalise import SIGNED_METRICS, STATE_LABELS, convert
 
 router = APIRouter(prefix="/api/integrations")
 log = logging.getLogger(__name__)
 
-_INV_ST = {0:"Off",1:"Sleeping",2:"Starting",3:"Running",4:"Throttled",5:"Shutting Down",6:"Fault",7:"Standby"}
+def _reading(m, raw, scale: float | None = None) -> dict:
+    """One Test row: raw source value, internal value and display label (#15).
 
-def _enum_label(metric: str, value) -> str | None:
-    """Return a human-readable enum/bitfield label for well-known metrics, or None."""
-    if value is None:
-        return None
-    try:
-        v = int(float(value))
-    except (TypeError, ValueError):
-        return None
-    if metric == "inverter_state":
-        return _INV_ST.get(v)
-    if metric == "connection_state":
-        return "Connected" if v == 1 else "Disconnected"
-    if metric == "grid_status":
-        if v & 2: return "Grid Forming"
-        if v & 1: return "Grid Following"
-        if v & 4: return "PV Clipped"
-        return f"Mode {v}"
-    return None
+    Uses the same conversion as polling, so the preview is what the bridge stores.
+    """
+    value = convert(m, raw, scale=scale)
+    label = STATE_LABELS.get(m.target_metric, {}).get(value) if isinstance(value, str) else None
+    return {"source": m.source, "target_metric": m.target_metric,
+            "raw": raw, "scaled": value, "label": label}
+
+
+@router.get("/labels")
+async def labels() -> dict:
+    """The internal convention, for the UI: signed metrics and state labels (#15)."""
+    return {"signed": {k: list(v) for k, v in SIGNED_METRICS.items()},
+            "states": STATE_LABELS}
 
 
 def _registry(request: Request):
@@ -107,11 +104,7 @@ async def test_integration(request: Request, row_id: str) -> dict:
                 data = r.json()
             readings = []
             for m in mappings:
-                raw = _dotpath(data, m.source)
-                scaled = float(raw) * m.scale if raw is not None else None
-                readings.append({"source": m.source, "target_metric": m.target_metric,
-                                  "raw": raw, "scaled": scaled,
-                                  "label": _enum_label(m.target_metric, scaled)})
+                readings.append(_reading(m, _dotpath(data, m.source)))
             return {"ok": True, "readings": readings}
 
         if proto in ("modbus_tcp", "sunspec_tcp"):
@@ -122,10 +115,7 @@ async def test_integration(request: Request, row_id: str) -> dict:
                 values = await read_registers(cfg["host"], int(cfg.get("port", 502)),
                                               int(cfg.get("unit_id", 1)), fc, address, count, reg_type)
                 raw = values[0] if values else None
-                scaled = raw * scale if raw is not None else None
-                readings.append({"source": m.source, "target_metric": m.target_metric,
-                                  "raw": raw, "scaled": scaled,
-                                  "label": _enum_label(m.target_metric, scaled)})
+                readings.append(_reading(m, raw, scale=scale))
             return {"ok": True, "readings": readings}
 
         if proto == "ha_ws":
@@ -140,14 +130,7 @@ async def test_integration(request: Request, row_id: str) -> dict:
             readings = []
             for m in mappings:
                 state_obj = states.get(m.source, {})
-                raw = state_obj.get("state")
-                try:
-                    scaled = float(raw) * m.scale
-                except (TypeError, ValueError):
-                    scaled = raw
-                readings.append({"source": m.source, "target_metric": m.target_metric,
-                                  "raw": raw, "scaled": scaled,
-                                  "label": _enum_label(m.target_metric, scaled)})
+                readings.append(_reading(m, state_obj.get("state")))
             return {"ok": True, "readings": readings}
 
         if proto == "mqtt":
@@ -168,7 +151,14 @@ async def probe_registers(body: ProbeRequest) -> dict:
             body.host, body.port, body.unit_id,
             body.fc, body.address, count, body.type,
         )
-        return {"ok": True, "registers": values[:body.count]}
+        out: dict = {"ok": True, "registers": values[:body.count]}
+        if body.target_metric and values:
+            from ..integrations.models import FieldMapping
+            m = FieldMapping(source="probe", target_metric=body.target_metric,
+                             scale=body.scale, positive=body.positive, value_map=body.value_map)
+            reading = _reading(m, values[0])
+            out["value"], out["label"] = reading["scaled"], reading["label"]
+        return out
     except Exception as exc:
         raise HTTPException(400, str(exc))
 

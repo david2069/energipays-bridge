@@ -6,6 +6,7 @@ import time
 
 import aiosqlite
 
+from ..integrations.normalise import state_code
 from ..sample import Sample
 
 log = logging.getLogger(__name__)
@@ -31,11 +32,16 @@ class MetricsRecorder:
     async def __call__(self, sample: Sample) -> None:
         if sample.quality == "error" or not sample.points:
             return
-        rows = [
-            (sample.device_id, k, sample.ts, float(v))
-            for k, v in sample.points.items()
-            if (k in _RECORDED_POINTS or k.startswith("ext.")) and isinstance(v, (int, float))
-        ]
+        rows = []
+        for k, v in sample.points.items():
+            if not (k in _RECORDED_POINTS or k.startswith("ext.")):
+                continue
+            if isinstance(v, str) and k.startswith("ext."):
+                # Integration states are text; keep their history as the stable
+                # code from normalise.STATE_LABELS (#15).
+                v = state_code(k[4:], v)
+            if isinstance(v, (int, float)):
+                rows.append((sample.device_id, k, sample.ts, float(v)))
         if rows:
             await self._db.executemany(
                 "INSERT INTO metric_samples (device_id, point_id, ts, value) VALUES (?,?,?,?)",
