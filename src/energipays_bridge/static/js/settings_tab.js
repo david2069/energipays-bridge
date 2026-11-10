@@ -289,6 +289,7 @@ function integrationsCard() {
 
   const _blankMapping = () => ({
     target_metric: '', source: '', scale: 1.0, enabled: true,
+    positive: null, value_map: {}, _vm: [],
     _fc: 'fc3', _addr: '', _rtype: 'uint16', _scale: 1.0,
     _probing: false, _probeResult: null, _probeScaled: null,
   })
@@ -360,6 +361,8 @@ function integrationsCard() {
                   username: '', password: '', ...(intg.config || {}) },
         mappings: (intg.mappings || []).map(m => ({
           ...m,
+          // value_map as editable rows (#15)
+          _vm: Object.entries(m.value_map || {}).map(([from, to]) => ({ from, to })),
           _fc: m.source?.split(':')[0] || 'fc3',
           _addr: parseInt(m.source?.split(':')[1]) || '',
           _rtype: m.source?.split(':')[2] || 'uint16',
@@ -367,6 +370,7 @@ function integrationsCard() {
           _probing: false, _probeResult: null, _probeScaled: null,
         })),
         enabled: intg.enabled,
+        secrets_set: intg.secrets_set || {},   // secrets are never sent back (#17)
       }
       if (!this.form.mappings.length) this.form.mappings.push(_blankMapping())
       this.testResult = null
@@ -477,7 +481,12 @@ function integrationsCard() {
           const enabled = m.enabled !== false  // default true
           // Sign and value map travel with the mapping (#15); without them a save would
           // silently reset the source's convention to the bridge's.
-          const extra = { positive: m.positive || null, value_map: m.value_map || {} }
+          const value_map = {}
+          for (const r of (m._vm || [])) {
+            if (String(r.from).trim() !== '' && r.to) value_map[String(r.from).trim()] = r.to
+          }
+          const signed = Alpine.store('app').signedMetrics[m.target_metric]
+          const extra = { positive: signed ? (m.positive || signed[0]) : null, value_map }
           if (this.form.protocol === 'modbus_tcp' || this.form.protocol === 'sunspec_tcp') {
             return { target_metric: m.target_metric, source: `${m._fc}:${m._addr}:${m._rtype}:${m._scale}`, scale: 1, enabled, ...extra }
           }
@@ -546,7 +555,9 @@ function integrationsCard() {
             address: parseInt(m._addr) - (this.form.config.base_address_offset || 0),
             count: 1, type: m._rtype,
             target_metric: m.target_metric || null, scale: m._scale || 1,
-            positive: m.positive || null, value_map: m.value_map || {},
+            positive: Alpine.store('app').signedMetrics[m.target_metric] ? (m.positive || null) : null,
+            value_map: Object.fromEntries((m._vm || []).filter(r => String(r.from).trim() !== '' && r.to)
+                                          .map(r => [String(r.from).trim(), r.to])),
           }),
         })
         const d = await r.json()

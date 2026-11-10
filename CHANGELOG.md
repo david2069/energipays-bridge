@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Added
+- **Mapping editor: sign and value map per mapping.** Battery and grid power mappings
+  have a "Positive value at the source means" choice (Discharge/Charge, Import/Export),
+  with a hint on how to check it. State mappings have a "Source value → state" table,
+  for example `Idle` → Standby. Test shows each value as raw → bridge value, with
+  charging/discharging or importing/exporting (#15).
+
+### Fixed
+- When editing an integration, its saved token now shows "Saved — leave blank to keep"
+  instead of an empty field. Leaving it blank already kept the token (#17).
+
 ### Security
 - **Integration secrets are encrypted and never sent back to the browser.** The Home
   Assistant long-lived token, the REST bearer token and the MQTT password of an external

@@ -482,6 +482,46 @@
                              class="w-20 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand"/>
                     </div>
                   </template>
+                  <!-- Sign: what a positive value means at this source (#15) -->
+                  <template x-if="$store.app.signedMetrics[m.target_metric]">
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <span>Positive value at the source means</span>
+                      <select x-model="m.positive"
+                              class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-brand">
+                        <template x-for="opt in $store.app.signedMetrics[m.target_metric]" :key="opt">
+                          <option :value="opt" :selected="(m.positive || $store.app.signedMetrics[m.target_metric][0]) === opt"
+                                  x-text="opt.charAt(0).toUpperCase() + opt.slice(1)"></option>
+                        </template>
+                      </select>
+                      <span class="text-slate-500"
+                            x-text="m.target_metric === 'battery_power_w' ? 'Check with Test while the battery is charging: it must show a negative value.' : 'Check with Test while importing from the grid: it must show a positive value.'"></span>
+                    </div>
+                  </template>
+                  <!-- Value map: source codes/text → bridge states (#15) -->
+                  <template x-if="$store.app.stateLabels[m.target_metric]">
+                    <div class="space-y-1 text-[11px] text-slate-400">
+                      <div class="flex items-center justify-between">
+                        <span>Source value → state <span class="text-slate-500">(leave empty to use the built-in names)</span></span>
+                        <button type="button" @click="(m._vm = m._vm || []).push({from: '', to: ''})"
+                                class="text-brand hover:underline">+ Add</button>
+                      </div>
+                      <template x-for="(row, vi) in (m._vm || [])" :key="vi">
+                        <div class="flex items-center gap-1.5">
+                          <input type="text" x-model="row.from" placeholder="e.g. 1 or Idle"
+                                 class="w-28 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 font-mono focus:outline-none focus:border-brand"/>
+                          <span>→</span>
+                          <select x-model="row.to"
+                                  class="flex-1 bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-brand">
+                            <option value="">— choose —</option>
+                            <template x-for="id in Object.keys($store.app.stateLabels[m.target_metric])" :key="id">
+                              <option :value="id" :selected="row.to === id" x-text="$store.app.stateLabels[m.target_metric][id]"></option>
+                            </template>
+                          </select>
+                          <button type="button" @click="m._vm.splice(vi, 1)" class="text-slate-600 hover:text-red-400">✕</button>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
                 </div>
               </template>
             </div>
@@ -496,8 +536,14 @@
                   <template x-for="r in testResult.readings" :key="r.source">
                     <div>
                       <span class="text-slate-400" x-text="r.target_metric + ': '"></span>
-                      <span x-text="r.scaled ?? r.raw ?? '—'"></span>
-                      <span x-show="r.label" class="ml-1 text-amber-400" x-text="'(' + r.label + ')'"></span>
+                      <span class="text-slate-500" x-text="'raw ' + (r.raw ?? '—') + ' → '"></span>
+                      <span x-text="r.label ?? r.scaled ?? '—'"></span>
+                      <span x-show="!r.label && r.target_metric === 'battery_power_w' && typeof r.scaled === 'number'"
+                            class="ml-1 text-amber-400"
+                            x-text="r.scaled > 50 ? '(discharging)' : r.scaled < -50 ? '(charging)' : '(standby)'"></span>
+                      <span x-show="!r.label && r.target_metric === 'grid_power_w' && typeof r.scaled === 'number'"
+                            class="ml-1 text-amber-400"
+                            x-text="r.scaled > 0 ? '(importing)' : r.scaled < 0 ? '(exporting)' : ''"></span>
                     </div>
                   </template>
                 </div>
