@@ -95,6 +95,35 @@ MODEL_AUTO_POINTS: dict[int, list[tuple[int, str, str, int | None, str]]] = {
     ],
 }
 
+# FranklinWH aGate (model 1 Mn "FranklinWH Technologies Co., Ltd"): points whose
+# meaning differs from a plain inverter. M701 W is grid power, + import / − export
+# (franklinwh-modbus docs/API_COOKBOOK.md, CONFLICT_DETECTION_ANALYSIS.md).
+FRANKLINWH_OVERRIDES: dict[tuple[int, str], str] = {(701, "W"): "grid_power_w"}
+
+# FranklinWH holding registers outside the SunSpec chain, read with FC3 at these PDU
+# addresses (franklinwh-modbus docs/FRANKLINWH_MODBUS_EXTENSIONS.md). Only registers
+# that doc lists as measured; all read-only here.
+# (address, name, reg_type, target_metric, note)
+FRANKLINWH_EXTENSION: list[tuple[int, str, str, str, str]] = [
+    (15502, "PVOutputP", "uint16", "solar_power_w", "total PV, all sources"),
+    (16000, "LoadActiveP", "uint16", "home_load_w", "home load, ~1 W resolution"),
+    (15507, "OnGridMode", "uint16", "operating_mode", "1 Backup, 2 Self-Consumption, 3 TOU"),
+    (15508, "SelfReserve", "uint16", "self_reserve_soc", ""),
+    (15509, "TouReserve", "uint16", "tou_reserve_soc",
+     "TOU reserve on V12R02B60D00; repeats the Self reserve on V10R01B04D00"),
+]
+
+
+def _is_franklinwh(manufacturer: str) -> bool:
+    return "franklin" in manufacturer.lower()
+
+
+async def _read_string(host: str, port: int, unit_id: int, address: int, count: int) -> str:
+    regs = await read_registers(host, port, unit_id, 3, address, count, "uint16")
+    raw = b"".join(int(r).to_bytes(2, "big") for r in regs)
+    return raw.split(b"\0", 1)[0].decode("ascii", "replace").strip()
+
+
 # Type widths in registers
 _REG_COUNT = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2}
 
@@ -134,6 +163,7 @@ async def scan_sunspec(
 
     models = []
     offset = base + 2   # skip the 2-register "SunS" magic
+    manufacturer = ""
 
     while True:
         try:
@@ -150,11 +180,19 @@ async def scan_sunspec(
         name, category = MODEL_NAMES.get(model_id, (f"Model {model_id}", None))
         data_addr = offset + 2  # first data register
 
+        if model_id == 1:
+            try:
+                manufacturer = await _read_string(host, port, unit_id, data_addr, 16)   # Mn
+            except Exception as exc:
+                log.debug("SunSpec Mn read failed: %s", exc)
+
         # Try to build suggested mappings for known models
         # Tuple format: (data_off, point_id, reg_type, sf_off_or_None, target_metric[, unit_scale])
         suggested = []
         for entry in MODEL_AUTO_POINTS.get(model_id, []):
             data_off, point_id, reg_type, sf_off, target_metric = entry[:5]
+            if _is_franklinwh(manufacturer):
+                target_metric = FRANKLINWH_OVERRIDES.get((model_id, point_id), target_metric)
             unit_scale = entry[5] if len(entry) > 5 else 1.0
             abs_addr = data_addr + data_off
             scale = unit_scale
@@ -196,12 +234,32 @@ async def scan_sunspec(
 
         offset += 2 + length  # skip header + data
 
+    if _is_franklinwh(manufacturer):
+        models.append(await _franklinwh_extension(host, port, unit_id))
+
     return {
         "ok": True,
         "base_address": base,
+        "manufacturer": manufacturer,
         "models": models,
         "error": None,
     }
+
+
+async def _franklinwh_extension(host: str, port: int, unit_id: int) -> dict:
+    """Operating mode, reserves, total PV and home load: not in any SunSpec model."""
+    suggested = []
+    for address, name, reg_type, target_metric, note in FRANKLINWH_EXTENSION:
+        live_value = None
+        try:
+            regs = await read_registers(host, port, unit_id, 3, address, 1, reg_type)
+            live_value = regs[0] if regs else None
+        except Exception:
+            pass
+        suggested.append({"target_metric": target_metric, "source": f"fc3:{address}:{reg_type}:1.0",
+                          "point": name, "live_value": live_value, "note": note})
+    return {"model_id": "ext", "name": "FranklinWH extension registers", "category": "battery",
+            "data_address": 15500, "length": 0, "suggested_mappings": suggested}
 
 
 async def _find_base(host: str, port: int, unit_id: int, preferred_start: int | None = None) -> int | None:

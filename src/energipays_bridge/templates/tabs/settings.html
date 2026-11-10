@@ -376,7 +376,8 @@
                     </button>
                   </div>
                   <template x-for="m in ssModels" :key="m.model_id">
-                    <div class="flex items-center gap-2 text-xs">
+                    <div class="flex items-center gap-2 text-xs"
+                         :title="m.suggested_mappings.map(s => s.point + ' → ' + s.target_metric + (s.note ? ' (' + s.note + ')' : '')).join('\n')">
                       <span class="font-mono text-slate-400 w-10 shrink-0" x-text="m.model_id"></span>
                       <span class="text-slate-300 flex-1" x-text="m.name"></span>
                       <span x-show="m.category" class="text-[10px] px-1.5 py-0.5 rounded"
