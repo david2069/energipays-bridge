@@ -7,7 +7,7 @@ import time
 from abc import ABC, abstractmethod
 
 from ..sample import Sample, SampleBus
-from .normalise import derive
+from .normalise import derive, split_unmapped
 from .secret_store import scrub_own
 
 log = logging.getLogger(__name__)
@@ -15,12 +15,18 @@ log = logging.getLogger(__name__)
 EXT_DEVICE_ID = "ext"
 
 
-async def publish_points(bus: SampleBus, points: dict[str, object]) -> None:
+async def publish_points(bus: SampleBus, points: dict[str, object], owner: object = None) -> None:
     """Fill derived values (#15), prefix with ``ext.`` and publish one sample.
 
-    Every protocol publishes through here, so all get the same derivation.
+    Every protocol publishes through here, so all get the same derivation. State
+    values with no known meaning are dropped (battery state then comes from power)
+    and kept on ``owner.unmapped`` for the integration card (#30).
     """
-    derived = derive(dict(points))
+    points = dict(points)
+    unmapped = split_unmapped(points)
+    if owner is not None:
+        owner.unmapped = unmapped
+    derived = derive(points)
     prefixed = {f"ext.{k}": v for k, v in derived.items()}
     await bus.publish(Sample(device_id=EXT_DEVICE_ID, ts=time.time(), points=prefixed))
 
@@ -58,7 +64,7 @@ class IntegrationPoller(ABC):
             try:
                 points = await self._poll()
                 if points:
-                    await publish_points(self.bus, points)
+                    await publish_points(self.bus, points, self)
                     self.status = "live"
                     self.last_error = ""
             except Exception as exc:

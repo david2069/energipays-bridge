@@ -120,4 +120,4 @@ class HaWsPoller:
                     self._latest[m.target_metric] = convert(m, state_val)
 
                     # Publish a sample with all currently known ext metrics
-                    await publish_points(self.bus, self._latest)
+                    await publish_points(self.bus, self._latest, self)

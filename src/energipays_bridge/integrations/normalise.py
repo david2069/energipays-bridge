@@ -164,6 +164,24 @@ def convert(mapping: Any, raw: Any, scale: float | None = None) -> Any:
     return value
 
 
+def is_unmapped(metric: str, value: Any) -> bool:
+    """A state metric whose value has no known meaning (e.g. a bare ``-3``)."""
+    labels = STATE_LABELS.get(metric)
+    return labels is not None and value is not None and not (isinstance(value, str) and value in labels)
+
+
+def split_unmapped(points: dict[str, Any]) -> dict[str, Any]:
+    """Remove state values with no known meaning from ``points`` and return them (#30).
+
+    They are never shown or stored as a state; the integration reports them so the
+    user can add a value map.
+    """
+    bad = {k: v for k, v in points.items() if is_unmapped(k, v)}
+    for k in bad:
+        del points[k]
+    return bad
+
+
 def derive(points: dict[str, Any]) -> dict[str, Any]:
     """Fill what a source left out, from internal values. Returns ``points``."""
     pw = points.get("battery_power_w")

@@ -243,6 +243,11 @@ Connect a FranklinWH battery, solar inverter, or any other device via:
 
 Configure in **Settings → External Integrations**. Mapped metrics (e.g. `ext.battery_soc`, `ext.solar_power_w`) appear in the Dashboard and Analytics tab automatically.
 
+- **Presets** fill in the topics, keys, signs and state names for the FranklinWH Modbus Bridge, the FranklinWH Direct Connect Bridge and the Modbus Bridge (SunSpec). Confirm them with **Test**.
+- **Signs:** inside the bridge, battery power is **+ discharge / − charge** and grid power is **+ import / − export**. If your source uses the opposite sign, choose it for that mapping under "Positive value at the source means".
+- **States:** text such as `Idle` or `TOU` is recognised. For a source that sends codes, add a **value map** (for example `3` → Time-of-Use). A state value the bridge doesn't recognise is not shown. The integration's card lists it as *Unmapped*, and Battery State then comes from battery power.
+- **Self-signed HTTPS** (REST): turn on "Trust a self-signed certificate" for that integration only.
+
 ---
 
 ## Push notifications

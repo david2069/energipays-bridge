@@ -156,6 +156,11 @@
               </span>
               <span x-show="intg.last_error" class="text-[10px] text-red-400 truncate max-w-[120px]" x-text="intg.last_error"></span>
             </div>
+            <!-- State values with no known meaning: not shown on the dashboard until mapped (#30) -->
+            <template x-for="[metric, val] in Object.entries(intg.unmapped || {})" :key="metric">
+              <div class="text-[10px] text-amber-400"
+                   x-text="'Unmapped ' + metric + ' value ' + val + ': add a value map (Edit)'"></div>
+            </template>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <button @click="toggleEnabled(intg)"
@@ -576,6 +581,8 @@
                       <span class="text-slate-400" x-text="r.target_metric + ': '"></span>
                       <span class="text-slate-500" x-text="'raw ' + (r.raw ?? '—') + ' → '"></span>
                       <span x-text="r.label ?? r.scaled ?? '—'"></span>
+                      <span x-show="r.unmapped" class="ml-1 text-amber-400"
+                            x-text="'(unmapped: add a value map, e.g. ' + r.raw + ' → a state)'"></span>
                       <span x-show="!r.label && r.target_metric === 'battery_power_w' && typeof r.scaled === 'number'"
                             class="ml-1 text-amber-400"
                             x-text="r.scaled > 50 ? '(discharging)' : r.scaled < -50 ? '(charging)' : '(standby)'"></span>
