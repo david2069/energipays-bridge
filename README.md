@@ -225,6 +225,8 @@ To re-run the wizard at any time: **Settings → Re-run Setup Wizard**.
 
 When `MQTT_ENABLED=true`, the bridge publishes all sensors as Home Assistant entities under the `homeassistant/` discovery prefix. Entities appear automatically in HA — no manual configuration needed.
 
+Battery entities come from your battery integration (Settings → Integrations) and appear on the same HA device once the integration sends the value. **Battery On Grid** (binary sensor) is on while the battery system is grid-connected and off during an outage; a simulated off-grid test is not reported as off grid.
+
 Published entities include: water temperatures (T1/T2/T3/avg), grid import/export power, phase voltages, heating status, boost status, active rule, state of charge, and more.
 
 **For the HA add-on:** set `mqtt_enabled: true` in the Configuration tab and point `mqtt_host` at your broker. If you use the [Mosquitto add-on](https://github.com/home-assistant/addons/tree/master/mosquitto), the default host `core-mosquitto` works without changes.
