@@ -138,6 +138,14 @@ document.addEventListener('alpine:init', () => {
       const age = days ? `${days} d ${h} h` : h ? `${h} h ${m} m` : `${m} m`
       return `Energipays has had no data from your PowerDiverter for ${age} (last data ${when}).`
     },
+    // "3 d 4 h ago" for the header badge
+    get deviceLastDataShort() {
+      const ts = this.deviceLastDataTs
+      if (!ts) return ''
+      const s = Math.max(0, Math.round(Date.now() / 1000 - ts))
+      const days = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60)
+      return (days ? `${days} d ${h} h` : h ? `${h} h ${m} m` : `${m} m`) + ' ago'
+    },
     // One dialog per offline spell, remembered per browser by its last-data time.
     _checkDeviceContact(prevOffline) {
       const key = String(this.deviceLastDataTs || 'none')
@@ -327,6 +335,13 @@ document.addEventListener('alpine:init', () => {
 })
 
 // Shared number formatter used by all tabs
+// |v| for a reading, null when there is none — Math.abs(null) is 0, a fake reading (#36)
+function absOrNull(v) {
+  if (v === null || v === undefined || v === '') return null
+  const n = typeof v === 'number' ? v : parseFloat(v)
+  return isNaN(n) ? null : Math.abs(n)
+}
+
 function fmt(val, unit = '', decimals = 1) {
   if (val === null || val === undefined || val === '') return '—'
   const n = typeof val === 'number' ? val : parseFloat(val)

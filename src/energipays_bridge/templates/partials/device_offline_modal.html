@@ -6,8 +6,11 @@
        role="dialog" aria-modal="true" aria-labelledby="pd-offline-title">
     <h2 id="pd-offline-title" class="text-lg font-semibold text-red-200">PowerDiverter not connected</h2>
     <p class="text-sm text-slate-200" x-text="$store.app.deviceOfflineSince"></p>
-    <p class="text-sm text-slate-300">The bridge is signed in to Energipays, but the PowerDiverter is not sending data.
-      Readings, charts and totals show the last data it sent.</p>
+    <p class="text-sm text-slate-300">The bridge is signed in to Energipays, but the PowerDiverter is not sending data,
+      so there are no live readings: they show — until it reconnects, and are not stored or sent to Home Assistant
+      (its sensors there show unavailable).</p>
+    <p class="text-sm text-slate-300">What is still available: history and charts from data recorded before it went
+      offline (Analytics), and your settings and rules.</p>
     <div class="text-sm text-slate-300">
       <p class="font-medium text-slate-200 mb-1">Please check:</p>
       <ol class="list-decimal ml-5 space-y-0.5">

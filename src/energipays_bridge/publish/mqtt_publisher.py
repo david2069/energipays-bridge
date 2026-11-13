@@ -20,6 +20,7 @@ from energipays_bridge.publish.entities import (
     ENERGIPAYS_ENTITIES,
     ENTITY_BY_SLUG,
     EntityDef,
+    device_availability_topic,
 )
 from energipays_bridge.sample import Sample
 
@@ -172,6 +173,11 @@ class MqttPublisher:
 
         if not self._discovery_sent and self._connected:
             await self._enqueue_discovery()
+
+        # PowerDiverter contact (#36): readings entities go unavailable while offline
+        if "device_connected" in pts:
+            await self._enqueue(device_availability_topic(sample.device_id),
+                                "online" if pts["device_connected"] else "offline", retain=True)
 
         # State messages for all read-capable entities
         is_single_phase = int(pts.get("dev.phase_type", 0)) == 1

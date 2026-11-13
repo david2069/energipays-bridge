@@ -27,6 +27,22 @@ _FAILURES_BEFORE_ALERT = 3
 #: the hot-water tank temperatures (#36).
 _CONTACT_KEYS = ("phasePower", "phasePowerA", "phasePowerB", "phasePowerC",
                  "waterTemperature1", "waterTemperature2", "waterTemperature3")
+#: What the PowerDiverter itself measures. While Energipays has no contact with it,
+#: the cloud keeps answering with its last values; they are not readings any more, so
+#: they are left out of the sample — not shown, stored or sent to HA (#36, owner
+#: 2026-11-13: "it makes no sense to have fake readings"). Settings (boost_power,
+#: temperatureLimit, profile/sd.* switches) and cloud statistics stay.
+DEVICE_READINGS = frozenset({
+    "waterTemperature1", "waterTemperature2", "waterTemperature3", "waterTemperatureAvg",
+    "voltageA", "voltageB", "voltageC",
+    "phasePowerA", "phasePowerB", "phasePowerC", "phasePower",
+    "heaterStatus", "boostStatus", "stateOfCharge", "currentDRM",
+    "signalWiFi", "signalLora",
+    "offPeakStreamHeaterPower", "offPeakStreamExtraPower", "divertedPowerHeater", "divertedPowerExtra",
+    "solarStreamA", "solarStreamB", "solarStreamC", "solarPower",
+    "boostAntibacterialTime", "errors", "errorCount",
+})
+
 #: Unchanged grid power and tank temperatures for this long = no contact.
 DEVICE_STALE_S = 30 * 60
 #: How far back the last cloud stats slot with data is looked for.
@@ -468,6 +484,9 @@ class EnergipaysPoller:
             log.info("PowerDiverter back online")
             await self._emit("device_online", {"ts": datetime.now(ZoneInfo(self._tz)).strftime("%H:%M")})
         points["device_connected"] = 1 if connected else 0
+        if not connected:
+            for k in DEVICE_READINGS:
+                points.pop(k, None)
         if c.last_data_ts:
             points["device_last_data_ts"] = round(c.last_data_ts)
             points["device_last_data"] = datetime.fromtimestamp(

@@ -171,7 +171,7 @@
             </button>
             <span class="text-[10px] font-bold tabular-nums"
                   :class="$store.app.points.boostStatus ? 'text-red-400' : 'text-green-400'"
-                  x-text="$store.app.points.boostStatus ? 'On' : 'Off'"></span>
+                  x-text="$store.app.points.boostStatus == null ? '—' : $store.app.points.boostStatus ? 'On' : 'Off'"></span>
           </div>
 
         </div>
@@ -466,7 +466,7 @@
                 :fill="metricsTab==='grid' ? '#4ade80' : '#94a3b8'">Grid</text>
           <text y="22" text-anchor="middle" font-size="11" font-weight="600"
                 :fill="($store.app.points.phasePower||0) < -0.05 ? '#fbbf24' : ($store.app.points.phasePower||0) > 0.05 ? '#4ade80' : '#94a3b8'"
-                x-text="fmt(Math.abs($store.app.points.phasePower),'kW',2)"></text>
+                x-text="fmt(absOrNull($store.app.points.phasePower),'kW',2)"></text>
           <text y="34" text-anchor="middle" font-size="8"
                 :fill="($store.app.points.phasePower||0) < -0.05 ? '#f97316' : '#4ade80'"
                 x-text="Math.abs($store.app.points.phasePower||0) < 0.05 ? '' : ($store.app.points.phasePower||0) < -0.05 ? 'Import' : 'Export'"></text>
@@ -482,7 +482,7 @@
                 :fill="metricsTab==='solar' ? '#facc15' : '#94a3b8'">Solar</text>
           <text y="20" text-anchor="middle" font-size="9"
                 :fill="($store.app.points.solarStreamA||0) > 0.05 ? '#facc15' : '#475569'"
-                x-text="fmt($store.app.points.solarStreamA||0,'kW',2)"></text>
+                x-text="fmt($store.app.points.solarStreamA,'kW',2)"></text>
           <!-- Solar restriction window — shown below Solar kW label -->
           <g x-show="$store.app.points['sd.solarRestrictionSwitcherStatus']"
              transform="translate(0,36)" style="pointer-events:none">
@@ -684,7 +684,7 @@
                 x-text="$store.app.points['dev.storage_name'] || 'Heater'"></text>
           <text y="18" text-anchor="middle" font-size="11" font-weight="600"
                 :fill="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? '#4ade80' : '#94a3b8'"
-                x-text="fmt(Math.abs($store.app.points.offPeakStreamHeaterPower),'kW',2)"></text>
+                x-text="fmt(absOrNull($store.app.points.offPeakStreamHeaterPower),'kW',2)"></text>
           <text y="30" text-anchor="middle" font-size="9" fill="#64748b"
                 x-text="fmt($store.app.points.waterTemperatureAvg,'°C',1)"></text>
           <g x-show="$store.app.points.boostStatus">
@@ -760,7 +760,7 @@
       <div class="flex items-end gap-1 mb-3">
         <span class="text-3xl font-bold"
               :class="($store.app.points.phasePower || 0) < 0 ? 'text-amber-400' : 'text-green-400'"
-              x-text="fmt(Math.abs($store.app.points.phasePower), 'kW', 2)"></span>
+              x-text="fmt(absOrNull($store.app.points.phasePower), 'kW', 2)"></span>
         <span class="text-sm text-slate-500 mb-1"
               x-text="Math.abs($store.app.points.phasePower||0) < 0.05 ? '' : ($store.app.points.phasePower||0) < 0 ? 'import' : 'export'"></span>
       </div>
@@ -832,7 +832,7 @@
           <div class="text-xs text-slate-500 mb-0.5">Status</div>
           <span class="text-sm font-semibold rounded-full px-2.5 py-0.5"
                 :class="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? 'bg-brand/20 text-brand' : 'bg-slate-700 text-slate-400'"
-                x-text="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05 ? 'Heating' : 'Idle'"></span>
+                x-text="$store.app.points.offPeakStreamHeaterPower == null ? '—' : Math.abs($store.app.points.offPeakStreamHeaterPower) > 0.05 ? 'Heating' : 'Idle'"></span>
         </div>
         <div>
           <div class="text-xs text-slate-500 mb-0.5">Avg</div>
@@ -848,7 +848,7 @@
         <div x-show="Math.abs($store.app.points.offPeakStreamHeaterPower||0) > 0.05" class="ml-auto">
           <div class="text-xs text-slate-500 mb-0.5">Draw</div>
           <span class="text-2xl font-bold text-green-400"
-                x-text="fmt(Math.abs($store.app.points.offPeakStreamHeaterPower),'kW',2)"></span>
+                x-text="fmt(absOrNull($store.app.points.offPeakStreamHeaterPower),'kW',2)"></span>
         </div>
         <!-- Chart button -->
         <button @click="openHotWaterChart()" title="24h temperature chart"
@@ -1632,7 +1632,7 @@
             <span class="w-2.5 h-2.5 rounded shrink-0" style="background:#f97316aa"></span>
             <span class="text-slate-500">Heater</span>
             <span class="font-mono font-semibold text-orange-400"
-                  x-text="fmt(Math.abs($store.app.points.offPeakStreamHeaterPower||0), 'kW', 2)"></span>
+                  x-text="fmt(absOrNull($store.app.points.offPeakStreamHeaterPower), 'kW', 2)"></span>
           </div>
         </div>
         <!-- Chart -->

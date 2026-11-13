@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+## 1.5.1 — No old readings shown as live while the PowerDiverter is offline
+
+### Changed
+- **No fake readings while the PowerDiverter is offline.** Energipays keeps answering
+  with the last values the device sent; the bridge no longer shows them as current.
+  Temperatures, grid, solar, heater, Wi-Fi and LoRa read "—", Home Assistant's sensors
+  for them show unavailable, and they are not stored in the bridge's history, until
+  data arrives again. Settings, rules and cloud statistics stay. Matches energipays.com,
+  which shows N/A for an offline device (#36).
+- **Header:** "Live" while the PowerDiverter is sending; "Energipays OK · 7s ago" plus
+  "PowerDiverter offline · last data 4 d 4 h ago" when only the cloud answers (#36).
+- **The offline dialog** says what is still available: history and charts recorded
+  before it went offline, settings and rules (#36).
+
+  Verified: pytest 139 passed (3 new; mutations of the drop, the HA availability and
+  its publish each caught); screen helpers run in JavaScriptCore (5 checks); not yet
+  seen in the add-on.
+
 ### Added
 - **Home Assistant: "Battery On Grid" binary sensor** from your battery integration's
   grid-connection state: on while grid-connected, off during an outage. It appears
