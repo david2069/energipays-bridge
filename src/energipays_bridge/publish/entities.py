@@ -169,6 +169,10 @@ ENERGIPAYS_ENTITIES: list[EntityDef] = [
        state_class="total_increasing"),
 
     # ── Device / connectivity (diagnostic) ────────────────────────────────
+    # Whether Energipays is still receiving data from the PowerDiverter (#36)
+    _b("device_connected", "device_connected", "PowerDiverter Connected", "connectivity"),
+    _s("device_last_data", "device_last_data", "PowerDiverter Last Data", "", "timestamp",
+       state_class="", icon="mdi:clock-alert-outline", diagnostic=True),
     _s("wifi_signal",    "signalWiFi",            "WiFi Signal",  "dBm", "signal_strength",
        diagnostic=True),
     _b("lora_enabled",  "dev.is_lora_enabled",   "LoRa Enabled", diagnostic=True),

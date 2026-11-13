@@ -3,11 +3,21 @@
 
   <!-- Status dot + poll time -->
   <div class="flex items-center gap-1.5 shrink-0">
-    <span class="w-2 h-2 rounded-full animate-pulse"
+    <!-- Bridge ↔ Energipays -->
+    <span x-show="!$store.app.connected || !$store.app.deviceOffline" class="w-2 h-2 rounded-full animate-pulse"
           :class="$store.app.connected ? 'bg-green-400' : 'bg-red-500'"></span>
-    <span class="text-xs text-slate-400" x-text="$store.app.connected ? 'Live' : 'Offline'"></span>
-    <span class="hidden sm:inline text-xs text-slate-500 ml-0.5"
+    <span x-show="!$store.app.connected || !$store.app.deviceOffline" class="text-xs text-slate-400"
+          x-text="$store.app.connected ? 'Live' : 'Offline'"></span>
+    <span x-show="!$store.app.connected || !$store.app.deviceOffline" class="hidden sm:inline text-xs text-slate-500 ml-0.5"
           x-text="'· ' + $store.app.lastPollLabel"></span>
+    <!-- PowerDiverter not heard from (#36): replaces "Live" -->
+    <button x-show="$store.app.connected && $store.app.deviceOffline" x-cloak
+            @click="$store.app.deviceOfflineDialog = true"
+            :title="$store.app.deviceOfflineSince"
+            class="flex items-center gap-1 bg-red-900/60 text-red-200 border border-red-700/60 rounded-full px-2 py-0.5 text-[11px] font-medium">
+      <span class="w-2 h-2 rounded-full bg-red-500"></span>
+      PowerDiverter offline
+    </button>
   </div>
 
   <!-- Read-only mode badge — device writes are refused while READ_ONLY=true -->

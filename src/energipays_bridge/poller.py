@@ -7,7 +7,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from .sample import Sample, SampleBus
 
@@ -19,6 +21,74 @@ log = logging.getLogger(__name__)
 #: Consecutive poll failures before raising a notification. 3 x 60s ~= 3 min,
 #: long enough to ride out a transient Energipays blip without crying wolf.
 _FAILURES_BEFORE_ALERT = 3
+
+
+#: Telemetry that changes while the PowerDiverter is uploading: grid power and
+#: the hot-water tank temperatures (#36).
+_CONTACT_KEYS = ("phasePower", "phasePowerA", "phasePowerB", "phasePowerC",
+                 "waterTemperature1", "waterTemperature2", "waterTemperature3")
+#: Unchanged grid power and tank temperatures for this long = no contact.
+DEVICE_STALE_S = 30 * 60
+#: How far back the last cloud stats slot with data is looked for.
+LAST_DATA_LOOKBACK_DAYS = 7
+
+
+def last_data_slot(raw: object, tz: str) -> float | None:
+    """Epoch of the latest stats slot holding any non-zero value, or None.
+
+    The cloud has no last-seen field. A PowerDiverter keeps no data while
+    offline, so its 15-minute stats slots stay all zero from the moment it
+    stopped uploading (same rule as energipays-mobile #25). Slot keys are
+    device-local wall time.
+    """
+    a = raw.get("analytics") if isinstance(raw, dict) else None
+    if not isinstance(a, dict):
+        return None
+    best = None
+    for key, vals in a.items():
+        if not isinstance(vals, dict):
+            continue
+        if not any(isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0
+                   for v in vals.values()):
+            continue
+        try:
+            at = datetime.strptime(str(key), "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo(tz))
+        except ValueError:
+            continue
+        ts = at.timestamp()
+        if best is None or ts > best:
+            best = ts
+    return best
+
+
+class DeviceContact:
+    """Whether Energipays is still hearing from the PowerDiverter (#36).
+
+    Lost contact when Energipays reports it offline (is_online 0), or when grid
+    power and tank temperatures have not changed for DEVICE_STALE_S. A
+    successful cloud poll says nothing about the device itself.
+    """
+
+    def __init__(self, stale_after_s: float = DEVICE_STALE_S) -> None:
+        self.stale_after_s = stale_after_s
+        self.connected: bool | None = None
+        self.last_data_ts: float | None = None
+        self._sig: tuple | None = None
+
+    def update(self, points: dict, now: float) -> tuple[bool, bool]:
+        """Return (connected, changed) after one poll."""
+        sig = tuple(points.get(k) for k in _CONTACT_KEYS)
+        if any(v is not None for v in sig) and sig != self._sig:
+            if self._sig is not None or self.last_data_ts is None:
+                self.last_data_ts = now
+            self._sig = sig
+        flag = points.get("is_online")
+        reported_off = flag is not None and str(flag).strip().lower() in ("0", "false")
+        stale = self.last_data_ts is None or now - self.last_data_ts > self.stale_after_s
+        connected = not reported_off and not stale
+        changed = connected != self.connected
+        self.connected = connected
+        return connected, changed
 
 
 def _flatten(device_status: dict, statistics: dict, device_profile: dict | None = None) -> dict[str, object]:
@@ -260,6 +330,7 @@ class EnergipaysPoller:
         self.consecutive_failures: int = 0
         self.restarts: int = 0
         self.stalled: bool = False
+        self.contact = DeviceContact()
 
     async def _emit(self, event: str, context: dict) -> None:
         """Fire a health event, never letting a notification failure hurt polling."""
@@ -364,6 +435,44 @@ class EnergipaysPoller:
                 await self._record_failure(str(exc))
             await asyncio.sleep(self._interval)
 
+    async def _find_last_data(self) -> float | None:
+        """Last cloud stats slot with data: today first, then the past week."""
+        today = datetime.now(ZoneInfo(self._tz)).date()
+        for start in (today, today - timedelta(days=LAST_DATA_LOOKBACK_DAYS)):
+            try:
+                raw = await asyncio.to_thread(self._client.stats, self._device_id,
+                                              start.isoformat(), today.isoformat(),
+                                              self._data_server, self._tz, "power", "sum")
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Last-data lookup failed: %s", exc)
+                return None
+            ts = last_data_slot(raw, self._tz)
+            if ts is not None:
+                return ts
+        return None
+
+    async def _track_contact(self, points: dict) -> None:
+        """Add device_connected / device_last_data_ts; log and notify on change."""
+        c = self.contact
+        connected, changed = c.update(points, self.last_poll_ts)
+        if changed and not connected:
+            found = await self._find_last_data()
+            if found is not None:
+                c.last_data_ts = found
+            since = (datetime.fromtimestamp(c.last_data_ts, ZoneInfo(self._tz)).strftime("%H:%M %a %d %b")
+                     if c.last_data_ts else f"more than {LAST_DATA_LOOKBACK_DAYS} days")
+            log.warning("PowerDiverter not connected: Energipays has had no data from it since %s. "
+                        "Check it is powered and connected to Wi-Fi.", since)
+            await self._emit("device_offline", {"ts": since, "since": since})
+        elif changed and connected and c.last_data_ts and self.polls_total > 1:
+            log.info("PowerDiverter back online")
+            await self._emit("device_online", {"ts": datetime.now(ZoneInfo(self._tz)).strftime("%H:%M")})
+        points["device_connected"] = 1 if connected else 0
+        if c.last_data_ts:
+            points["device_last_data_ts"] = round(c.last_data_ts)
+            points["device_last_data"] = datetime.fromtimestamp(
+                round(c.last_data_ts), ZoneInfo(self._tz)).isoformat()
+
     async def _poll(self) -> None:
         try:
             device_status, statistics, device_profile = await asyncio.gather(
@@ -395,6 +504,7 @@ class EnergipaysPoller:
             if was_stalled or failures >= _FAILURES_BEFORE_ALERT:
                 log.info("Poller recovered after %d consecutive failures", failures)
                 await self._emit("poller_recovered", {"failures": failures})
+            await self._track_contact(points)
             sample = Sample(device_id=self._device_id, ts=self.last_poll_ts,
                             points=points, quality="ok")
             await self._bus.publish(sample)

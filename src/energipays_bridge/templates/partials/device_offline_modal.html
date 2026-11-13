@@ -1,0 +1,26 @@
+<!-- PowerDiverter not connected (#36): once per offline spell -->
+<div x-show="$store.app.deviceOfflineDialog && $store.app.deviceOffline" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+     @keydown.escape.window="$store.app.closeDeviceOfflineDialog()">
+  <div class="bg-slate-900 border border-red-700/60 rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3"
+       role="dialog" aria-modal="true" aria-labelledby="pd-offline-title">
+    <h2 id="pd-offline-title" class="text-lg font-semibold text-red-200">PowerDiverter not connected</h2>
+    <p class="text-sm text-slate-200" x-text="$store.app.deviceOfflineSince"></p>
+    <p class="text-sm text-slate-300">The bridge is signed in to Energipays, but the PowerDiverter is not sending data.
+      Readings, charts and totals show the last data it sent.</p>
+    <div class="text-sm text-slate-300">
+      <p class="font-medium text-slate-200 mb-1">Please check:</p>
+      <ol class="list-decimal ml-5 space-y-0.5">
+        <li>The PowerDiverter has power.</li>
+        <li>Your Wi-Fi router is on and has internet.</li>
+        <li>The PowerDiverter is connected to your Wi-Fi (its Wi-Fi light, or your router's device list).</li>
+        <li>If you changed your Wi-Fi name or password, the PowerDiverter needs the new details.</li>
+      </ol>
+    </div>
+    <p class="text-xs text-slate-400">This message closes by itself when data arrives again.</p>
+    <div class="flex justify-end">
+      <button @click="$store.app.closeDeviceOfflineDialog()"
+              class="px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm text-slate-100">OK</button>
+    </div>
+  </div>
+</div>

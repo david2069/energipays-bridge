@@ -1,0 +1,8 @@
+<!-- PowerDiverter not connected (#36): banner on every tab while offline -->
+<div x-show="$store.app.connected && $store.app.deviceOffline" x-cloak
+     class="bg-red-900/80 border-b border-red-700/60 px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-red-100 text-xs">
+  <span class="font-semibold">PowerDiverter not connected</span>
+  <span class="text-red-200/90" x-text="$store.app.deviceOfflineSince"></span>
+  <span class="text-red-200/90">Readings shown are the last it sent.</span>
+  <button @click="$store.app.deviceOfflineDialog = true" class="underline text-red-100">What to check</button>
+</div>
