@@ -18,6 +18,9 @@ class EntityDef:
     options: list[str] = field(default_factory=list)  # for select
     # diagnostic entities appear under "Diagnostic" in HA device page
     diagnostic: bool = False
+    # source state id -> HA state, for entities fed from a state metric (#20);
+    # a state not listed publishes nothing
+    states: dict[str, str] | None = None
 
     # ── topic helpers ──────────────────────────────────────────────────────
 
@@ -38,6 +41,8 @@ class EntityDef:
     def format_value(self, raw) -> str | None:
         if raw is None:
             return None
+        if self.states is not None:
+            return self.states.get(str(raw))
         if self.ha_type in ("binary_sensor", "switch"):
             return "ON" if int(raw) == 1 else "OFF"
         if self.ha_type == "select" and self.options == ["Off", "On"]:
@@ -220,5 +225,16 @@ ENERGIPAYS_ENTITIES: list[EntityDef] = [
               state_class="", icon="mdi:clock-outline", diagnostic=True),
 ]
 
+# ── Battery entities, fed by the battery integration's ext.* metrics (#20) ──
+# Published on the same HA device, and only once the integration has sent the
+# metric, so a site without a mapped source gets no permanently unknown entity.
+BATTERY_ENTITIES: list[EntityDef] = [
+    # Read-only: from the grid-connection state (#15). Off = the battery system is
+    # islanded (outage); a simulated off-grid is never reported as off grid.
+    EntityDef(slug="battery_on_grid", stat_key="ext.battery_grid_status", ha_type="binary_sensor",
+              name="Battery On Grid", icon="mdi:transmission-tower",
+              states={"on_grid": "ON", "off_grid": "OFF"}),
+]
+
 # Keyed lookup
-ENTITY_BY_SLUG: dict[str, EntityDef] = {e.slug: e for e in ENERGIPAYS_ENTITIES}
+ENTITY_BY_SLUG: dict[str, EntityDef] = {e.slug: e for e in ENERGIPAYS_ENTITIES + BATTERY_ENTITIES}

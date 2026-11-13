@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Added
+- **Home Assistant: "Battery On Grid" binary sensor** from your battery integration's
+  grid-connection state: on while grid-connected, off during an outage. It appears
+  once the integration sends that value (#20).
+
+### Fixed
+- **MQTT: battery-integration readings no longer disturb the PowerDiverter's HA
+  device.** If one arrived before the first PowerDiverter poll, the HA device was
+  registered as "ext", and each one replaced the PowerDiverter's latest values used
+  for republishing (#20).
+
+  Verified: pytest 136 passed (4 new; mutations of the routing, once-only discovery
+  and metric check each caught); not yet seen in the add-on.
+
 ## 1.5.0 — Says clearly when the PowerDiverter is not connected
 
 ### Added

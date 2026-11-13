@@ -11,7 +11,9 @@ import paho.mqtt.client as mqtt
 
 from energipays_bridge.boost import DEFAULT_DURATION, DURATIONS
 from energipays_bridge.cloud_result import label, outcome
+from energipays_bridge.integrations.base import EXT_DEVICE_ID
 from energipays_bridge.publish.entities import (
+    BATTERY_ENTITIES,
     BOOST_POWER_MAP,
     BOOST_POWER_OPTIONS,
     BOOST_POWER_REVERSE,
@@ -62,6 +64,8 @@ class MqttPublisher:
         self._device_info: dict | None = None
         self._discovery_sent = False
         self._latest_points: dict = {}
+        self._latest_ext: dict = {}          # battery integration (ext.*) points (#20)
+        self._ext_discovered: set[str] = set()
 
         # command dispatch (set from main after login)
         self._ep_client: Any = None    # EnergipaysClient
@@ -145,6 +149,12 @@ class MqttPublisher:
     async def queue_sample(self, sample: Sample) -> None:
         if self.paused:
             return
+        if sample.device_id == EXT_DEVICE_ID:
+            # Battery integration samples feed the battery entities only; they must
+            # not become the HA device or replace the PowerDiverter's points.
+            self._latest_ext = dict(sample.points)
+            await self._publish_ext()
+            return
         pts = sample.points
         self._latest_points = pts
 
@@ -213,11 +223,12 @@ class MqttPublisher:
     async def unpublish(self) -> None:
         if not self._device_id:
             return
-        for entity in ENERGIPAYS_ENTITIES:
+        for entity in ENERGIPAYS_ENTITIES + BATTERY_ENTITIES:
             topic = (f"{self._discovery_prefix}/{entity.ha_type}"
                      f"/energipays_{self._device_id}_{entity.slug}/config")
             await self._enqueue(topic, "", retain=True)
-        log.info("Unpublish: cleared %d discovery topics", len(ENERGIPAYS_ENTITIES))
+        self._ext_discovered.clear()
+        log.info("Unpublish: cleared %d discovery topics", len(ENERGIPAYS_ENTITIES) + len(BATTERY_ENTITIES))
 
     @property
     def connected(self) -> bool:
@@ -248,6 +259,25 @@ class MqttPublisher:
             count += 1
         self._discovery_sent = True
         log.info("Discovery queued for %s (%d entities)", self._device_id, count)
+        self._ext_discovered.clear()
+        await self._publish_ext()
+
+    async def _publish_ext(self) -> None:
+        """Battery entities: discovery the first time a metric arrives, then state."""
+        if not (self._connected and self._device_id and self._device_info and self._discovery_sent):
+            return
+        for entity in BATTERY_ENTITIES:
+            if entity.stat_key not in self._latest_ext:
+                continue
+            if entity.slug not in self._ext_discovered:
+                topic = (f"{self._discovery_prefix}/{entity.ha_type}"
+                         f"/energipays_{self._device_id}_{entity.slug}/config")
+                await self._enqueue(topic, json.dumps(
+                    entity.discovery_payload(self._device_id, self._device_info)), retain=True)
+                self._ext_discovered.add(entity.slug)
+            value = entity.format_value(self._latest_ext[entity.stat_key])
+            if value is not None:
+                await self._enqueue(entity.state_topic(self._device_id), value, retain=True)
 
     async def _publish_rule_discovery(self) -> None:
         """Re-send only the active_rule select discovery (when rules list changes)."""
