@@ -123,6 +123,37 @@ document.addEventListener('alpine:init', () => {
 
     toasts: [],
 
+    // ── PowerDiverter contact (#36) — set by the poller, not the cloud poll ──
+    deviceOfflineDialog: false,
+    get deviceOffline() { return this.points.device_connected === 0 },
+    get deviceLastDataTs() { return this.points.device_last_data_ts || null },
+    get deviceOfflineSince() {
+      const ts = this.deviceLastDataTs
+      if (!ts) return 'Energipays has had no data from your PowerDiverter for more than 7 days.'
+      const d = new Date(ts * 1000)
+      const when = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' +
+        d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+      const s = Math.max(0, Math.round(Date.now() / 1000 - ts))
+      const days = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60)
+      const age = days ? `${days} d ${h} h` : h ? `${h} h ${m} m` : `${m} m`
+      return `Energipays has had no data from your PowerDiverter for ${age} (last data ${when}).`
+    },
+    // One dialog per offline spell, remembered per browser by its last-data time.
+    _checkDeviceContact(prevOffline) {
+      const key = String(this.deviceLastDataTs || 'none')
+      let seen = null
+      try { seen = localStorage.getItem('pdOfflineSeen') } catch (e) {}
+      if (this.deviceOffline && seen !== key) this.deviceOfflineDialog = true
+      if (prevOffline && !this.deviceOffline) {
+        this.deviceOfflineDialog = false
+        this.addToast('PowerDiverter back online', 'success')
+      }
+    },
+    closeDeviceOfflineDialog() {
+      this.deviceOfflineDialog = false
+      try { localStorage.setItem('pdOfflineSeen', String(this.deviceLastDataTs || 'none')) } catch (e) {}
+    },
+
     get lastPollLabel() {
       if (!this.lastPollTs) return 'never'
       const ago = Math.round((Date.now() / 1000) - this.lastPollTs)
@@ -234,7 +265,9 @@ document.addEventListener('alpine:init', () => {
         }
         // Only replace points when we have real data — an empty response
         // (failed cloud poll, session expiry) should not wipe the last known values.
+        const wasOffline = this.deviceOffline
         if (Object.keys(fresh).length > 0) this.points = fresh
+        if (Object.keys(fresh).length > 0) this._checkDeviceContact(wasOffline)
         // Notify dashboard tab so it can anchor its client-side countdown
         const dash = Alpine.store('dashboard')
         if (dash && dash.onPointsUpdate) dash.onPointsUpdate(fresh)

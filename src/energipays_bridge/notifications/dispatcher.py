@@ -12,8 +12,8 @@ log = logging.getLogger(__name__)
 # ── Notification templates ────────────────────────────────────────────────────
 
 _TEMPLATES: dict[str, tuple[str, str]] = {
-    "device_online":    ("Sunamp Online",           "Device connected ({ts})"),
-    "device_offline":   ("Sunamp Offline",          "Device went offline ({ts})"),
+    "device_online":    ("PowerDiverter back online", "Energipays is receiving data from the PowerDiverter again ({ts})"),
+    "device_offline":   ("⚠️ PowerDiverter not connected", "Energipays has had no data from the PowerDiverter since {since}. Check it is powered and connected to Wi-Fi."),
     "boost_started":    ("Boost Started",            "Boost is now active"),
     "boost_ended":      ("Boost Ended",              "Boost completed"),
     "offpeak_started":  ("Off-Peak Active",          "Off-peak heating rule started"),

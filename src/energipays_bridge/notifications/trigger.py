@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from ..sample import Sample
 from .dispatcher import send_notification
@@ -43,12 +42,9 @@ class NotificationTrigger:
             self._prev = dict(p)
             return
 
-        now_str = datetime.now().strftime("%H:%M")
 
-        # ── Device online / offline ───────────────────────────────────────────
-        if p.get("is_online") != prev.get("is_online") and p.get("is_online") is not None:
-            ev = "device_online" if p["is_online"] else "device_offline"
-            await send_notification(db, ev, {"ts": now_str})
+        # Device online / offline is raised by the poller, which also catches a
+        # device that stops sending data while the cloud still says online (#36).
 
         # ── Boost started / ended ─────────────────────────────────────────────
         prev_boost = bool(prev.get("boostStatus", 0))

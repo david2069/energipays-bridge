@@ -1,5 +1,26 @@
 ## [Unreleased]
 
+## 1.5.0 — Says clearly when the PowerDiverter is not connected
+
+### Added
+- **"PowerDiverter not connected" banner, header badge and dialog.** The bridge
+  treats the PowerDiverter as not connected when Energipays reports it offline, or
+  when its grid power and tank temperatures have not changed for 30 minutes. A
+  signed-in Energipays poll no longer shows as "Live" in that case. The banner stays
+  on every tab and says how long Energipays has had no data (last data time from
+  the cloud's 15-minute stats, looking back 7 days). The dialog opens once per
+  offline spell and lists what to check; it closes by itself when data returns (#36).
+- **Home Assistant: "PowerDiverter Connected"** (connectivity binary sensor) and
+  **"PowerDiverter Last Data"** (timestamp) (#36).
+
+### Changed
+- **Offline / back-online notifications** now come from the same check, so they
+  also fire when the device stops sending data while Energipays still says online,
+  and the offline message gives the last-data time (#36).
+
+  Verified: pytest 132 passed (8 new; mutations of each rule caught); banner and
+  dialog logic run in JavaScriptCore (7 checks); not yet seen in the add-on.
+
 ## 1.4.1 — Solar Forecast shows actual solar again
 
 ### Fixed
