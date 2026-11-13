@@ -1402,7 +1402,7 @@
                viewBox="0 0 100 88" preserveAspectRatio="none">
             <!-- Actual solar PV line (today only, up to NOW) -->
             <polyline x-show="solarShowActual && solarActualPoints.length > 1"
-                      :points="solarActualPoints.map((p,i)=>(((i+0.5)/24*50)).toFixed(2)+' '+p).join(', ')"
+                      :points="solarActualPoints.map(([x,y])=>x+' '+y).join(', ')"
                       fill="none" stroke="#f97316" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
             <!-- Temperature line (48h) -->
             <polyline x-show="solarShowTemp && solarTempPoints.length > 1"
@@ -1489,7 +1489,10 @@
         </div>
         <div x-show="solarShowActual" class="flex items-center gap-1">
           <span class="w-4 h-0.5 bg-orange-500 inline-block rounded"></span>
-          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'">Actual PV</span>
+          <span class="text-[10px]" :class="$store.app.isDark ? 'text-slate-500' : 'text-slate-400'"
+                x-text="_solarActualSource ? `Actual PV (${_solarActualSource})` : 'Actual PV: no solar readings today'"></span>
+          <button x-show="!_solarActualSource && $store.app.notMapped('solar_power_w')" @click="$store.app.mapMetric('solar_power_w')"
+                  class="text-[10px] underline text-amber-400">Map it</button>
         </div>
         <div x-show="solarShowTemp" class="flex items-center gap-1">
           <span class="w-4 h-0.5 bg-sky-400 inline-block rounded" style="background: repeating-linear-gradient(90deg,#38bdf8 0,#38bdf8 3px,transparent 3px,transparent 5px)"></span>

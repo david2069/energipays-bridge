@@ -32,7 +32,7 @@ Runs as a **Home Assistant Add-on**, a **Docker container**, or a bare **Python 
 - **External integrations** — pull battery/solar data from REST, Modbus TCP, HA WebSocket, or MQTT
 - **MQTT Discovery** — auto-publish all sensors to Home Assistant as entities
 - **Push notifications** — receive alerts (boost started, device offline, temperature threshold) via HA mobile app
-- **Solar forecast** — chart solar production against actual generation
+- **Solar forecast** — chart solar production against actual generation (from your battery integration's Solar Power if mapped, else the PowerDiverter's own solar reading; the legend names the source)
 - **PWA** — installable on iOS Safari and Android Chrome, works like a native app
 - **Setup wizard** — guided first-run setup (credentials → MQTT → integrations → notifications)
 
