@@ -33,7 +33,7 @@ Runs as a **Home Assistant Add-on**, a **Docker container**, or a bare **Python 
 - **MQTT Discovery** — auto-publish all sensors to Home Assistant as entities
 - **Push notifications** — receive alerts (boost started, device offline, temperature threshold) via HA mobile app
 - **Solar forecast** — chart solar production against actual generation (from your battery integration's Solar Power if mapped, else the PowerDiverter's own solar reading; the legend names the source)
-- **PowerDiverter not connected** — a banner, header badge and dialog say when Energipays has had no data from the PowerDiverter, since when, and what to check; HA gets a connectivity sensor and a last-data time
+- **PowerDiverter not connected** — a banner, header badge and dialog say when Energipays has had no data from the PowerDiverter, since when, and what to check; HA gets a connectivity sensor and a last-data time; while it is offline its live readings show "—" (unavailable in HA) instead of the last values Energipays still returns
 - **PWA** — installable on iOS Safari and Android Chrome, works like a native app
 - **Setup wizard** — guided first-run setup (credentials → MQTT → integrations → notifications)
 

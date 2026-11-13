@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..poller import DEVICE_READINGS
+
 
 @dataclass
 class EntityDef:
@@ -87,7 +89,15 @@ class EntityDef:
             payload["icon"] = self.icon
         if self.diagnostic:
             payload["entity_category"] = "diagnostic"
+        if self.stat_key in DEVICE_READINGS:
+            # Unavailable while Energipays has no contact with the PowerDiverter (#36),
+            # instead of holding its last value as if it were current.
+            payload["availability_topic"] = device_availability_topic(device_id)
         return payload
+
+
+def device_availability_topic(device_id: str) -> str:
+    return f"energipays/{device_id}/device_availability"
 
 
 def _s(slug, stat_key, name, unit="", device_class="", state_class="measurement", icon="", diagnostic=False) -> EntityDef:

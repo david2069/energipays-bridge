@@ -96,3 +96,41 @@ def test_poll_publishes_last_data_as_iso():
     p, got, _ = _poller(c)
     run(p._poll())
     assert got[0].points["device_last_data"] == "2026-11-09T14:00:00+11:00"
+
+
+def test_offline_sample_has_no_readings_but_keeps_settings():
+    from energipays_bridge.poller import DEVICE_READINGS
+    st = {"data": [{"is_online": 0, "status": {
+        "phasePower": 5.27, "waterTemperature1": 76, "solarStreamA": 5.49, "signalWiFi": -42,
+        "boostStatus": 0, "boost_power": 4, "temperatureLimit": 85}}]}
+    c = FakeClient(device_status=st, stats={}, device={})
+    p, got, _ = _poller(c)
+    run(p._poll())
+    pts = got[0].points
+    assert not (set(pts) & DEVICE_READINGS), set(pts) & DEVICE_READINGS
+    assert pts["boost_power"] == 4 and pts["temperatureLimit"] == 85 and pts["is_online"] == 0
+
+
+def test_online_sample_keeps_readings():
+    st = {"data": [{"is_online": 1, "status": {"phasePower": 5.27, "waterTemperature1": 76}}]}
+    p, got, _ = _poller(FakeClient(device_status=st, device={}))
+    run(p._poll())
+    assert got[0].points["phasePower"] == 5.27 and got[0].points["waterTemperatureAvg"] == 76
+
+
+def test_ha_readings_go_unavailable_settings_do_not():
+    from energipays_bridge.publish.entities import ENERGIPAYS_ENTITIES
+    from energipays_bridge.publish.mqtt_publisher import MqttPublisher
+    from energipays_bridge.sample import Sample
+    by_key = {e.stat_key: e for e in ENERGIPAYS_ENTITIES}
+    grid = by_key["phasePower"].discovery_payload("pd1", {})
+    assert grid["availability_topic"] == "energipays/pd1/device_availability"
+    assert "availability_topic" not in by_key["dev.firmware_version"].discovery_payload("pd1", {})
+    assert "availability_topic" not in by_key["device_connected"].discovery_payload("pd1", {})
+    pub = MqttPublisher("localhost")
+    pub._connected = True
+    run(pub.queue_sample(Sample("pd1", 1, {"device_connected": 0})))
+    msgs = []
+    while not pub._queue.empty():
+        msgs.append(pub._queue.get_nowait())
+    assert ("energipays/pd1/device_availability", "offline", True) in msgs
