@@ -47,7 +47,8 @@ function dashboardTab() {
     _solarRules: [],
     solarShowActual: localStorage.getItem('solarShowActual') === '1',
     solarShowTemp:   localStorage.getItem('solarShowTemp')   === '1',
-    _solarActualData: [],  // [{ts, value}] from metrics history
+    _solarActualData: [],  // [{ts, kw}] today, from metrics history
+    _solarActualSource: null,  // 'integration' | 'PowerDiverter' | null
 
     async fetchSolar() {
       if (this.solarLoading) return
@@ -69,47 +70,47 @@ function dashboardTab() {
       finally { this.solarLoading = false }
     },
 
+    // Actual solar (#37): the battery integration's Solar Power (W) when it has
+    // readings today, else the PowerDiverter's own solarPower (kW). Rows are kW.
     async fetchSolarActual() {
-      try {
-        const r = await fetch('/api/metrics/history?point=ext.solar_power_w&device_id=ext&range=24h&bucket=1h')
-        if (r.ok) { const d = await r.json(); this._solarActualData = d.data || [] }
-      } catch {}
-    },
-
-    // Actual solar PV: Y pixel values for today's 24 hours (bars 0-23), null if no data
-    get solarActualPoints() {
-      if (!this._solarActualData.length || !this.solar48Hours.today.length) return []
-      const chartH = 76
-      const todayHours = this.solar48Hours.today
-      const nowTs = Date.now() / 1000
-      // Build a map: hour-of-day → watts
-      const byHour = {}
-      this._solarActualData.forEach(({ts, value}) => {
-        const d = new Date(ts * 1000)
-        if (d.toDateString() === new Date().toDateString()) byHour[d.getHours()] = value
-      })
-      // Normalize against max actual power, NOT irradiance (different units)
-      const vals = Object.values(byHour).filter(v => v > 0)
-      if (!vals.length) return []
-      const maxActual = Math.max(...vals)
-      const pts = []
-      for (let i = 0; i < todayHours.length; i++) {
-        const hh = parseInt(todayHours[i].hour.slice(11, 13))
-        const slotTs = new Date(todayHours[i].hour).getTime() / 1000 + 1800
-        if (slotTs > nowTs) break  // only up to NOW
-        const w = byHour[hh] ?? null
-        if (w === null) { pts.push(null); continue }
-        const scaled = Math.min(Math.max(w, 0), maxActual)
-        pts.push((chartH - (scaled / maxActual) * chartH + 6).toFixed(1))
+      const today = new Date().toDateString()
+      const read = async (point, dev) => {
+        try {
+          const r = await fetch(`/api/metrics/history?point=${point}${dev ? '&device_id=' + dev : ''}&range=24h&bucket=1h`)
+          if (!r.ok) return []
+          const d = await r.json()
+          return (d.data || []).filter(x => x.value != null && new Date(x.ts * 1000).toDateString() === today)
+        } catch { return [] }
       }
-      return pts.filter(p => p !== null)
+      const ext = await read('ext.solar_power_w', 'ext')
+      if (ext.length) {
+        this._solarActualData = ext.map(x => ({ ts: x.ts, kw: x.value / 1000 }))
+        this._solarActualSource = 'integration'
+        return
+      }
+      const pd = await read('solarPower')
+      this._solarActualData = pd.map(x => ({ ts: x.ts, kw: x.value }))
+      this._solarActualSource = pd.length ? 'PowerDiverter' : null
     },
 
-    // Max actual power seen today (kW, for Y-axis label)
+    // Actual solar PV: [x, y] in the overlay's viewBox (x 0-50 = today), one per
+    // hour with a reading, on the same kW scale as the forecast bars.
+    get solarActualPoints() {
+      if (!this.solarShowActual || !this._solarActualData.length) return []
+      const chartH = 76
+      const max = this.solarMax48
+      return this._solarActualData.map(({ ts, kw }) => {
+        const d = new Date(ts * 1000)
+        const x = ((d.getHours() + 0.5) / 24 * 50).toFixed(2)
+        const y = (chartH - (Math.min(Math.max(kw, 0), max) / max) * chartH + 6).toFixed(1)
+        return [x, y]
+      })
+    },
+
+    // Max actual power seen today (kW)
     get solarActualMaxKw() {
-      if (!this._solarActualData.length) return null
-      const vals = this._solarActualData.map(d => d.value).filter(v => v > 0)
-      return vals.length ? (Math.max(...vals) / 1000).toFixed(2) : null
+      const vals = this._solarActualData.map(d => d.kw).filter(v => v > 0)
+      return vals.length ? Math.max(...vals) : null
     },
 
     // Temperature: Y pixel values across all 48h (today+tomorrow), one per hour
@@ -163,7 +164,8 @@ function dashboardTab() {
 
     get solarMax48() {
       const { today, tomorrow } = this.solar48Hours
-      return Math.max(...[...today, ...tomorrow].map(h => h.estimated_kw || 0), 0.1)
+      // one kW scale for forecast bars and the actual line (#37)
+      return Math.max(...[...today, ...tomorrow].map(h => h.estimated_kw || 0), this.solarShowActual ? (this.solarActualMaxKw || 0) : 0, 0.1)
     },
 
     solarBarH(v, containerH) {

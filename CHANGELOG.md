@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+## 1.4.1 — Solar Forecast shows actual solar again
+
+### Fixed
+- **Solar Forecast: the Actual PV line now appears.** It used only a battery
+  integration's Solar Power; it now falls back to the PowerDiverter's own solar
+  reading. The legend names the source, or says "no solar readings today" with a
+  Map it link when no integration maps Solar Power. The line shares the bars' kW
+  scale and sits at the right hour (#37).
+
+  Verified: logic checked with sample readings (PowerDiverter only with a gap,
+  integration preferred, yesterday-only data shows none); not yet seen in the add-on.
+
 ## 1.4.0 — Every Battery-tab field can be mapped from your battery's integration
 
 ### Added
