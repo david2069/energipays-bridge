@@ -71,6 +71,9 @@ def main():
     # documentation ranges are fine; examples use 192.0.2.x.
     ipv4_regex = re.compile(r'(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])')
     ip_allowed_prefixes = ("127.", "192.0.2.", "198.51.100.", "203.0.113.")
+    # Fixed vendor addresses, identical on every device (owner-approved 2026-11-26):
+    # 192.168.1.4 = the PowerDiverter's own Wi-Fi setup hotspot page.
+    ip_vendor_fixed = {"192.168.1.4"}
     # Coordinates with 3+ decimals (~100 m or finer) can place a home; examples use 2 (~1 km).
     coord_regex = re.compile(
         r'\b(lat|latitude|lon|lng|long|longitude)\b["\']?\s*[:=]\s*["\']?(-?\d{1,3}\.\d{3,})', re.IGNORECASE)
@@ -179,7 +182,7 @@ def main():
                     ip = match.group(0)
                     if any(int(o) > 255 for o in ip.split(".")):
                         continue
-                    if ip == "0.0.0.0" or ip.startswith(ip_allowed_prefixes):
+                    if ip == "0.0.0.0" or ip.startswith(ip_allowed_prefixes) or ip in ip_vendor_fixed:
                         continue
                     print(f"PII Leak [IP {ip}]: {rel}:{i+1}")
                     found += 1

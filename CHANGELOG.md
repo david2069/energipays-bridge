@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## 1.5.2 — Wi-Fi steps in the offline dialog
+
+### Changed
+- **The offline dialog** now says how to give the PowerDiverter a new Wi-Fi name or
+  password: hold the red Easy Boost button, join "PowerdiverterWeb", open 192.168.1.4,
+  Save, then turn it off and on (the vendor's procedure; #36).
+
 ## 1.5.1 — No old readings shown as live while the PowerDiverter is offline
 
 ### Changed
