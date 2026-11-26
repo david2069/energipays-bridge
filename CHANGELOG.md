@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## 1.5.3 — Offline dialog fits on a phone
+
+### Fixed
+- **The offline dialog** no longer runs off the bottom of a phone screen with the OK
+  button out of reach: the title and OK stay in place and the text scrolls between
+  them (#36).
+
+  Verified: rendered in headless Chrome at 390×664, 390×844, 1280×560 and 1280×800;
+  scrolled to the end on a phone, the last line and OK both show.
+
 ## 1.5.2 — Wi-Fi steps in the offline dialog
 
 ### Changed
